@@ -5,6 +5,12 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../core/session.dart';
 import '../services/profile_service.dart';
 import 'profile_details_screen.dart';
+import 'invitations_list_screen.dart';
+import 'wallet_payments_screen.dart';
+import 'help_support_screen.dart';
+import 'accessibility_screen.dart';
+import 'settings_screen.dart';
+import 'refer_earn_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -53,6 +59,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _lastNameController.dispose();
     _phoneController.dispose();
     super.dispose();
+  }
+
+  Widget _buildMenuTile(
+    BuildContext context, {
+    required IconData icon,
+    required String title,
+    String? subtitle,
+    required VoidCallback onTap,
+  }) {
+    return ListTile(
+      leading: Icon(icon, color: const Color(0xFFFDBB42)),
+      title: Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
+      subtitle: subtitle != null ? Text(subtitle, style: const TextStyle(fontSize: 12)) : null,
+      trailing: const Icon(Icons.chevron_right),
+      onTap: onTap,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
+    );
   }
 
   @override
@@ -112,132 +136,88 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                 ),
                 const SizedBox(height: 24),
-                ListTile(
-                  leading: const Icon(Icons.card_giftcard),
-                  title: const Text('My E-Invitations'),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () => GoRouter.of(context).push('/invites'),
-                ),
-                const Divider(),
-                ListTile(
-                  leading: const Icon(Icons.badge_outlined),
-                  title: const Text('Profile Details'),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () async {
-                    final changed = await Navigator.of(context).push<bool>(
-                      MaterialPageRoute(builder: (_) => const ProfileDetailsScreen()),
-                    );
-                    if (changed == true) {
-                      _load();
-                    }
-                  },
-                ),
-                const Divider(),
-                ListTile(
-                  leading: const Icon(Icons.info_outline),
-                  title: const Text('About'),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () {
-                    showDialog(
-                      context: context,
-                      builder: (context) => AlertDialog(
-                        title: const Text('About'),
-                        content: const Text('SaralEvents - Your complete event planning solution.'),
-                        actions: [
-                          TextButton(
-                            onPressed: () => Navigator.pop(context),
-                            child: const Text('OK'),
-                          ),
-                        ],
+                Card(
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  child: Column(
+                    children: [
+                      _buildMenuTile(
+                        context,
+                        icon: Icons.card_giftcard,
+                        title: 'My Invitations',
+                        subtitle: 'Track active and past invites',
+                        onTap: () => Navigator.of(context).push(
+                          MaterialPageRoute(builder: (_) => const InvitationsListScreen()),
+                        ),
                       ),
-                    );
-                  },
-                ),
-                const Divider(),
-                ListTile(
-                  leading: const Icon(Icons.edit_outlined),
-                  title: const Text('Send feedback'),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () {
-                    showDialog(
-                      context: context,
-                      builder: (context) => AlertDialog(
-                        title: const Text('Send Feedback'),
-                        content: const Text('We value your feedback! Please share your thoughts and suggestions to help us improve the app.'),
-                        actions: [
-                          TextButton(
-                            onPressed: () => Navigator.pop(context),
-                            child: const Text('OK'),
-                          ),
-                        ],
+                      const Divider(height: 1),
+                      _buildMenuTile(
+                        context,
+                        icon: Icons.badge_outlined,
+                        title: 'Profile Details',
+                        subtitle: 'Update personal information',
+                        onTap: () async {
+                          final changed = await Navigator.of(context).push<bool>(
+                            MaterialPageRoute(builder: (_) => const ProfileDetailsScreen()),
+                          );
+                          if (changed == true) {
+                            _load();
+                          }
+                        },
                       ),
-                    );
-                  },
-                ),
-                const Divider(),
-                ListTile(
-                  leading: const Icon(Icons.warning_outlined),
-                  title: const Text('Report a safety emergency'),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () {
-                    showDialog(
-                      context: context,
-                      builder: (context) => AlertDialog(
-                        title: const Text('Safety Emergency'),
-                        content: const Text('If you are experiencing a safety emergency, please contact local emergency services immediately.'),
-                        actions: [
-                          TextButton(
-                            onPressed: () => Navigator.pop(context),
-                            child: const Text('OK'),
-                          ),
-                        ],
+                      const Divider(height: 1),
+                      _buildMenuTile(
+                        context,
+                        icon: Icons.account_balance_wallet_outlined,
+                        title: 'Wallet & Payments',
+                        subtitle: 'Payment methods and transactions',
+                        onTap: () => Navigator.of(context).push(
+                          MaterialPageRoute(builder: (_) => const WalletPaymentsScreen()),
+                        ),
                       ),
-                    );
-                  },
-                ),
-                const Divider(),
-                ListTile(
-                  leading: const Icon(Icons.star_outline),
-                  title: const Text('Accessibility'),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () {
-                    showDialog(
-                      context: context,
-                      builder: (context) => AlertDialog(
-                        title: const Text('Accessibility'),
-                        content: const Text('We are committed to making our app accessible to everyone. If you need assistance or have accessibility concerns, please contact our support team.'),
-                        actions: [
-                          TextButton(
-                            onPressed: () => Navigator.pop(context),
-                            child: const Text('OK'),
-                          ),
-                        ],
+                      const Divider(height: 1),
+                      _buildMenuTile(
+                        context,
+                        icon: Icons.support_agent,
+                        title: 'Help & Support',
+                        subtitle: 'FAQs, issues, feedback, about',
+                        onTap: () => Navigator.of(context).push(
+                          MaterialPageRoute(builder: (_) => const HelpSupportScreen()),
+                        ),
                       ),
-                    );
-                  },
-                ),
-                const Divider(),
-                ListTile(
-                  leading: const Icon(Icons.settings_outlined),
-                  title: const Text('Settings'),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () {
-                    showDialog(
-                      context: context,
-                      builder: (context) => AlertDialog(
-                        title: const Text('Settings'),
-                        content: const Text('App settings and preferences will be available here.'),
-                        actions: [
-                          TextButton(
-                            onPressed: () => Navigator.pop(context),
-                            child: const Text('OK'),
-                          ),
-                        ],
+                      const Divider(height: 1),
+                      _buildMenuTile(
+                        context,
+                        icon: Icons.visibility_outlined,
+                        title: 'Accessibility',
+                        subtitle: 'Theme and font preferences',
+                        onTap: () => Navigator.of(context).push(
+                          MaterialPageRoute(builder: (_) => const AccessibilityScreen()),
+                        ),
                       ),
-                    );
-                  },
+                      const Divider(height: 1),
+                      _buildMenuTile(
+                        context,
+                        icon: Icons.settings_outlined,
+                        title: 'Settings',
+                        subtitle: 'Notifications, language, location',
+                        onTap: () => Navigator.of(context).push(
+                          MaterialPageRoute(builder: (_) => const SettingsScreen()),
+                        ),
+                      ),
+                      const Divider(height: 1),
+                      _buildMenuTile(
+                        context,
+                        icon: Icons.card_giftcard_outlined,
+                        title: 'Refer & Earn',
+                        subtitle: 'Share and earn rewards',
+                        onTap: () => Navigator.of(context).push(
+                          MaterialPageRoute(builder: (_) => const ReferEarnScreen()),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-                const Divider(),
                 const SizedBox(height: 24),
                 FilledButton.icon(
                   onPressed: () async {

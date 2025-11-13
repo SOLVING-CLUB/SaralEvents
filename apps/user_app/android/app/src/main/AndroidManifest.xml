@@ -41,7 +41,7 @@
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
-            <!-- App Links for invitations: https://saralevents.vercel.app/invite/:slug -->
+            <!-- Universal Links: https://saralevents.vercel.app/invite/:slug -->
             <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -50,21 +50,39 @@
                       android:host="saralevents.vercel.app"
                       android:pathPrefix="/invite" />
             </intent-filter>
-            <!-- Handle app links from other apps -->
-            <intent-filter>
+            <!-- Universal Links: https://saralevents.vercel.app/refer -->
+            <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="https" android:host="saralevents.vercel.app" android:pathPrefix="/invite" />
+                <data android:scheme="https"
+                      android:host="saralevents.vercel.app"
+                      android:pathPrefix="/refer" />
             </intent-filter>
-            <!-- Custom scheme for direct app opening -->
+            <!-- Universal Links: https://saralevents.vercel.app/service/:id -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https"
+                      android:host="saralevents.vercel.app"
+                      android:pathPrefix="/service" />
+            </intent-filter>
+            <!-- Custom scheme: saralevents://invite/:slug -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="saralevents" android:host="invite" />
             </intent-filter>
-            <!-- Custom scheme for auth confirmation redirect -->
+            <!-- Custom scheme: saralevents://refer/:code -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="saralevents" android:host="refer" />
+            </intent-filter>
+            <!-- Custom scheme: saralevents://auth/confirm -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />

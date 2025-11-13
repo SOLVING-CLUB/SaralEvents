@@ -7,6 +7,7 @@ import '../core/services/address_storage.dart';
 import '../core/utils/address_utils.dart';
 import '../models/service_models.dart';
 import 'catalog_screen.dart';
+import 'profile_screen.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../services/profile_service.dart';
 import '../widgets/wishlist_button.dart';
@@ -322,15 +323,22 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
           child: Row(
             children: [
               // Profile picture
-              CircleAvatar(
-                radius: 25,
-                backgroundColor: const Color(0xFFFDBB42),
-                backgroundImage: (_avatarUrl != null && _avatarUrl!.isNotEmpty)
-                    ? NetworkImage(_avatarUrl!)
-                    : null,
-                child: (_avatarUrl == null || _avatarUrl!.isEmpty)
-                    ? const Icon(Icons.person, color: Colors.white, size: 28)
-                    : null,
+              GestureDetector(
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const ProfileScreen()),
+                  );
+                },
+                child: CircleAvatar(
+                  radius: 25,
+                  backgroundColor: const Color(0xFFFDBB42),
+                  backgroundImage: (_avatarUrl != null && _avatarUrl!.isNotEmpty)
+                      ? NetworkImage(_avatarUrl!)
+                      : null,
+                  child: (_avatarUrl == null || _avatarUrl!.isEmpty)
+                      ? const Icon(Icons.person, color: Colors.white, size: 28)
+                      : null,
+                ),
               ),
               const SizedBox(width: 12),
               

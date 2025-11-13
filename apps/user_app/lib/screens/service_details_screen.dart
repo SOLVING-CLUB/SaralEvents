@@ -3,10 +3,12 @@ import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:share_plus/share_plus.dart';
 import '../models/service_models.dart';
 import '../services/service_service.dart';
 import '../widgets/location_aware_widget.dart';
 import '../widgets/wishlist_button.dart';
+import '../utils/deep_link_helper.dart';
 import 'booking_screen.dart';
 
 
@@ -575,28 +577,15 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen>
               ],
             ),
           ),
-          Row(
-            children: [
-              OutlinedButton.icon(
-                onPressed: () => _contactVendor(service),
-                icon: const Icon(Icons.phone),
-                label: const Text('Call'),
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                ),
-              ),
-              const SizedBox(width: 12),
-              ElevatedButton.icon(
-                onPressed: () => _bookService(service),
-                icon: const Icon(Icons.calendar_today),
-                label: const Text('Book Now'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFF4B63E),
-                  foregroundColor: Colors.black87,
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                ),
-              ),
-            ],
+          ElevatedButton.icon(
+            onPressed: () => _bookService(service),
+            icon: const Icon(Icons.calendar_today),
+            label: const Text('Book Now'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFF4B63E),
+              foregroundColor: Colors.black87,
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            ),
           ),
         ],
       ),
@@ -917,28 +906,14 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen>
           const SizedBox(height: 24),
           
           // Action Buttons
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: () => _contactVendor(service),
-                  icon: const Icon(Icons.phone),
-                  label: const Text('Call Vendor'),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: ElevatedButton.icon(
-                  onPressed: () => _chatWithVendor(service),
-                  icon: const Icon(Icons.chat),
-                  label: const Text('Chat'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFF4B63E),
-                    foregroundColor: Colors.black87,
-                  ),
-                ),
-              ),
-            ],
+          ElevatedButton.icon(
+            onPressed: () => _chatWithVendor(service),
+            icon: const Icon(Icons.chat),
+            label: const Text('Chat'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFF4B63E),
+              foregroundColor: Colors.black87,
+            ),
           ),
         ],
       ),
@@ -1341,13 +1316,35 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen>
   }
 
   // Action Methods
-  void _shareService(ServiceItem service) {
-    // Implement share functionality
+  Future<void> _shareService(ServiceItem service) async {
     HapticFeedback.lightImpact();
-    // In a real app, you would use share_plus package
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Share functionality coming soon!')),
-    );
+    
+    final universalLink = DeepLinkHelper.serviceUniversalLink(service.id.toString());
+    final deepLink = DeepLinkHelper.serviceLink(service.id.toString());
+    
+    final shareText = '''🌟 Check out this service: ${service.name}
+
+Vendor: ${service.vendorName}
+Starting from: ₹${service.price.toStringAsFixed(0)}
+${service.description.isNotEmpty ? '\n${service.description.substring(0, service.description.length > 100 ? 100 : service.description.length)}...' : ''}
+
+Open in app:
+$universalLink
+
+Or use custom link:
+$deepLink
+
+Tap the link above to view and book on Saral Events! 🎉''';
+
+    try {
+      await Share.share(shareText, subject: 'Check out: ${service.name}');
+    } catch (e) {
+      if (!mounted) return;
+      await Clipboard.setData(ClipboardData(text: deepLink));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Link copied to clipboard')),
+      );
+    }
   }
 
   void _showImageGallery(List<MediaItem> media, int initialIndex) {

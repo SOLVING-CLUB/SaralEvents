@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Saral Events - Deep Link Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .card {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .link {
+            display: block;
+            padding: 15px;
+            margin: 10px 0;
+            background: #4CAF50;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+            text-align: center;
+            font-weight: bold;
+        }
+        .link:hover {
+            background: #45a049;
+        }
+        .info {
+            background: #e3f2fd;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 10px 0;
+            font-size: 14px;
+        }
+        code {
+            background: #f0f0f0;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔗 Saral Events Deep Link Test</h1>
+    
+    <div class="card">
+        <h2>Test Invitation Link</h2>
+        <p class="info">
+            Click the button below to test opening an invitation in the app.
+            This uses Android Intent URL format which works better in Chrome.
+        </p>
+        <a href="intent://invite/test-slug-123#Intent;scheme=saralevents;package=com.mycompany.saralevents;end" 
+           class="link" 
+           onclick="testLink('intent://invite/test-slug-123#Intent;scheme=saralevents;package=com.mycompany.saralevents;end'); return false;">
+            Open Invitation (Android Intent URL)
+        </a>
+        <a href="saralevents://invite/test-slug-123" 
+           class="link" 
+           style="background: #2196F3;">
+            Open Invitation (Custom Scheme)
+        </a>
+    </div>
+
+    <div class="card">
+        <h2>Test Referral Link</h2>
+        <a href="intent://refer/ABC123#Intent;scheme=saralevents;package=com.mycompany.saralevents;end" 
+           class="link" 
+           onclick="testLink('intent://refer/ABC123#Intent;scheme=saralevents;package=com.mycompany.saralevents;end'); return false;">
+            Open Referral (Android Intent URL)
+        </a>
+        <a href="saralevents://refer/ABC123" 
+           class="link" 
+           style="background: #2196F3;">
+            Open Referral (Custom Scheme)
+        </a>
+    </div>
+
+    <div class="card">
+        <h2>How It Works</h2>
+        <p><strong>Android Intent URLs</strong> work better in Chrome because:</p>
+        <ul>
+            <li>Chrome recognizes the <code>intent://</code> scheme</li>
+            <li>Automatically prompts to open in app</li>
+            <li>Falls back gracefully if app not installed</li>
+        </ul>
+        <p><strong>Custom Schemes</strong> (<code>saralevents://</code>):</p>
+        <ul>
+            <li>Work when clicked from links</li>
+            <li>May not work when typed directly in Chrome address bar</li>
+            <li>Require app to be installed</li>
+        </ul>
+    </div>
+
+    <script>
+        function testLink(url) {
+            // Try Android Intent URL first
+            window.location.href = url;
+            
+            // Fallback after delay
+            setTimeout(function() {
+                // If still on page, try custom scheme
+                var customScheme = url.replace('intent://', 'saralevents://').split('#')[0];
+                window.location.href = customScheme;
+            }, 1000);
+        }
+    </script>
+</body>
+</html>
+

@@ -10,8 +10,10 @@ plugins {
 
 android {
     namespace = "com.mycompany.saralevents"
-    compileSdk = flutter.compileSdkVersion
-    ndkVersion = "27.0.12077973"
+    // Use Platform 36 to match plugin requirements
+    compileSdk = 36
+    buildToolsVersion = "36.1.0"
+    // NDK version removed - will be auto-detected if needed, or install via Android Studio SDK Manager
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
@@ -87,6 +89,5 @@ flutter {
 }
 
 dependencies {
-    // Provide ProGuard Keep annotations used by some SDKs (e.g., Razorpay) during R8
-    implementation("com.guardsquare:proguard-annotations:7.4.2")
+    // ProGuard annotations are already included by Razorpay SDK, no need to add separately
 }

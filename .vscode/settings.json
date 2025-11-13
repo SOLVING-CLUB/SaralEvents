@@ -1,2 +1,15 @@
 {
+  // Android SDK Platform Tools (ADB) PATH configuration
+  "terminal.integrated.env.osx": {
+    "ANDROID_HOME": "${env:HOME}/Library/Android/sdk",
+    "PATH": "${env:HOME}/Library/Android/sdk/platform-tools:${env:HOME}/Library/Android/sdk/tools:${env:HOME}/Library/Android/sdk/tools/bin:${env:PATH}"
+  },
+  // For all platforms (fallback)
+  "terminal.integrated.env.linux": {
+    "ANDROID_HOME": "${env:HOME}/Library/Android/sdk",
+    "PATH": "${env:HOME}/Library/Android/sdk/platform-tools:${env:HOME}/Library/Android/sdk/tools:${env:HOME}/Library/Android/sdk/tools/bin:${env:PATH}"
+  },
+  // Flutter/Dart settings
+  "dart.flutterSdkPath": null,
+  "dart.sdkPath": null
 }

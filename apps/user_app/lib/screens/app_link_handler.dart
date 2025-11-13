@@ -25,73 +25,170 @@ class _AppLinkHandlerState extends State<AppLinkHandler> {
   void _initAppLinks() {
     _appLinks = AppLinks();
     
-    // Listen to incoming app links
-    _linkSubscription = _appLinks.uriLinkStream.listen(
-      (Uri uri) {
-        print('🔗 Received app link: $uri');
-        _handleAppLink(uri.toString());
-      },
-      onError: (err) {
-        print('🔗 App link error: $err');
-      },
-    );
-
-    // Check for initial link (when app is opened from a link)
+    // Handle initial link (when app is opened from a link - cold start)
     _appLinks.getInitialLink().then((Uri? uri) {
       if (uri != null) {
-        print('🔗 Initial app link: $uri');
-        _handleAppLink(uri.toString());
+        print('🔗 Initial link (cold start): $uri');
+        // Wait longer for cold start to ensure router is ready
+        Future.delayed(const Duration(milliseconds: 2000), () {
+          if (mounted) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              Future.delayed(const Duration(milliseconds: 500), () {
+                if (mounted) {
+                  _handleLink(uri);
+                }
+              });
+            });
+          }
+        });
       }
     });
+
+    // Listen to incoming app links (when app is already running - warm start)
+    _linkSubscription = _appLinks.uriLinkStream.listen(
+      (Uri uri) {
+        print('🔗 Incoming link (warm start): $uri');
+        _handleLink(uri);
+      },
+      onError: (err) {
+        print('❌ App link error: $err');
+      },
+    );
   }
 
-  void _handleAppLink(String link) {
-    print('🔗 Handling app link: $link');
-    final uri = Uri.parse(link);
-    print('🔗 Parsed URI: scheme=${uri.scheme}, host=${uri.host}, path=${uri.path}');
+  void _handleLink(Uri uri) {
+    if (!mounted) return;
     
-    // Email confirmation: saralevents://auth/confirm or https://<site>/auth/confirm
-    if ((uri.scheme == 'saralevents' && uri.host == 'auth' && uri.path.startsWith('/confirm')) ||
-        (uri.scheme == 'https' && uri.path.startsWith('/auth/confirm'))) {
-      Future.delayed(const Duration(milliseconds: 400), () {
-        if (mounted) {
-          context.go('/auth/setup');
-        }
+    print('🔗 Processing: ${uri.toString()}');
+    print('   Scheme: ${uri.scheme}, Host: ${uri.host}, Path: ${uri.path}, Segments: ${uri.pathSegments}');
+
+    // Wait for router to be ready, then navigate
+    void navigateAfterDelay(String route) {
+      print('🔗 Preparing to navigate to: $route');
+      // Use multiple callbacks to ensure router is ready
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        Future.delayed(const Duration(milliseconds: 1000), () {
+          if (!mounted) {
+            print('⚠️ Widget not mounted, skipping navigation');
+            return;
+          }
+          try {
+            print('🔗 Navigating to: $route');
+            // Ensure we're navigating to a valid path (starts with /)
+            final path = route.startsWith('/') ? route : '/$route';
+            context.go(path);
+            print('✅ Navigation successful to: $path');
+          } catch (e, stackTrace) {
+            print('❌ Navigation error: $e');
+            print('Stack trace: $stackTrace');
+            // Fallback: try again after delay
+            Future.delayed(const Duration(milliseconds: 1000), () {
+              if (mounted) {
+                try {
+                  final path = route.startsWith('/') ? route : '/$route';
+                  print('🔗 Retrying navigation to: $path');
+                  context.go(path);
+                } catch (e2) {
+                  print('❌ Fallback navigation also failed: $e2');
+                  // Last resort: try to go to app home
+                  try {
+                    context.go('/app');
+                  } catch (e3) {
+                    print('❌ Even home navigation failed: $e3');
+                  }
+                }
+              }
+            });
+          }
+        });
       });
+    }
+
+    // Email confirmation
+    if (uri.path.contains('/auth/confirm') || (uri.scheme == 'saralevents' && uri.host == 'auth')) {
+      navigateAfterDelay('/auth/setup');
       return;
     }
 
-    // Handle custom scheme: saralevents://invite/{slug}
-    if (uri.scheme == 'saralevents' && uri.host == 'invite') {
-      // For saralevents://invite/abc-2865, the path is "/abc-2865"
-      final slug = uri.path.startsWith('/') ? uri.path.substring(1) : uri.path;
-      print('🔗 Custom scheme slug: $slug');
-      if (slug.isNotEmpty) {
-        // Add a small delay to ensure the app is fully initialized
-        Future.delayed(const Duration(milliseconds: 600), () {
-          if (mounted) {
-            print('🔗 Navigating to: /invite/$slug');
-            context.go('/invite/$slug');
-          }
-        });
+    // Invitation links: https://saralevents.vercel.app/invite/:slug or saralevents://invite/:slug
+    String? invitationSlug;
+    
+    // Handle https://saralevents.vercel.app/invite/:slug (universal link)
+    if (uri.scheme == 'https' && uri.host.contains('saralevents') && uri.path.contains('/invite/')) {
+      final segments = uri.pathSegments;
+      final slugIndex = segments.indexOf('invite');
+      if (slugIndex >= 0 && slugIndex < segments.length - 1) {
+        invitationSlug = segments[slugIndex + 1];
+      } else if (segments.isNotEmpty && segments.last != 'invite') {
+        invitationSlug = segments.last;
+      }
+    }
+    // Handle saralevents://invite/:slug (custom scheme)
+    else if (uri.scheme == 'saralevents' && uri.host == 'invite' && uri.pathSegments.isNotEmpty) {
+      invitationSlug = uri.pathSegments.first;
+    }
+    // Handle intent://invite/:slug#Intent... (for Android intent URLs)
+    else if (uri.scheme == 'intent' && uri.path.contains('/invite/')) {
+      final segments = uri.pathSegments;
+      final slugIndex = segments.indexOf('invite');
+      if (slugIndex >= 0 && slugIndex < segments.length - 1) {
+        invitationSlug = segments[slugIndex + 1];
+      }
+    }
+    
+    if (invitationSlug != null && invitationSlug.isNotEmpty) {
+      print('🔗 Invitation slug: $invitationSlug');
+      navigateAfterDelay('/invite/$invitationSlug');
+      return;
+    }
+
+    // Referral links: https://saralevents.vercel.app/refer?code=XXX or saralevents://refer/:code
+    if ((uri.scheme == 'https' && uri.host.contains('saralevents') && uri.path.contains('/refer')) ||
+        (uri.scheme == 'saralevents' && uri.host == 'refer') ||
+        (uri.scheme == 'intent' && uri.path.contains('/refer'))) {
+      String? code;
+      if (uri.queryParameters.containsKey('code')) {
+        code = uri.queryParameters['code'];
+      } else if (uri.pathSegments.isNotEmpty) {
+        final lastSegment = uri.pathSegments.last;
+        if (lastSegment != 'refer' && lastSegment.isNotEmpty) {
+          code = lastSegment;
+        }
+      }
+      
+      print('🔗 Referral code: $code');
+      if (code != null && code.isNotEmpty) {
+        navigateAfterDelay('/profile/refer?code=$code');
+      } else {
+        navigateAfterDelay('/profile/refer');
       }
       return;
     }
-    
-    // Handle HTTPS scheme: https://saralevents.vercel.app/invite/{slug}
-    if (uri.scheme == 'https' && uri.host == 'saralevents.vercel.app' && uri.path.startsWith('/invite/')) {
-      final slug = uri.path.substring('/invite/'.length);
-      print('🔗 HTTPS scheme slug: $slug');
-      if (slug.isNotEmpty) {
-        // Add a small delay to ensure the app is fully initialized
-        Future.delayed(const Duration(milliseconds: 600), () {
-          if (mounted) {
-            print('🔗 Navigating to: /invite/$slug');
-            context.go('/invite/$slug');
-          }
-        });
+
+    // Service links: https://saralevents.vercel.app/service/:id or saralevents://service/:id
+    if ((uri.scheme == 'https' && uri.host.contains('saralevents') && uri.path.contains('/service/')) ||
+        (uri.scheme == 'saralevents' && uri.host == 'service' && uri.pathSegments.isNotEmpty)) {
+      String? serviceId;
+      if (uri.scheme == 'https') {
+        final segments = uri.pathSegments;
+        final serviceIndex = segments.indexOf('service');
+        if (serviceIndex >= 0 && serviceIndex < segments.length - 1) {
+          serviceId = segments[serviceIndex + 1];
+        }
+      } else if (uri.scheme == 'saralevents') {
+        serviceId = uri.pathSegments.first;
+      }
+      
+      if (serviceId != null && serviceId.isNotEmpty) {
+        print('🔗 Service ID: $serviceId');
+        // Navigate to service details - you'll need to add this route or handle it
+        // For now, navigate to home and show service
+        navigateAfterDelay('/app');
+        return;
       }
     }
+
+    print('⚠️ Unhandled link: $uri');
   }
 
   @override

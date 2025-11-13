@@ -73,7 +73,7 @@
 	</array>
 	<key>com.apple.developer.associated-domains</key>
 	<array>
-		<string>applinks:saral-events.com</string>
+		<string>applinks:saralevents.vercel.app</string>
 	</array>
 </dict>
 </plist>

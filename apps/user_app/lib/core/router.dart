@@ -20,6 +20,13 @@ import '../screens/select_location_screen.dart';
 import '../screens/map_location_picker.dart';
 import '../screens/all_categories_screen.dart';
 import '../screens/all_events_screen.dart';
+import '../screens/profile_screen.dart';
+import '../screens/profile_details_screen.dart';
+import '../screens/wallet_payments_screen.dart';
+import '../screens/help_support_screen.dart';
+import '../screens/accessibility_screen.dart';
+import '../screens/settings_screen.dart';
+import '../screens/refer_earn_screen.dart';
 
 
 class AppRouter {
@@ -27,28 +34,53 @@ class AppRouter {
     return GoRouter(
       initialLocation: '/',
       refreshListenable: session,
-      // Sanitize platform-provided deep-link locations
+      // Deep links are handled by AppLinkHandler, router just needs to support the routes
       redirect: (ctx, state) {
         final uri = state.uri;
-        // Handle auth email confirmation deep link: saralevents://auth/confirm
-        if (uri.scheme == 'saralevents' && uri.host == 'auth' && uri.path.startsWith('/confirm')) {
+        
+        // Ignore custom scheme URIs - let AppLinkHandler handle them
+        if (uri.scheme == 'saralevents' || uri.scheme == 'intent') {
+          // AppLinkHandler will process these and navigate using context.go()
+          return null;
+        }
+        
+        // Handle auth redirects
+        if (uri.scheme == 'saralevents' && uri.host == 'auth' && uri.path.contains('/confirm')) {
           final s = Provider.of<UserSession>(ctx, listen: false);
-          // If already logged in, proceed to setup (profile completion). Otherwise go to login.
           return s.isAuthenticated ? '/auth/setup' : '/auth/login?verified=1';
         }
-        // Custom scheme: saralevents://invite/:slug
-        if (uri.scheme == 'saralevents' && uri.host == 'invite') {
-          final slug = uri.path.startsWith('/') ? uri.path.substring(1) : uri.path;
-          if (slug.isNotEmpty) return '/invite/$slug';
-          return '/';
-        }
-        // HTTPS app link: https://saralevents.vercel.app/invite/:slug
-        if (uri.scheme == 'https' && uri.host == 'saralevents.vercel.app' && uri.path.startsWith('/invite/')) {
-          final slug = uri.path.substring('/invite/'.length);
-          if (slug.isNotEmpty) return '/invite/$slug';
-          return '/';
-        }
         return null;
+      },
+      errorBuilder: (context, state) {
+        // Handle 404 errors gracefully
+        return Scaffold(
+          appBar: AppBar(title: const Text('Page Not Found')),
+          body: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.error_outline, size: 64, color: Colors.grey),
+                const SizedBox(height: 16),
+                Text(
+                  'Page Not Found',
+                  style: Theme.of(context).textTheme.headlineSmall,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  state.error?.toString() ?? 'The requested page could not be found.',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.grey),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 24),
+                TextButton.icon(
+                  onPressed: () => context.go('/app'),
+                  icon: const Icon(Icons.home),
+                  label: const Text('Home'),
+                ),
+              ],
+            ),
+          ),
+        );
       },
       routes: [
         GoRoute(
@@ -141,6 +173,16 @@ class AppRouter {
         GoRoute(
           path: '/invite/:slug',
           builder: (ctx, st) => InvitationPreviewScreen(slug: st.pathParameters['slug']!),
+        ),
+        GoRoute(path: '/profile', builder: (_, __) => const ProfileScreen()),
+        GoRoute(path: '/profile/details', builder: (_, __) => const ProfileDetailsScreen()),
+        GoRoute(path: '/profile/wallet', builder: (_, __) => const WalletPaymentsScreen()),
+        GoRoute(path: '/profile/help', builder: (_, __) => const HelpSupportScreen()),
+        GoRoute(path: '/profile/accessibility', builder: (_, __) => const AccessibilityScreen()),
+        GoRoute(path: '/profile/settings', builder: (_, __) => const SettingsScreen()),
+        GoRoute(
+          path: '/profile/refer',
+          builder: (_, state) => ReferEarnScreen(initialReferralCode: state.uri.queryParameters['code']),
         ),
         GoRoute(
           path: '/categories',

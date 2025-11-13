@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server'
 export const dynamic = 'force-static'
 
 export async function GET() {
-  const packageName = process.env.NEXT_PUBLIC_ANDROID_PACKAGE || 'com.example.saral_events_user_app'
+  const packageName = process.env.NEXT_PUBLIC_ANDROID_PACKAGE || 'com.mycompany.saralevents'
   const sha256 = (process.env.NEXT_PUBLIC_ANDROID_SHA256 || '').split(',').map(s => s.trim()).filter(Boolean)
   const statements = [
     {

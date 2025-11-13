@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:intl/intl.dart';
 import '../services/invitation_service.dart';
 import '../models/invitation_models.dart';
+import '../utils/deep_link_helper.dart';
 
 class InvitationPreviewScreen extends StatefulWidget {
   final String slug;
@@ -73,10 +77,78 @@ class _InvitationPreviewScreenState extends State<InvitationPreviewScreen> {
                       icon: const Icon(Icons.check_circle_outline),
                       label: const Text('RSVP Yes'),
                     ),
-                    const SizedBox(height: 8),
-                    Text('Share link: https://saralevents.vercel.app/invite/${_item!.slug}', style: TextStyle(color: Colors.grey.shade700)),
+                    const SizedBox(height: 12),
+                    OutlinedButton.icon(
+                      onPressed: () => _shareInvitation(),
+                      icon: const Icon(Icons.share_outlined),
+                      label: const Text('Share Invitation'),
+                    ),
+                    const SizedBox(height: 16),
+                    Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('Share Link:', style: TextStyle(fontWeight: FontWeight.w600)),
+                            const SizedBox(height: 8),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: SelectableText(
+                                    'saralevents://invite/${_item!.slug}',
+                                    style: const TextStyle(fontSize: 12, color: Colors.blue),
+                                  ),
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.copy, size: 18),
+                                  onPressed: () => _copyLink('saralevents://invite/${_item!.slug}'),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 4),
+                            const Text('Tap the link above to copy. Share it with friends to open the invitation directly in the app.', style: TextStyle(fontSize: 11, color: Colors.grey)),
+                          ],
+                        ),
+                      ),
+                    ),
                   ],
                 ),
+    );
+  }
+
+  Future<void> _shareInvitation() async {
+    if (_item == null) return;
+    final universalLink = DeepLinkHelper.invitationUniversalLink(_item!.slug);
+    final deepLink = DeepLinkHelper.invitationLink(_item!.slug);
+    
+    final shareText = DeepLinkHelper.shareableText(
+      title: 'You\'re invited to ${_item!.title}!',
+      date: _item!.eventDate != null 
+          ? DateFormat('EEE, dd MMM yyyy').format(_item!.eventDate!.toLocal())
+          : null,
+      time: _item!.eventTime,
+      venue: _item!.venueName,
+      universalLink: universalLink,
+      deepLink: deepLink,
+    );
+
+    try {
+      await Share.share(shareText, subject: 'Invitation: ${_item!.title}');
+    } catch (e) {
+      if (!mounted) return;
+      await _copyLink(deepLink);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Link copied to clipboard')),
+      );
+    }
+  }
+
+  Future<void> _copyLink(String link) async {
+    await Clipboard.setData(ClipboardData(text: link));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Link copied: $link')),
     );
   }
 }
