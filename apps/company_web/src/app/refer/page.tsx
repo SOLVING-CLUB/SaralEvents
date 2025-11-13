@@ -1,8 +1,8 @@
 "use client";
-import { useEffect } from "react";
+import { useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 
-export default function ReferPage() {
+function ReferContent() {
   const searchParams = useSearchParams();
   const code = searchParams.get("code");
 
@@ -58,6 +58,21 @@ export default function ReferPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function ReferPage() {
+  return (
+    <Suspense fallback={
+      <div className="max-w-2xl mx-auto p-6">
+        <div className="rounded-xl overflow-hidden border p-5">
+          <h1 className="text-2xl font-bold mb-4">Join Saral Events</h1>
+          <p className="text-gray-600">Loading...</p>
+        </div>
+      </div>
+    }>
+      <ReferContent />
+    </Suspense>
   );
 }
 
