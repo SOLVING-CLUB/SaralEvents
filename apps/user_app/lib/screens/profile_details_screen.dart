@@ -33,6 +33,13 @@ class _ProfileDetailsScreenState extends State<ProfileDetailsScreen> {
   bool _emailVerified = false;
   List<AddressInfo> _addresses = <AddressInfo>[];
   String? _activeAddressId;
+  String? _validateTenDigitPhone(String? value) {
+    final raw = (value ?? '').trim();
+    if (raw.isEmpty) return 'Enter phone number';
+    final digitsOnly = raw.replaceAll(RegExp(r'\D'), '');
+    if (digitsOnly.length != 10) return 'Enter 10-digit phone number';
+    return null;
+  }
 
   @override
   void initState() {
@@ -472,8 +479,11 @@ class _ProfileDetailsScreenState extends State<ProfileDetailsScreen> {
                           controller: _phoneController,
                           decoration: const InputDecoration(labelText: 'Phone number'),
                           keyboardType: TextInputType.phone,
-                          inputFormatters: [E164PhoneInputFormatter(maxLength: 15)],
-                          validator: Validators.phone,
+                          inputFormatters: [
+                            FilteringTextInputFormatter.digitsOnly,
+                            LengthLimitingTextInputFormatter(10),
+                          ],
+                          validator: _validateTenDigitPhone,
                         ),
                         const SizedBox(height: 12),
                         TextFormField(
