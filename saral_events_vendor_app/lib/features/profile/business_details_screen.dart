@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../../core/state/session.dart';
 import '../vendor_setup/vendor_service.dart';
@@ -101,6 +102,10 @@ class _BusinessDetailsScreenState extends State<BusinessDetailsScreen> {
               controller: _contact,
               decoration: const InputDecoration(labelText: 'Contact', prefixIcon: Icon(Icons.phone)),
               keyboardType: TextInputType.phone,
+              inputFormatters: [
+                FilteringTextInputFormatter.digitsOnly,
+                LengthLimitingTextInputFormatter(10),
+              ],
             ),
             const SizedBox(height: 12),
             TextField(
@@ -130,3 +135,4 @@ class _BusinessDetailsScreenState extends State<BusinessDetailsScreen> {
     );
   }
 }
+

@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/services.dart';
 // import 'package:syncfusion_flutter_pdfviewer/syncfusion_flutter_pdfviewer.dart';
 import 'dart:io';
 import '../../core/state/session.dart';
@@ -468,6 +469,10 @@ class _BusinessDetailsStep extends StatelessWidget {
               prefixIcon: Icon(Icons.phone),
             ),
             keyboardType: TextInputType.phone,
+            inputFormatters: [
+              FilteringTextInputFormatter.digitsOnly,
+              LengthLimitingTextInputFormatter(10),
+            ],
           ),
           const SizedBox(height: 16),
           
@@ -1401,5 +1406,6 @@ class _ReviewItem extends StatelessWidget {
     );
   }
 }
+
 
 
