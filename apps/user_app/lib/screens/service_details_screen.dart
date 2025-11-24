@@ -141,7 +141,8 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen>
           SliverAppBar(
             pinned: true,
             expandedHeight: 300,
-            backgroundColor: Colors.black,
+            backgroundColor: Colors.transparent,
+            surfaceTintColor: Colors.transparent,
             leading: Container(
               margin: const EdgeInsets.all(8),
               decoration: BoxDecoration(
