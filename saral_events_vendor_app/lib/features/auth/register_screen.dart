@@ -17,6 +17,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
   bool _isLoading = false;
+  bool _showPassword = false;
+  bool _showConfirmPassword = false;
 
   @override
   void dispose() {
@@ -127,15 +129,27 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       const SizedBox(height: 12),
                       TextFormField(
                         controller: _passwordController,
-                        decoration: const InputDecoration(labelText: 'Password'),
-                        obscureText: true,
+                        decoration: InputDecoration(
+                          labelText: 'Password',
+                          suffixIcon: IconButton(
+                            icon: Icon(_showPassword ? Icons.visibility_off : Icons.visibility),
+                            onPressed: () => setState(() => _showPassword = !_showPassword),
+                          ),
+                        ),
+                        obscureText: !_showPassword,
                         validator: (v) => (v == null || v.length < 6) ? 'Min 6 chars' : null,
                       ),
                       const SizedBox(height: 12),
                       TextFormField(
                         controller: _confirmPasswordController,
-                        decoration: const InputDecoration(labelText: 'Confirm Password'),
-                        obscureText: true,
+                        decoration: InputDecoration(
+                          labelText: 'Confirm Password',
+                          suffixIcon: IconButton(
+                            icon: Icon(_showConfirmPassword ? Icons.visibility_off : Icons.visibility),
+                            onPressed: () => setState(() => _showConfirmPassword = !_showConfirmPassword),
+                          ),
+                        ),
+                        obscureText: !_showConfirmPassword,
                         validator: (v) {
                           if (v == null || v.isEmpty) {
                             return 'Please confirm your password';
