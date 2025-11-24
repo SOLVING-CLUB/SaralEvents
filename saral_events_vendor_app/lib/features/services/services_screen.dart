@@ -11,6 +11,8 @@ import 'service_service.dart';
 import 'availability_service.dart';
 import '../../widgets/availability_calendar.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:provider/provider.dart';
+import '../../core/state/session.dart';
 
 
 class ServicesScreen extends StatefulWidget {
@@ -2091,6 +2093,22 @@ class _AddServicePageState extends State<_AddServicePage> {
   final _featKeyCtrl = TextEditingController();
   final _featValCtrl = TextEditingController();
   final List<MapEntry<String, String>> _features = <MapEntry<String, String>>[];
+  String? _vendorCategory;
+
+  bool get _shouldHideParkingField =>
+      _vendorCategory == 'Photography' || _vendorCategory == 'Music/DJ';
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final category = context.read<AppSession>().vendorProfile?.category;
+    if (category != _vendorCategory) {
+      _vendorCategory = category;
+      if (_shouldHideParkingField) {
+        _parkingCtrl.clear();
+      }
+    }
+  }
 
   void _addTagFromInput() {
     final raw = _tagCtrl.text.trim();
@@ -2313,6 +2331,7 @@ class _AddServicePageState extends State<_AddServicePage> {
 
   @override
   Widget build(BuildContext context) {
+    final hideParkingField = _shouldHideParkingField;
     return Scaffold(
       appBar: AppBar(
         title: const Text('Add Service'),
@@ -2477,13 +2496,14 @@ class _AddServicePageState extends State<_AddServicePage> {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 12),
-
-                    TextField(
-                      controller: _parkingCtrl,
-                      decoration: const InputDecoration(labelText: 'Parking Spaces'),
-                      keyboardType: TextInputType.number,
-                    ),
+                    if (!hideParkingField) ...[
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: _parkingCtrl,
+                        decoration: const InputDecoration(labelText: 'Parking Spaces'),
+                        keyboardType: TextInputType.number,
+                      ),
+                    ],
                     const SizedBox(height: 16),
 
                     const Text('Suited For'),
