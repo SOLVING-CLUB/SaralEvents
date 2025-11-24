@@ -94,7 +94,20 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
     super.dispose();
   }
 
-  Future<void> _cancelBooking(String bookingId) async {
+  Future<void> _confirmAndCancelBooking(String bookingId) async {
+    final shouldCancel = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Cancel booking?'),
+        content: const Text('Are you sure you want to cancel this booking?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Yes')),
+        ],
+      ),
+    );
+    if (shouldCancel != true) return;
+
     try {
       final success = await _bookingService.cancelBooking(bookingId);
       if (success) {
@@ -278,7 +291,11 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
             const SizedBox(height: 12),
             if (status.toLowerCase() == 'pending' || status.toLowerCase() == 'confirmed')
               Row(mainAxisAlignment: MainAxisAlignment.end, children: [
-                OutlinedButton(onPressed: () => _cancelBooking(booking['booking_id']), style: OutlinedButton.styleFrom(foregroundColor: Colors.red), child: const Text('Cancel Booking')),
+                OutlinedButton(
+                  onPressed: () => _confirmAndCancelBooking(booking['booking_id']),
+                  style: OutlinedButton.styleFrom(foregroundColor: Colors.red),
+                  child: const Text('Cancel Booking'),
+                ),
               ]),
           ],
         ),
