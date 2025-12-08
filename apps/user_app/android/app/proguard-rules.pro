@@ -20,7 +20,7 @@
 -keep class retrofit2.** { *; }
 
 # Deep Linking / App Links - Keep MainActivity and intent handling
--keep class com.mycompany.saralevents.MainActivity { *; }
+-keep class com.saralevents.userapp.MainActivity { *; }
 -keep class * extends android.app.Activity
 -keep class * extends android.app.Fragment
 -keepattributes *Annotation*

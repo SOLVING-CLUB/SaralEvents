@@ -5,16 +5,16 @@
 ### Android (via ADB)
 ```bash
 # Test invitation link (custom scheme)
-adb shell am start -W -a android.intent.action.VIEW -d "saralevents://invite/test-slug-123" com.mycompany.saralevents
+adb shell am start -W -a android.intent.action.VIEW -d "saralevents://invite/test-slug-123" com.saralevents.userapp
 
 # Test referral link (custom scheme)
-adb shell am start -W -a android.intent.action.VIEW -d "saralevents://refer/ABC123" com.mycompany.saralevents
+adb shell am start -W -a android.intent.action.VIEW -d "saralevents://refer/ABC123" com.saralevents.userapp
 
 # Test universal link (https)
-adb shell am start -W -a android.intent.action.VIEW -d "https://saralevents.vercel.app/invite/test-slug-123" com.mycompany.saralevents
+adb shell am start -W -a android.intent.action.VIEW -d "https://saralevents.vercel.app/invite/test-slug-123" com.saralevents.userapp
 
 # Test referral universal link
-adb shell am start -W -a android.intent.action.VIEW -d "https://saralevents.vercel.app/refer?code=ABC123" com.mycompany.saralevents
+adb shell am start -W -a android.intent.action.VIEW -d "https://saralevents.vercel.app/refer?code=ABC123" com.saralevents.userapp
 ```
 
 ### iOS (via Simulator Terminal)

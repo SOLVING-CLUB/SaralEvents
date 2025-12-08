@@ -1,0 +1,16 @@
+# Key properties file for Android app signing
+# Copy this file to key.properties and fill in your keystore details
+# DO NOT commit key.properties to version control
+
+storePassword=your_keystore_password
+keyPassword=your_key_password
+keyAlias=your_key_alias
+storeFile=../app/your-release-key.keystore
+
+# Instructions:
+# 1. Place your keystore file in android/app/ directory
+# 2. Update storeFile path relative to android/ directory
+# 3. Fill in your passwords and key alias
+# 4. Verify SHA1 fingerprint matches: 42:C0:05:DB:3D:92:D7:39:A5:DF:25:F8:FD:72:50:4E:FE:C0:A9:1F
+# 5. To verify SHA1: keytool -list -v -keystore your-release-key.keystore
+

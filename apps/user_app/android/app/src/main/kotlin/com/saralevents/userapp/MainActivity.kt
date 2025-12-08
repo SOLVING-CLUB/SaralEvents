@@ -1,4 +1,4 @@
-package com.mycompany.saralevents
+package com.saralevents.userapp
 
 import io.flutter.embedding.android.FlutterFragmentActivity
 

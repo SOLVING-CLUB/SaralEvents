@@ -24,7 +24,7 @@ flutter build appbundle --release
 
 # Test deep link
 adb install build/app/outputs/flutter-apk/app-release.apk
-adb shell am start -W -a android.intent.action.VIEW -d "saralevents://invite/test-slug" com.mycompany.saralevents
+adb shell am start -W -a android.intent.action.VIEW -d "saralevents://invite/test-slug" com.saralevents.userapp
 ```
 
 ### iOS Release Build
@@ -70,7 +70,7 @@ If deep links don't work in release build:
 
 1. **Check ProGuard rules**: Ensure `proguard-rules.pro` is included
 2. **Check AndroidManifest**: Verify intent filters are present
-3. **Check package name**: Ensure `com.mycompany.saralevents` matches everywhere
+3. **Check package name**: Ensure `com.saralevents.userapp` matches everywhere
 4. **Test with adb**: Use `adb logcat | grep -i "intent\|deep\|link"` to debug
 5. **Check app installation**: Uninstall debug version before installing release
 

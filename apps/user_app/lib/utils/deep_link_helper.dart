@@ -2,7 +2,7 @@ import '../core/config/app_config.dart';
 
 /// Helper class for generating deep links in various formats
 class DeepLinkHelper {
-  static const String packageName = 'com.mycompany.saralevents';
+  static const String packageName = 'com.saralevents.userapp';
   static const String customScheme = 'saralevents';
 
   /// Generate invitation universal link (https://)

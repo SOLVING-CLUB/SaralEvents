@@ -59,7 +59,7 @@ keytool -list -v -keystore /path/to/your/keystore.jks -alias your-key-alias
 
 In your hosting platform (Vercel/Netlify), add:
 ```
-NEXT_PUBLIC_ANDROID_PACKAGE=com.mycompany.saralevents
+NEXT_PUBLIC_ANDROID_PACKAGE=com.saralevents.userapp
 NEXT_PUBLIC_ANDROID_SHA256=YOUR_SHA256_FINGERPRINT_HERE
 ```
 
@@ -73,7 +73,7 @@ NEXT_PUBLIC_ANDROID_SHA256=DEBUG_SHA256,RELEASE_SHA256
 Add to environment variables:
 ```
 NEXT_PUBLIC_APPLE_TEAM_ID=YOUR_TEAM_ID
-NEXT_PUBLIC_IOS_BUNDLE_ID=com.mycompany.saralevents
+NEXT_PUBLIC_IOS_BUNDLE_ID=com.saralevents.userapp
 ```
 
 ## How It Works
@@ -99,7 +99,7 @@ NEXT_PUBLIC_IOS_BUNDLE_ID=com.mycompany.saralevents
 **Android:**
 ```bash
 # Check if domain is verified
-adb shell pm get-app-links com.mycompany.saralevents
+adb shell pm get-app-links com.saralevents.userapp
 
 # Should show: saralevents.vercel.app: verified
 ```
@@ -132,7 +132,7 @@ Visit these URLs in browser (should show "Open in App" page):
 ### Links open in browser instead of app:
 
 1. **Check domain verification:**
-   - Android: `adb shell pm get-app-links com.mycompany.saralevents`
+   - Android: `adb shell pm get-app-links com.saralevents.userapp`
    - iOS: Check Associated Domains in Settings
 
 2. **Verify SHA256 fingerprint** matches in `assetlinks.json`

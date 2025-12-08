@@ -40,22 +40,22 @@ saralevents://service/12345
 
 ### Test Invitation Link
 ```bash
-adb shell am start -W -a android.intent.action.VIEW -d "saralevents://invite/hgh-2110" com.mycompany.saralevents
+adb shell am start -W -a android.intent.action.VIEW -d "saralevents://invite/hgh-2110" com.saralevents.userapp
 ```
 
 ### Test Referral Link
 ```bash
-adb shell am start -W -a android.intent.action.VIEW -d "saralevents://refer/ABC123" com.mycompany.saralevents
+adb shell am start -W -a android.intent.action.VIEW -d "saralevents://refer/ABC123" com.saralevents.userapp
 ```
 
 ### Test Service Link
 ```bash
-adb shell am start -W -a android.intent.action.VIEW -d "saralevents://service/12345" com.mycompany.saralevents
+adb shell am start -W -a android.intent.action.VIEW -d "saralevents://service/12345" com.saralevents.userapp
 ```
 
 ### Alternative: Using ADB with Intent URI (Android Intent URL format)
 ```bash
-adb shell am start -W -a android.intent.action.VIEW -d "intent://invite/hgh-2110#Intent;scheme=saralevents;package=com.mycompany.saralevents;end" com.mycompany.saralevents
+adb shell am start -W -a android.intent.action.VIEW -d "intent://invite/hgh-2110#Intent;scheme=saralevents;package=com.saralevents.userapp;end" com.saralevents.userapp
 ```
 
 ### What Each Part Means:
@@ -64,7 +64,7 @@ adb shell am start -W -a android.intent.action.VIEW -d "intent://invite/hgh-2110
 - `-W` - Wait for launch to complete
 - `-a android.intent.action.VIEW` - Action type (view a URI)
 - `-d "saralevents://..."` - Data/URI to open
-- `com.mycompany.saralevents` - Package name (optional, helps Android find the right app)
+- `com.saralevents.userapp` - Package name (optional, helps Android find the right app)
 
 ## Usage in Chrome/Other Apps
 
@@ -72,7 +72,7 @@ adb shell am start -W -a android.intent.action.VIEW -d "intent://invite/hgh-2110
 
 For better Chrome compatibility, use Android Intent URL format:
 ```
-intent://invite/{slug}#Intent;scheme=saralevents;package=com.mycompany.saralevents;end
+intent://invite/{slug}#Intent;scheme=saralevents;package=com.saralevents.userapp;end
 ```
 
 **Why Android Intent URLs?**
@@ -83,7 +83,7 @@ intent://invite/{slug}#Intent;scheme=saralevents;package=com.mycompany.saraleven
 
 **Example:**
 ```
-intent://invite/hgh-2110#Intent;scheme=saralevents;package=com.mycompany.saralevents;end
+intent://invite/hgh-2110#Intent;scheme=saralevents;package=com.saralevents.userapp;end
 ```
 
 ### Custom Schemes
