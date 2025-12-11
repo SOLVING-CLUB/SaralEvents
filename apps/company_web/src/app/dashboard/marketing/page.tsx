@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase'
 import Image from 'next/image'
+import { Megaphone, Image as ImageIcon, PlusCircle, Eye, EyeOff, Trash2 } from 'lucide-react'
 
 interface Banner {
   id: string
@@ -15,7 +16,7 @@ interface Banner {
   mime_type?: string
 }
 
-export default function BannersPage() {
+export default function MarketingPage() {
   const [banners, setBanners] = useState<Banner[]>([])
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
@@ -52,34 +53,30 @@ export default function BannersPage() {
       setUploading(true)
       setError(null)
 
-      // Validate file
       if (!file.type.startsWith('image/')) {
         throw new Error('Please select an image file')
       }
 
-      if (file.size > 5 * 1024 * 1024) { // 5MB limit
+      if (file.size > 5 * 1024 * 1024) {
         throw new Error('File size must be less than 5MB')
       }
 
-      // Generate unique filename
       const fileExt = file.name.split('.').pop()
       const fileName = `banner_${Date.now()}.${fileExt}`
       const filePath = `banners/${fileName}`
 
-      // Upload to Supabase Storage
       const { error: uploadError } = await supabase.storage
         .from('user-app-assets')
         .upload(filePath, file)
 
       if (uploadError) throw uploadError
 
-      // Create database record
       const { error: dbError } = await supabase
         .from('app_assets')
         .insert({
           app_type: 'user',
           asset_type: 'banner',
-          asset_name: fileName.replace(/\.[^/.]+$/, ""), // Remove extension
+          asset_name: fileName.replace(/\.[^/.]+$/, ""),
           asset_path: filePath,
           bucket_name: 'user-app-assets',
           file_size: file.size,
@@ -90,11 +87,8 @@ export default function BannersPage() {
 
       if (dbError) throw dbError
 
-      // Reload banners
       await loadBanners()
       setSuccess('Banner uploaded successfully! Changes will appear in the user app within seconds.')
-      
-      // Clear success message after 5 seconds
       setTimeout(() => setSuccess(null), 5000)
     } catch (err) {
       console.error('Error uploading banner:', err)
@@ -125,14 +119,12 @@ export default function BannersPage() {
     if (!confirm('Are you sure you want to delete this banner?')) return
 
     try {
-      // Delete from storage
       const { error: storageError } = await supabase.storage
         .from(banner.bucket_name)
         .remove([banner.asset_path])
 
       if (storageError) console.warn('Storage deletion error:', storageError)
 
-      // Delete from database
       const { error: dbError } = await supabase
         .from('app_assets')
         .delete()
@@ -140,6 +132,8 @@ export default function BannersPage() {
 
       if (dbError) throw dbError
       await loadBanners()
+      setSuccess('Banner deleted successfully')
+      setTimeout(() => setSuccess(null), 3000)
     } catch (err) {
       console.error('Error deleting banner:', err)
       setError('Failed to delete banner')
@@ -153,25 +147,69 @@ export default function BannersPage() {
   }
 
   return (
-    <div className="min-h-screen p-6">
-      <div className="max-w-6xl mx-auto">
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="text-2xl font-bold">Banner Management</h1>
-            <p className="text-gray-600">
-              Manage banners displayed in the user app • 
-              <span className="font-medium text-blue-600"> {banners.filter(b => b.is_active).length} active</span> • 
-              <span className="text-gray-500">{banners.length} total</span>
-            </p>
-            {banners.length > 1 && (
-              <p className="text-sm text-green-600 mt-1">
-                📱 Multiple banners will display as a carousel in the user app
-              </p>
-            )}
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+            <Megaphone className="h-7 w-7 text-blue-600" />
+            Marketing & Promotions
+          </h1>
+          <p className="text-gray-600">
+            Manage promotional banners and campaigns for the user app
+          </p>
+        </div>
+      </div>
+
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="bg-white p-6 rounded-lg border border-gray-200">
+          <div className="flex items-center">
+            <div className="p-3 bg-blue-50 rounded-full">
+              <ImageIcon className="h-6 w-6 text-blue-600" />
+            </div>
+            <div className="ml-4">
+              <p className="text-sm text-gray-600">Total Banners</p>
+              <p className="text-2xl font-bold text-gray-900">{banners.length}</p>
+            </div>
           </div>
-          
-          <label className="px-4 py-2 bg-blue-600 text-white rounded-lg cursor-pointer hover:bg-blue-700 transition">
-            {uploading ? 'Uploading...' : 'Upload Banner'}
+        </div>
+        <div className="bg-white p-6 rounded-lg border border-gray-200">
+          <div className="flex items-center">
+            <div className="p-3 bg-green-50 rounded-full">
+              <Eye className="h-6 w-6 text-green-600" />
+            </div>
+            <div className="ml-4">
+              <p className="text-sm text-gray-600">Active Banners</p>
+              <p className="text-2xl font-bold text-green-600">{banners.filter(b => b.is_active).length}</p>
+            </div>
+          </div>
+        </div>
+        <div className="bg-white p-6 rounded-lg border border-gray-200">
+          <div className="flex items-center">
+            <div className="p-3 bg-gray-100 rounded-full">
+              <EyeOff className="h-6 w-6 text-gray-600" />
+            </div>
+            <div className="ml-4">
+              <p className="text-sm text-gray-600">Inactive Banners</p>
+              <p className="text-2xl font-bold text-gray-600">{banners.filter(b => !b.is_active).length}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Upload Section */}
+      <div className="bg-white p-6 rounded-lg border border-gray-200">
+        <h3 className="text-lg font-semibold mb-4">Upload New Banner</h3>
+        <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-blue-400 transition-colors">
+          <label className="cursor-pointer">
+            <div className="flex flex-col items-center">
+              <PlusCircle className="h-12 w-12 text-gray-400 mb-3" />
+              <p className="text-gray-600 mb-1">
+                {uploading ? 'Uploading...' : 'Click to upload a banner image'}
+              </p>
+              <p className="text-sm text-gray-400">PNG, JPG, GIF up to 5MB</p>
+            </div>
             <input
               type="file"
               accept="image/*"
@@ -184,39 +222,52 @@ export default function BannersPage() {
             />
           </label>
         </div>
-
-        {error && (
-          <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
-            <p className="text-red-600">{error}</p>
-            <button 
-              onClick={() => setError(null)}
-              className="mt-2 text-sm text-red-500 hover:text-red-700"
-            >
-              Dismiss
-            </button>
-          </div>
+        {banners.length > 1 && (
+          <p className="text-sm text-blue-600 mt-3">
+            📱 Multiple banners will display as a carousel in the user app
+          </p>
         )}
+      </div>
 
-        {success && (
-          <div className="mb-4 p-4 bg-green-50 border border-green-200 rounded-lg">
-            <p className="text-green-600">{success}</p>
-            <button 
-              onClick={() => setSuccess(null)}
-              className="mt-2 text-sm text-green-500 hover:text-green-700"
-            >
-              Dismiss
-            </button>
-          </div>
-        )}
+      {/* Messages */}
+      {error && (
+        <div className="p-4 bg-red-50 border border-red-200 rounded-lg flex items-center justify-between">
+          <p className="text-red-600">{error}</p>
+          <button onClick={() => setError(null)} className="text-red-500 hover:text-red-700 text-sm">
+            Dismiss
+          </button>
+        </div>
+      )}
 
+      {success && (
+        <div className="p-4 bg-green-50 border border-green-200 rounded-lg flex items-center justify-between">
+          <p className="text-green-600">{success}</p>
+          <button onClick={() => setSuccess(null)} className="text-green-500 hover:text-green-700 text-sm">
+            Dismiss
+          </button>
+        </div>
+      )}
+
+      {/* Banners Grid */}
+      <div className="bg-white rounded-lg border border-gray-200">
+        <div className="p-4 border-b border-gray-200">
+          <h3 className="text-lg font-semibold">All Banners</h3>
+        </div>
+        
         {loading ? (
           <div className="flex items-center justify-center py-12">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
           </div>
+        ) : banners.length === 0 ? (
+          <div className="text-center py-12">
+            <ImageIcon className="mx-auto h-12 w-12 text-gray-300 mb-4" />
+            <h3 className="text-lg font-medium text-gray-900 mb-1">No banners uploaded</h3>
+            <p className="text-gray-600">Upload your first promotional banner to get started</p>
+          </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 p-6">
             {banners.map((banner) => (
-              <div key={banner.id} className="bg-white rounded-lg shadow-sm border overflow-hidden">
+              <div key={banner.id} className="bg-gray-50 rounded-lg overflow-hidden border border-gray-200">
                 <div className="aspect-video relative">
                   <Image
                     src={getBannerUrl(banner)}
@@ -227,58 +278,47 @@ export default function BannersPage() {
                   <div className={`absolute top-2 right-2 px-2 py-1 rounded text-xs font-medium ${
                     banner.is_active 
                       ? 'bg-green-100 text-green-800' 
-                      : 'bg-gray-100 text-gray-800'
+                      : 'bg-gray-200 text-gray-600'
                   }`}>
                     {banner.is_active ? 'Active' : 'Inactive'}
                   </div>
                 </div>
                 
                 <div className="p-4">
-                  <h3 className="font-medium text-gray-900 mb-1">{banner.asset_name}</h3>
-                  <p className="text-sm text-gray-600 mb-2">{banner.description}</p>
-                  
-                  <div className="text-xs text-gray-500 mb-3">
-                    <div>Size: {banner.file_size ? `${(banner.file_size / 1024).toFixed(1)} KB` : 'Unknown'}</div>
-                    <div>Uploaded: {new Date(banner.created_at).toLocaleDateString()}</div>
-                  </div>
+                  <h4 className="font-medium text-gray-900 mb-1 truncate">{banner.asset_name}</h4>
+                  <p className="text-sm text-gray-500 mb-3">
+                    {banner.file_size ? `${(banner.file_size / 1024).toFixed(1)} KB` : ''} • 
+                    {new Date(banner.created_at).toLocaleDateString()}
+                  </p>
                   
                   <div className="flex gap-2">
                     <button
                       onClick={() => toggleBannerStatus(banner.id, banner.is_active)}
-                      className={`flex-1 px-3 py-1.5 text-sm rounded transition ${
+                      className={`flex-1 px-3 py-2 text-sm rounded-lg flex items-center justify-center gap-1 transition ${
                         banner.is_active
-                          ? 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                          ? 'bg-gray-200 text-gray-700 hover:bg-gray-300'
                           : 'bg-green-100 text-green-700 hover:bg-green-200'
                       }`}
                     >
-                      {banner.is_active ? 'Deactivate' : 'Activate'}
+                      {banner.is_active ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      {banner.is_active ? 'Hide' : 'Show'}
                     </button>
                     
                     <button
                       onClick={() => deleteBanner(banner)}
-                      className="px-3 py-1.5 text-sm bg-red-100 text-red-700 rounded hover:bg-red-200 transition"
+                      className="px-3 py-2 text-sm bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition flex items-center gap-1"
                     >
+                      <Trash2 className="h-4 w-4" />
                       Delete
                     </button>
                   </div>
                 </div>
               </div>
             ))}
-            
-            {banners.length === 0 && (
-              <div className="col-span-full text-center py-12">
-                <div className="text-gray-400 mb-2">
-                  <svg className="mx-auto h-12 w-12" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                  </svg>
-                </div>
-                <h3 className="text-lg font-medium text-gray-900 mb-1">No banners uploaded</h3>
-                <p className="text-gray-600">Upload your first banner to get started</p>
-              </div>
-            )}
           </div>
         )}
       </div>
     </div>
   )
 }
+

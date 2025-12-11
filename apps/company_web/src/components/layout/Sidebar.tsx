@@ -10,42 +10,50 @@ import {
   Settings, 
   Users, 
   Store, 
-  Image,
-  BarChart3
+  Megaphone,
+  BarChart3,
+  Star,
+  HeadphonesIcon,
+  Shield
 } from 'lucide-react'
 
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Orders', href: '/dashboard/orders', icon: ShoppingBag },
-  { name: 'Chats', href: '/dashboard/chats', icon: MessageSquare },
   { name: 'Services', href: '/dashboard/services', icon: Settings },
   { name: 'Vendors', href: '/dashboard/vendors', icon: Store },
   { name: 'Users', href: '/dashboard/users', icon: Users },
-  { name: 'Banners', href: '/dashboard/banners', icon: Image },
+  { name: 'Reviews & Feedback', href: '/dashboard/reviews', icon: Star },
+  { name: 'Support Tickets', href: '/dashboard/support', icon: HeadphonesIcon },
+  { name: 'Marketing & Promotions', href: '/dashboard/marketing', icon: Megaphone },
   { name: 'Analytics', href: '/dashboard/analytics', icon: BarChart3 },
+  { name: 'Access Control', href: '/dashboard/access-control', icon: Shield },
 ]
 
 export function Sidebar() {
   const pathname = usePathname()
 
   return (
-    <div className="w-64 bg-white border-r border-gray-200 h-full">
-      <nav className="mt-8 px-4">
-        <ul className="space-y-2">
+    <div className="w-64 bg-white border-r border-gray-200 min-h-[calc(100vh-64px)]">
+      <nav className="mt-6 px-4">
+        <ul className="space-y-1">
           {navigation.map((item) => {
-            const isActive = pathname === item.href
+            // For Dashboard, only match exactly; for others, match subpaths too
+            const isActive = item.href === '/dashboard' 
+              ? pathname === '/dashboard'
+              : pathname === item.href || pathname?.startsWith(item.href + '/')
             return (
               <li key={item.name}>
                 <Link
                   href={item.href}
                   className={cn(
-                    'flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors',
+                    'flex items-center px-3 py-2.5 text-sm font-medium rounded-lg transition-colors',
                     isActive
-                      ? 'bg-gray-100 text-gray-900'
+                      ? 'bg-blue-50 text-blue-700 border-l-4 border-blue-600 -ml-1 pl-4'
                       : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
                   )}
                 >
-                  <item.icon className="h-5 w-5 mr-3" />
+                  <item.icon className="h-5 w-5 mr-3 flex-shrink-0" />
                   {item.name}
                 </Link>
               </li>
