@@ -55,7 +55,20 @@ export default function ReviewsPage() {
     if (error) {
       setError(error.message)
     } else {
-      setReviews((data || []) as Review[])
+      // Transform Supabase response: arrays to single objects
+      const transformedData = (data || []).map((review: any) => ({
+        ...review,
+        profiles: Array.isArray(review.profiles) && review.profiles.length > 0 
+          ? review.profiles[0] 
+          : null,
+        services: Array.isArray(review.services) && review.services.length > 0 
+          ? review.services[0] 
+          : null,
+        vendor_profiles: Array.isArray(review.vendor_profiles) && review.vendor_profiles.length > 0 
+          ? review.vendor_profiles[0] 
+          : null,
+      })) as Review[]
+      setReviews(transformedData)
     }
     setLoading(false)
   }
@@ -64,9 +77,9 @@ export default function ReviewsPage() {
     if (ratingFilter !== 'all' && review.rating !== ratingFilter) return false
     if (search) {
       const q = search.toLowerCase()
-      const userName = (review.profiles as any)?.full_name?.toLowerCase() || ''
-      const serviceName = (review.services as any)?.name?.toLowerCase() || ''
-      const vendorName = (review.vendor_profiles as any)?.business_name?.toLowerCase() || ''
+      const userName = review.profiles?.full_name?.toLowerCase() || ''
+      const serviceName = review.services?.name?.toLowerCase() || ''
+      const vendorName = review.vendor_profiles?.business_name?.toLowerCase() || ''
       const comment = review.comment?.toLowerCase() || ''
       if (!userName.includes(q) && !serviceName.includes(q) && !vendorName.includes(q) && !comment.includes(q)) {
         return false
@@ -214,7 +227,7 @@ export default function ReviewsPage() {
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1">
                       <span className="font-medium text-gray-900">
-                        {(review.profiles as any)?.full_name || 'Anonymous'}
+                        {review.profiles?.full_name || 'Anonymous'}
                       </span>
                       <div className="flex items-center">
                         {[1, 2, 3, 4, 5].map((star) => (
@@ -230,8 +243,8 @@ export default function ReviewsPage() {
                       </div>
                     </div>
                     <div className="text-sm text-gray-500 mb-2">
-                      Service: {(review.services as any)?.name || 'N/A'} • 
-                      Vendor: {(review.vendor_profiles as any)?.business_name || 'N/A'}
+                      Service: {review.services?.name || 'N/A'} • 
+                      Vendor: {review.vendor_profiles?.business_name || 'N/A'}
                     </div>
                     {review.comment && (
                       <p className="text-gray-700">{review.comment}</p>
