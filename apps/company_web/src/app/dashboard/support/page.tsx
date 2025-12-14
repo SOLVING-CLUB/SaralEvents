@@ -79,7 +79,17 @@ export default function SupportPage() {
         setError(error.message)
       }
     } else {
-      setTickets((data || []) as SupportTicket[])
+      // Transform Supabase response: arrays to single objects
+      const transformedData = (data || []).map((ticket: any) => ({
+        ...ticket,
+        profiles: Array.isArray(ticket.profiles) && ticket.profiles.length > 0 
+          ? ticket.profiles[0] 
+          : null,
+        vendor_profiles: Array.isArray(ticket.vendor_profiles) && ticket.vendor_profiles.length > 0 
+          ? ticket.vendor_profiles[0] 
+          : null,
+      })) as SupportTicket[]
+      setTickets(transformedData)
     }
     setLoading(false)
   }
@@ -106,8 +116,8 @@ export default function SupportPage() {
     if (search) {
       const q = search.toLowerCase()
       const subject = ticket.subject?.toLowerCase() || ''
-      const userName = (ticket.profiles as any)?.full_name?.toLowerCase() || ''
-      const email = (ticket.profiles as any)?.email?.toLowerCase() || ''
+      const userName = ticket.profiles?.full_name?.toLowerCase() || ''
+      const email = ticket.profiles?.email?.toLowerCase() || ''
       if (!subject.includes(q) && !userName.includes(q) && !email.includes(q) && !ticket.id.includes(q)) {
         return false
       }
@@ -274,8 +284,8 @@ export default function SupportPage() {
                     </div>
                   </td>
                   <td className="p-3">
-                    <p className="text-gray-900">{(ticket.profiles as any)?.full_name || 'Unknown'}</p>
-                    <p className="text-xs text-gray-500">{(ticket.profiles as any)?.email || ''}</p>
+                    <p className="text-gray-900">{ticket.profiles?.full_name || 'Unknown'}</p>
+                    <p className="text-xs text-gray-500">{ticket.profiles?.email || ''}</p>
                   </td>
                   <td className="p-3">
                     <span className="px-2 py-1 bg-gray-100 text-gray-700 rounded text-xs">
