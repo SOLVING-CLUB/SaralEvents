@@ -7,6 +7,7 @@ import 'core/router.dart';
 import 'core/theme/app_theme.dart';
 import 'core/widgets/permission_manager.dart';
 import 'screens/app_link_handler.dart';
+//test
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
