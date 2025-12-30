@@ -44,7 +44,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
             _passwordController.text,
             firstName: _firstNameController.text.trim(),
             lastName: _lastNameController.text.trim(),
-            phoneNumber: _phoneController.text.trim().isEmpty ? null : _phoneController.text.trim(),
+            phoneNumber: _phoneController.text.trim(),
           );
       if (!mounted) return;
       if (requiresEmailConfirm) {
@@ -208,7 +208,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       const SizedBox(height: 12),
                       TextFormField(
                         controller: _phoneController,
-                        decoration: const InputDecoration(labelText: 'Phone Number (Optional)'),
+                        decoration: const InputDecoration(labelText: 'Phone Number'),
                         keyboardType: TextInputType.phone,
                         inputFormatters: [
                           FilteringTextInputFormatter.digitsOnly,
@@ -216,7 +216,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         ],
                         validator: (v) {
                           final t = (v ?? '').trim();
-                          if (t.isEmpty) return null; // optional
+                          if (t.isEmpty) return 'Phone number is required';
                           if (t.length != 10) return 'Phone number must be exactly 10 digits';
                           return null;
                         },

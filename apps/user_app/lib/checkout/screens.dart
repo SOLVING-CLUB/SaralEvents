@@ -83,6 +83,8 @@ class CartPage extends StatelessWidget {
                 details == null
                     ? 'No billing details yet'
                     : '${details.name} • ${details.phone}\n${details.email}',
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
               ),
             ),
             Text('Total: ₹${state.totalPrice.toStringAsFixed(0)}', style: const TextStyle(fontWeight: FontWeight.bold)),
@@ -91,14 +93,14 @@ class CartPage extends StatelessWidget {
       );
     });
   }
-
-  Widget _bottomNav() { return const SizedBox.shrink(); }
 }
 
 class PaymentDetailsPage extends StatelessWidget {
   final VoidCallback onChoosePayment;
   final VoidCallback onNext;
-  const PaymentDetailsPage({super.key, required this.onChoosePayment, required this.onNext});
+  PaymentDetailsPage({super.key, required this.onChoosePayment, required this.onNext});
+
+  final GlobalKey<BillingFormState> _billingFormKey = GlobalKey<BillingFormState>();
 
   @override
   Widget build(BuildContext context) {
@@ -111,6 +113,7 @@ class PaymentDetailsPage extends StatelessWidget {
           InstallmentCard(installments: state.installmentBreakdown, total: state.totalPrice),
           const SizedBox(height: 8),
           BillingForm(
+            key: _billingFormKey,
             initial: state.billingDetails,
             onSave: (d) {
               context.read<CheckoutState>().saveBillingDetails(d);
@@ -122,7 +125,17 @@ class PaymentDetailsPage extends StatelessWidget {
             children: [
               Expanded(
                 child: ElevatedButton(
-                  onPressed: onChoosePayment,
+                  onPressed: () {
+                    final formState = _billingFormKey.currentState;
+                    final ok = formState?.validateAndSave() ?? false;
+                    if (!ok) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Please fill all required details before choosing payment method')),
+                      );
+                      return;
+                    }
+                    onChoosePayment();
+                  },
                   style: _primaryBtn(context),
                   child: const Text('Choose Payment'),
                 ),
@@ -133,7 +146,20 @@ class PaymentDetailsPage extends StatelessWidget {
           Row(
             children: [
               Expanded(
-                child: OutlinedButton(onPressed: onNext, child: const Text('Next')),
+                child: OutlinedButton(
+                  onPressed: () {
+                    final formState = _billingFormKey.currentState;
+                    final ok = formState?.validateAndSave() ?? false;
+                    if (!ok) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Please fill all required details before continuing')),
+                      );
+                      return;
+                    }
+                    onNext();
+                  },
+                  child: const Text('Next'),
+                ),
               ),
             ],
           ),
@@ -173,7 +199,12 @@ class PaymentSummaryPage extends StatelessWidget {
                   Text('Email: ${d.email}') ,
                   Text('Phone: ${d.phone}') ,
                   if (d.eventDate != null) Text('Event: ${d.eventDate!.day}/${d.eventDate!.month}/${d.eventDate!.year}') ,
-                  if (d.messageToVendor != null) Text('Message: ${d.messageToVendor}') ,
+                  if (d.messageToVendor != null)
+                    Text(
+                      'Message: ${d.messageToVendor}',
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                 ],
                 const SizedBox(height: 12),
                 InstallmentCard(installments: state.installmentBreakdown, total: state.totalPrice, margin: EdgeInsets.zero),
@@ -228,7 +259,47 @@ class _PaymentMethodPageState extends State<PaymentMethodPage> {
               child: ElevatedButton(
                 onPressed: _isProcessing ? null : () async {
                   final state = context.read<CheckoutState>();
+
+                  // Hard guard: do not allow payment if billing details are missing
+                  if (state.billingDetails == null) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Please fill your billing details before making a payment.'),
+                      ),
+                    );
+                    Navigator.of(context).pop(); // Go back to previous step
+                    return;
+                  }
+
                   final m = _method ?? SelectedPaymentMethod(type: PaymentMethodType.cash);
+
+                  // Basic validation for non-cash payment methods
+                  if (m.type == PaymentMethodType.upi) {
+                    if (m.upiId == null || m.upiId!.trim().isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Please enter a valid UPI ID.')),
+                      );
+                      return;
+                    }
+                  } else if (m.type == PaymentMethodType.card) {
+                    if ((m.cardNumber == null || m.cardNumber!.trim().length < 8) ||
+                        (m.cardName == null || m.cardName!.trim().isEmpty) ||
+                        (m.cardExpiry == null || m.cardExpiry!.trim().isEmpty) ||
+                        (m.cardCvv == null || m.cardCvv!.trim().length < 3)) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Please fill all card details correctly.')),
+                      );
+                      return;
+                    }
+                  } else if (m.type == PaymentMethodType.netBanking) {
+                    if (m.bankName == null || m.bankName!.trim().isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Please select a bank for net banking.')),
+                      );
+                      return;
+                    }
+                  }
+
                   state.savePaymentMethod(m);
 
                   if (m.type == PaymentMethodType.cash) {

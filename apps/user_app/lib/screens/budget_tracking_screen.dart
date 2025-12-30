@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/event_planning_models.dart';
 import '../services/event_planning_service.dart';
+import '../core/input_formatters.dart';
 
 class BudgetTrackingScreen extends StatefulWidget {
   final Event event;
@@ -906,6 +907,18 @@ class _BudgetItemDialogState extends State<_BudgetItemDialog> {
                           labelText: 'Vendor Name',
                           border: OutlineInputBorder(),
                         ),
+                        inputFormatters: [
+                          LettersSpacesTextInputFormatter(),
+                        ],
+                        validator: (value) {
+                          final v = (value ?? '').trim();
+                          if (v.isEmpty) return null; // optional
+                          if (v.length > 60) return 'Vendor name is too long';
+                          if (!RegExp(r'^[A-Za-z ]+$').hasMatch(v)) {
+                            return 'Use letters and spaces only';
+                          }
+                          return null;
+                        },
                       ),
                       
                       const SizedBox(height: 16),
@@ -918,9 +931,9 @@ class _BudgetItemDialogState extends State<_BudgetItemDialog> {
                           border: OutlineInputBorder(),
                         ),
                         keyboardType: TextInputType.number,
-                        maxLength: 10,
                         inputFormatters: [
                           FilteringTextInputFormatter.digitsOnly,
+                          LengthLimitingTextInputFormatter(10),
                         ],
                         validator: (value) {
                           if (value != null && value.trim().isNotEmpty) {

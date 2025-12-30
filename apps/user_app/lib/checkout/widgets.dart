@@ -69,10 +69,10 @@ class BillingForm extends StatefulWidget {
   const BillingForm({super.key, this.initial, required this.onSave});
 
   @override
-  State<BillingForm> createState() => _BillingFormState();
+  State<BillingForm> createState() => BillingFormState();
 }
 
-class _BillingFormState extends State<BillingForm> {
+class BillingFormState extends State<BillingForm> {
   final _formKey = GlobalKey<FormState>();
   final _name = TextEditingController();
   final _email = TextEditingController();
@@ -145,15 +145,23 @@ class _BillingFormState extends State<BillingForm> {
   }
 
   void _onSave() {
-    if (_formKey.currentState!.validate()) {
-      widget.onSave(BillingDetails(
-        name: _name.text.trim(),
-        email: _email.text.trim(),
-        phone: _phone.text.trim(),
-        eventDate: _eventDate,
-        messageToVendor: _message.text.trim().isEmpty ? null : _message.text.trim(),
-      ));
+    validateAndSave();
+  }
+
+  /// Validate the form and save details via [widget.onSave].
+  /// Returns true if the form was valid and details were saved.
+  bool validateAndSave() {
+    if (!_formKey.currentState!.validate()) {
+      return false;
     }
+    widget.onSave(BillingDetails(
+      name: _name.text.trim(),
+      email: _email.text.trim(),
+      phone: _phone.text.trim(),
+      eventDate: _eventDate,
+      messageToVendor: _message.text.trim().isEmpty ? null : _message.text.trim(),
+    ));
+    return true;
   }
 
   // Removed custom email validator in favor of Validators.email

@@ -9,6 +9,7 @@ import 'guest_list_screen.dart';
 import 'event_notes_screen.dart';
 import 'create_event_screen.dart';
 import 'budget_tracking_screen.dart';
+import 'invitations_list_screen.dart';
 import 'dart:async';
 
 class EventDetailsScreen extends StatefulWidget {
@@ -160,6 +161,14 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
       ),
     );
     _loadEventData();
+  }
+
+  Future<void> _navigateToEInvites() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => const InvitationsListScreen(),
+      ),
+    );
   }
 
   @override
@@ -704,12 +713,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                   subtitle: 'Send invitations',
                   icon: Icons.mail,
                   color: Colors.teal,
-                  onTap: () {
-                    // TODO: Navigate to e-invites screen
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('E-Invites coming soon!')),
-                    );
-                  },
+                  onTap: _navigateToEInvites,
                 ),
               ),
               const SizedBox(width: 12),
