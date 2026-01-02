@@ -316,7 +316,8 @@ class _PaymentMethodPageState extends State<PaymentMethodPage> {
                       checkoutState: state,
                       onSuccess: () {
                         setState(() => _isProcessing = false);
-                        widget.onNext();
+                        // Payment success is handled by PaymentResultScreen
+                        // Don't call widget.onNext() here as it will be called from PaymentResultScreen's onContinue
                       },
                       onFailure: () {
                         setState(() => _isProcessing = false);

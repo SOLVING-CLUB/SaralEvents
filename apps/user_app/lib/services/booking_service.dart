@@ -72,6 +72,7 @@ class BookingService {
         'amount': amount,
         'notes': notes,
         'status': 'pending',
+        'milestone_status': 'created', // Initial milestone status
       };
 
       print('Booking data: $bookingData');

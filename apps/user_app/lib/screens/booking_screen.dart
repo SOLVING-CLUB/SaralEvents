@@ -101,128 +101,6 @@ class _BookingScreenState extends State<BookingScreen> {
 
 
 
-  Future<void> _createBooking() async {
-    print('Creating booking for service: ${widget.service.name}');
-    print('Service ID: ${widget.service.id}');
-    print('Vendor ID: ${widget.service.vendorId}');
-    print('Vendor Name: ${widget.service.vendorName}');
-    
-    if (widget.service.vendorId.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Invalid vendor information - vendor ID is empty')),
-      );
-      return;
-    }
-
-    if (widget.service.id.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Invalid service information - service ID is empty')),
-      );
-      return;
-    }
-
-    if (_selectedDate == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select a date for your booking')),
-      );
-      return;
-    }
-
-    setState(() {
-      _isLoading = true;
-    });
-
-    try {
-      final success = await _bookingService.createBooking(
-        serviceId: widget.service.id,
-        vendorId: widget.service.vendorId,
-        bookingDate: _selectedDate!,
-        bookingTime: _selectedTime,
-        amount: widget.service.price,
-        notes: _notesController.text.trim().isNotEmpty ? _notesController.text.trim() : null,
-      );
-
-      if (success) {
-        if (mounted) {
-          showDialog(
-            context: context,
-            barrierDismissible: false,
-            builder: (context) => AlertDialog(
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
-              ),
-              title: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFDBB42),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: const Icon(
-                      Icons.check_circle,
-                      color: Colors.white,
-                      size: 24,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  const Text(
-                    'Booking Successful!',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 18,
-                    ),
-                  ),
-                ],
-              ),
-              content: const Text(
-                'Your booking has been created successfully. The vendor will review and confirm your booking.',
-                style: TextStyle(fontSize: 16),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () {
-                    Navigator.of(context).pop(); // Close dialog
-                    Navigator.of(context).pop(); // Go back to catalog
-                  },
-                  style: TextButton.styleFrom(
-                    backgroundColor: const Color(0xFFFDBB42),
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  child: const Text(
-                    'OK',
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                ),
-              ],
-            ),
-          );
-        }
-      } else {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Failed to create booking. Please try again.')),
-          );
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -675,17 +553,48 @@ class _BookingScreenState extends State<BookingScreen> {
         onPressed: _isLoading
             ? null
             : () async {
-                await _createBooking();
-                if (!mounted) return;
-                // Launch checkout flow with selected service as initial cart item
-                final item = CartItem(
-                  id: widget.service.id,
-                  title: widget.service.name,
-                  category: 'Service',
-                  price: widget.service.price,
-                  subtitle: widget.service.vendorName,
-                );
-                Navigator.of(context).push(CheckoutFlow.routeWithItem(item));
+                setState(() => _isLoading = true);
+                try {
+                  final success = await _bookingService.createBooking(
+                    serviceId: widget.service.id,
+                    vendorId: widget.service.vendorId,
+                    bookingDate: _selectedDate!,
+                    bookingTime: _selectedTime,
+                    amount: widget.service.price,
+                    notes: _notesController.text.trim().isNotEmpty ? _notesController.text.trim() : null,
+                  );
+
+                  if (!mounted) return;
+
+                  if (success) {
+                    // Launch checkout flow with selected service as initial cart item
+                    final item = CartItem(
+                      id: widget.service.id,
+                      title: widget.service.name,
+                      category: 'Service',
+                      price: widget.service.price,
+                      subtitle: widget.service.vendorName,
+                    );
+                    // Navigate to checkout flow
+                    if (mounted) {
+                      Navigator.of(context).push(CheckoutFlow.routeWithItem(item));
+                    }
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Failed to create booking. Please try again.')),
+                    );
+                  }
+                } catch (e) {
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Error: $e')),
+                    );
+                  }
+                } finally {
+                  if (mounted) {
+                    setState(() => _isLoading = false);
+                  }
+                }
               },
         style: ElevatedButton.styleFrom(
           backgroundColor: const Color(0xFFFDBB42),

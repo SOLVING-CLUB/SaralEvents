@@ -157,16 +157,34 @@ class PaymentService {
       );
     }
 
-    // Show success screen
-    Navigator.of(context).push(
+    // Show success screen on root navigator to ensure it's above CheckoutFlow
+    Navigator.of(context, rootNavigator: true).push(
       MaterialPageRoute(
         builder: (context) => PaymentResultScreen(
           isSuccess: true,
           paymentId: paymentId,
           responseData: responseData,
           onContinue: () {
-            Navigator.of(context).pop(); // Close result screen
-            onSuccessCallback();
+            // Close payment result screen (on root navigator)
+            Navigator.of(context, rootNavigator: true).pop();
+            
+            // Pop CheckoutFlow itself (which is on the main navigator)
+            // The stack structure: [Previous Screen] -> CheckoutFlow -> PaymentResultScreen (just popped)
+            // We want to pop back to [Previous Screen]
+            if (Navigator.of(context).canPop()) {
+              Navigator.of(context).pop();
+            }
+            
+            // Call success callback after navigation completes
+            Future.delayed(const Duration(milliseconds: 300), () {
+              if (context.mounted) {
+                try {
+                  onSuccessCallback();
+                } catch (e) {
+                  debugPrint('Error in payment success callback: $e');
+                }
+              }
+            });
           },
         ),
       ),

@@ -123,9 +123,33 @@ class _AppLinkHandlerState extends State<AppLinkHandler> {
         invitationSlug = segments.last;
       }
     }
-    // Handle saralevents://invite/:slug (custom scheme)
+    // Handle saralevents://invite/:slug (custom scheme - format 1: host is 'invite')
     else if (uri.scheme == 'saralevents' && uri.host == 'invite' && uri.pathSegments.isNotEmpty) {
       invitationSlug = uri.pathSegments.first;
+    }
+    // Handle saralevents://invite/:slug (custom scheme - format 2: path contains '/invite/')
+    else if (uri.scheme == 'saralevents' && uri.path.contains('/invite/')) {
+      final segments = uri.pathSegments;
+      final slugIndex = segments.indexOf('invite');
+      if (slugIndex >= 0 && slugIndex < segments.length - 1) {
+        invitationSlug = segments[slugIndex + 1];
+      } else if (segments.isNotEmpty && segments.last != 'invite') {
+        invitationSlug = segments.last;
+      }
+    }
+    // Handle saralevents://invite/:slug (custom scheme - format 3: host empty, path starts with /invite/)
+    else if (uri.scheme == 'saralevents' && (uri.host.isEmpty || uri.host == '') && uri.path.startsWith('/invite/')) {
+      final pathParts = uri.path.split('/').where((p) => p.isNotEmpty).toList();
+      if (pathParts.length >= 2 && pathParts[0] == 'invite') {
+        invitationSlug = pathParts[1];
+      }
+    }
+    // Handle saralevents://invite/:slug (custom scheme - format 4: try parsing from full string)
+    else if (uri.scheme == 'saralevents' && uri.toString().contains('/invite/')) {
+      final match = RegExp(r'/invite/([^/?#]+)').firstMatch(uri.toString());
+      if (match != null && match.groupCount >= 1) {
+        invitationSlug = match.group(1);
+      }
     }
     // Handle intent://invite/:slug#Intent... (for Android intent URLs)
     else if (uri.scheme == 'intent' && uri.path.contains('/invite/')) {
