@@ -33,6 +33,32 @@ export interface VendorActivity {
   count: number
 }
 
+export interface WithdrawalRequestRow {
+  id: string
+  vendor_id: string
+  wallet_id: string
+  amount: number
+  status: string
+  requested_at: string
+  processed_at: string | null
+  rejection_reason?: string | null
+  bank_snapshot?: any
+}
+
+export interface WalletTransactionRow {
+  id: string
+  vendor_id: string
+  txn_type: 'credit' | 'debit'
+  source: string
+  amount: number
+  balance_after: number
+  booking_id?: string | null
+  milestone_id?: string | null
+  escrow_transaction_id?: string | null
+  notes?: string | null
+  created_at: string
+}
+
 export async function getDashboardStats(): Promise<DashboardStats> {
   const supabase = createClient()
   
@@ -141,6 +167,196 @@ export async function getTopVendors(limit = 5): Promise<TopVendor[]> {
     .slice(0, limit)
   
   return vendors
+}
+
+// ---------------- Wallet / Withdrawals (admin) ----------------
+
+export async function listWithdrawalRequests(status: string[] = ['pending']): Promise<WithdrawalRequestRow[]> {
+  const supabase = createClient()
+  const { data, error } = await supabase
+    .from('withdrawal_requests')
+    .select('*')
+    .in('status', status)
+    .order('requested_at', { ascending: false })
+
+  if (error) {
+    console.error('Error fetching withdrawal requests:', error)
+    return []
+  }
+  return data || []
+}
+
+export async function approveWithdrawalRequest(requestId: string, adminId?: string) {
+  const supabase = createClient()
+
+  // Fetch request + wallet
+  const { data: req, error: reqErr } = await supabase
+    .from('withdrawal_requests')
+    .select('*')
+    .eq('id', requestId)
+    .maybeSingle()
+  if (reqErr || !req) throw new Error(reqErr?.message || 'Request not found')
+  if (req.status !== 'pending') throw new Error('Only pending requests can be approved')
+
+  // Fetch wallet
+  const { data: wallet, error: wErr } = await supabase
+    .from('vendor_wallets')
+    .select('*')
+    .eq('id', req.wallet_id)
+    .maybeSingle()
+  if (wErr || !wallet) throw new Error(wErr?.message || 'Wallet not found')
+
+  const newBalance = Number(wallet.balance) - Number(req.amount)
+  const newPending = Number(wallet.pending_withdrawal) - Number(req.amount)
+  if (newBalance < 0 || newPending < 0) throw new Error('Insufficient balance')
+
+  // Update wallet balances
+  const { error: uwErr } = await supabase
+    .from('vendor_wallets')
+    .update({
+      balance: newBalance,
+      pending_withdrawal: newPending,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', wallet.id)
+  if (uwErr) throw new Error(uwErr.message)
+
+  // Insert wallet transaction (debit)
+  const { data: txn, error: txnErr } = await supabase
+    .from('wallet_transactions')
+    .insert({
+      wallet_id: wallet.id,
+      vendor_id: req.vendor_id,
+      txn_type: 'debit',
+      source: 'withdrawal',
+      amount: req.amount,
+      balance_after: newBalance,
+      notes: 'Withdrawal approved by admin',
+    })
+    .select()
+    .maybeSingle()
+  if (txnErr) throw new Error(txnErr.message)
+
+  // Update request status
+  const { error: uReqErr } = await supabase
+    .from('withdrawal_requests')
+    .update({
+      status: 'approved',
+      admin_id: adminId,
+      processed_at: new Date().toISOString(),
+    })
+    .eq('id', requestId)
+  if (uReqErr) throw new Error(uReqErr.message)
+
+  return { walletBalance: newBalance, transaction: txn }
+}
+
+export async function rejectWithdrawalRequest(requestId: string, reason = 'Rejected by admin', adminId?: string) {
+  const supabase = createClient()
+
+  const { data: req, error: reqErr } = await supabase
+    .from('withdrawal_requests')
+    .select('*')
+    .eq('id', requestId)
+    .maybeSingle()
+  if (reqErr || !req) throw new Error(reqErr?.message || 'Request not found')
+  if (req.status !== 'pending') throw new Error('Only pending requests can be rejected')
+
+  // Release pending_withdrawal
+  const { data: wallet } = await supabase
+    .from('vendor_wallets')
+    .select('*')
+    .eq('id', req.wallet_id)
+    .maybeSingle()
+  if (wallet) {
+    const newPending = Number(wallet.pending_withdrawal) - Number(req.amount)
+    await supabase
+      .from('vendor_wallets')
+      .update({
+        pending_withdrawal: newPending < 0 ? 0 : newPending,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', wallet.id)
+  }
+
+  const { error: uReqErr } = await supabase
+    .from('withdrawal_requests')
+    .update({
+      status: 'rejected',
+      admin_id: adminId,
+      rejection_reason: reason,
+      processed_at: new Date().toISOString(),
+    })
+    .eq('id', requestId)
+  if (uReqErr) throw new Error(uReqErr.message)
+}
+
+export async function creditVendorWalletFromMilestone(milestoneId: string) {
+  const supabase = createClient()
+
+  // Fetch milestone + booking to get vendor_id and amount
+  const { data: milestone, error: mErr } = await supabase
+    .from('payment_milestones')
+    .select('id, amount, booking_id')
+    .eq('id', milestoneId)
+    .maybeSingle()
+  if (mErr || !milestone) throw new Error(mErr?.message || 'Milestone not found')
+
+  const { data: booking, error: bErr } = await supabase
+    .from('bookings')
+    .select('id, vendor_id')
+    .eq('id', milestone.booking_id)
+    .maybeSingle()
+  if (bErr || !booking) throw new Error(bErr?.message || 'Booking not found')
+
+  // Ensure wallet
+  const { data: wallet } = await supabase
+    .from('vendor_wallets')
+    .insert({ vendor_id: booking.vendor_id })
+    .select()
+    .maybeSingle()
+    .catch(async () => {
+      // If insert fails due to unique, fetch existing
+      const { data: w } = await supabase
+          .from('vendor_wallets')
+          .select('*')
+          .eq('vendor_id', booking.vendor_id)
+          .maybeSingle()
+      return { data: w }
+    })
+  if (!wallet) throw new Error('Wallet not found/created')
+
+  const newBalance = Number(wallet.balance) + Number(milestone.amount)
+  const newTotal = Number(wallet.total_earned) + Number(milestone.amount)
+
+  const { error: uwErr } = await supabase
+    .from('vendor_wallets')
+    .update({
+      balance: newBalance,
+      total_earned: newTotal,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', wallet.id)
+  if (uwErr) throw new Error(uwErr.message)
+
+  const { data: txn, error: txnErr } = await supabase
+    .from('wallet_transactions')
+    .insert({
+      wallet_id: wallet.id,
+      vendor_id: booking.vendor_id,
+      txn_type: 'credit',
+      source: 'milestone_release',
+      amount: milestone.amount,
+      balance_after: newBalance,
+      booking_id: booking.id,
+      milestone_id: milestone.id,
+      notes: 'Milestone released to vendor wallet',
+    })
+    .select()
+    .maybeSingle()
+  if (txnErr) throw new Error(txnErr.message)
+
+  return txn as WalletTransactionRow
 }
 
 export async function getPopularServices(limit = 5): Promise<PopularService[]> {

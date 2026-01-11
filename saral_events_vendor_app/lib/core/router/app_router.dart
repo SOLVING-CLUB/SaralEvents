@@ -12,6 +12,7 @@ import '../../features/auth/reset_password_screen.dart';
 import '../../features/shell/main_navigation_scaffold.dart';
 import '../../features/profile/business_details_screen.dart';
 import '../../features/profile/documents_screen.dart';
+import '../../features/wallet/wallet_screen.dart';
 
 class AppRouter {
   static GoRouter create(AppSession session) {
@@ -110,6 +111,7 @@ class AppRouter {
         GoRoute(path: '/app', builder: (_, __) => const MainNavigationScaffold()),
         GoRoute(path: '/app/business-details', builder: (_, __) => const BusinessDetailsScreen()),
         GoRoute(path: '/app/documents', builder: (_, __) => const DocumentsScreen()),
+        GoRoute(path: '/app/wallet', builder: (_, __) => const WalletScreen()),
       ],
     );
   }

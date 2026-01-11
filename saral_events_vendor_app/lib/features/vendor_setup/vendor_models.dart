@@ -8,6 +8,14 @@ class VendorProfile {
   final String? email;
   final String? website;
   final String? description;
+  final String? gstNumber;
+  final String? panNumber;
+  final String? aadhaarNumber;
+  final String? accountHolderName;
+  final String? accountNumber;
+  final String? ifscCode;
+  final String? bankName;
+  final String? branchName;
   final List<String> services;
   final List<VendorDocument> documents;
   final DateTime createdAt;
@@ -23,6 +31,14 @@ class VendorProfile {
     this.email,
     this.website,
     this.description,
+    this.gstNumber,
+    this.panNumber,
+    this.aadhaarNumber,
+    this.accountHolderName,
+    this.accountNumber,
+    this.ifscCode,
+    this.bankName,
+    this.branchName,
     required this.services,
     required this.documents,
     required this.createdAt,
@@ -37,6 +53,14 @@ class VendorProfile {
     String? email,
     String? website,
     String? description,
+    String? gstNumber,
+    String? panNumber,
+    String? aadhaarNumber,
+    String? accountHolderName,
+    String? accountNumber,
+    String? ifscCode,
+    String? bankName,
+    String? branchName,
     List<String>? services,
     List<VendorDocument>? documents,
     DateTime? updatedAt,
@@ -51,6 +75,14 @@ class VendorProfile {
       email: email ?? this.email,
       website: website ?? this.website,
       description: description ?? this.description,
+      gstNumber: gstNumber ?? this.gstNumber,
+      panNumber: panNumber ?? this.panNumber,
+      aadhaarNumber: aadhaarNumber ?? this.aadhaarNumber,
+      accountHolderName: accountHolderName ?? this.accountHolderName,
+      accountNumber: accountNumber ?? this.accountNumber,
+      ifscCode: ifscCode ?? this.ifscCode,
+      bankName: bankName ?? this.bankName,
+      branchName: branchName ?? this.branchName,
       services: services ?? this.services,
       documents: documents ?? this.documents,
       createdAt: createdAt,
@@ -69,6 +101,14 @@ class VendorProfile {
       'email': email,
       'website': website,
       'description': description,
+      'gst_number': gstNumber,
+      'pan_number': panNumber,
+      'aadhaar_number': aadhaarNumber,
+      'account_holder_name': accountHolderName,
+      'account_number': accountNumber,
+      'ifsc_code': ifscCode,
+      'bank_name': bankName,
+      'branch_name': branchName,
       'services': services,
       'created_at': createdAt.toIso8601String(),
       'updated_at': updatedAt.toIso8601String(),
@@ -86,6 +126,14 @@ class VendorProfile {
       email: json['email'],
       website: json['website'],
       description: json['description'],
+      gstNumber: json['gst_number'],
+      panNumber: json['pan_number'],
+      aadhaarNumber: json['aadhaar_number'],
+      accountHolderName: json['account_holder_name'],
+      accountNumber: json['account_number'],
+      ifscCode: json['ifsc_code'],
+      bankName: json['bank_name'],
+      branchName: json['branch_name'],
       services: List<String>.from(json['services'] ?? []),
       documents: [], // Documents will be fetched separately
       createdAt: DateTime.parse(json['created_at']),

@@ -271,9 +271,9 @@ class _PaymentMethodPageState extends State<PaymentMethodPage> {
                     return;
                   }
 
-                  final m = _method ?? SelectedPaymentMethod(type: PaymentMethodType.cash);
+                  final m = _method ?? SelectedPaymentMethod(type: PaymentMethodType.upi);
 
-                  // Basic validation for non-cash payment methods
+                  // Basic validation for payment methods
                   if (m.type == PaymentMethodType.upi) {
                     if (m.upiId == null || m.upiId!.trim().isEmpty) {
                       ScaffoldMessenger.of(context).showSnackBar(
@@ -301,11 +301,6 @@ class _PaymentMethodPageState extends State<PaymentMethodPage> {
                   }
 
                   state.savePaymentMethod(m);
-
-                  if (m.type == PaymentMethodType.cash) {
-                    widget.onNext();
-                    return;
-                  }
 
                   // Process payment using the comprehensive payment service
                   setState(() => _isProcessing = true);

@@ -2156,11 +2156,34 @@ class _AddServicePageState extends State<_AddServicePage> {
   }
 
   Future<void> _pickImages() async {
+    final currentImageCount = _media.where((m) => m.type == MediaType.image).length;
+    if (currentImageCount >= 5) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Maximum 5 images allowed. Please remove some images before adding more.'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
     final picker = ImagePicker();
     final files = await picker.pickMultiImage();
     if (files.isNotEmpty) {
+      final remainingSlots = 5 - currentImageCount;
+      final filesToAdd = files.length > remainingSlots ? files.take(remainingSlots).toList() : files;
+      
+      if (files.length > remainingSlots) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Only $remainingSlots image(s) added. Maximum 5 images allowed.'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+
       setState(() {
-        for (final f in files) {
+        for (final f in filesToAdd) {
           _media.add(MediaItem(url: f.path, type: MediaType.image));
         }
       });
@@ -2168,6 +2191,17 @@ class _AddServicePageState extends State<_AddServicePage> {
   }
 
   Future<void> _pickVideo() async {
+    final currentVideoCount = _media.where((m) => m.type == MediaType.video).length;
+    if (currentVideoCount >= 5) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Maximum 5 videos allowed. Please remove some videos before adding more.'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
     final picker = ImagePicker();
     final f = await picker.pickVideo(source: ImageSource.gallery);
     if (f != null) {
@@ -2205,6 +2239,33 @@ class _AddServicePageState extends State<_AddServicePage> {
       ),
     );
     if (ok == true && urlCtrl.text.trim().isNotEmpty) {
+      final currentImageCount = _media.where((m) => m.type == MediaType.image).length;
+      final currentVideoCount = _media.where((m) => m.type == MediaType.video).length;
+
+      if (selected == MediaType.image && currentImageCount >= 5) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Maximum 5 images allowed. Please remove some images before adding more.'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+        return;
+      }
+
+      if (selected == MediaType.video && currentVideoCount >= 5) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Maximum 5 videos allowed. Please remove some videos before adding more.'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+        return;
+      }
+
       setState(() => _media.add(MediaItem(url: urlCtrl.text.trim(), type: selected)));
     }
   }
@@ -2246,6 +2307,50 @@ class _AddServicePageState extends State<_AddServicePage> {
 
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
+
+    // Validate media requirements
+    final imageCount = _media.where((m) => m.type == MediaType.image).length;
+    final videoCount = _media.where((m) => m.type == MediaType.video).length;
+
+    if (imageCount < 2) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please add at least 2 images (minimum 2 required)'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    if (imageCount > 5) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Maximum 5 images allowed. Please remove ${imageCount - 5} image(s)'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    if (videoCount < 2) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please add at least 2 videos (minimum 2 required)'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    if (videoCount > 5) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Maximum 5 videos allowed. Please remove ${videoCount - 5} video(s)'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
 
     setState(() {
       _isSaving = true;
@@ -2357,7 +2462,7 @@ class _AddServicePageState extends State<_AddServicePage> {
             children: [
               TextFormField(
                 controller: _nameCtrl,
-                decoration: const InputDecoration(labelText: 'Service Name'),
+                decoration: const InputDecoration(labelText: 'Service Name *'),
                 validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
               ),
               const SizedBox(height: 8),
@@ -2378,8 +2483,9 @@ class _AddServicePageState extends State<_AddServicePage> {
               const SizedBox(height: 8),
               TextFormField(
                 controller: _descCtrl,
-                decoration: const InputDecoration(labelText: 'Description'),
+                decoration: const InputDecoration(labelText: 'Description *'),
                 maxLines: 4,
+                validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
               ),
               const SizedBox(height: 12),
               const Text('Tags'),
@@ -2409,6 +2515,13 @@ class _AddServicePageState extends State<_AddServicePage> {
                 ],
               ),
               const SizedBox(height: 16),
+              const Text('Media *', style: TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 4),
+              Text(
+                'Images: Minimum 2, Maximum 5 | Videos: Minimum 2, Maximum 5',
+                style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+              ),
+              const SizedBox(height: 8),
               Row(
                 children: [
                   FilledButton.icon(onPressed: _pickImages, icon: const Icon(Icons.image), label: const Text('Add Images')),

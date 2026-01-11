@@ -35,6 +35,12 @@ class _VendorSetupFlowState extends State<VendorSetupFlow> {
   final _gstNumber = TextEditingController();
   final _panNumber = TextEditingController();
   final _aadhaarNumber = TextEditingController();
+  // Bank/KYC
+  final _accountHolderName = TextEditingController();
+  final _accountNumber = TextEditingController();
+  final _ifscCode = TextEditingController();
+  final _bankName = TextEditingController();
+  final _branchName = TextEditingController();
 
   // Document uploads
   final Map<String, dynamic> _documents = {};
@@ -92,6 +98,11 @@ class _VendorSetupFlowState extends State<VendorSetupFlow> {
     _gstNumber.dispose();
     _panNumber.dispose();
     _aadhaarNumber.dispose();
+    _accountHolderName.dispose();
+    _accountNumber.dispose();
+    _ifscCode.dispose();
+    _bankName.dispose();
+    _branchName.dispose();
     super.dispose();
   }
 
@@ -177,7 +188,13 @@ class _VendorSetupFlowState extends State<VendorSetupFlow> {
                     });
                   },
                 ),
-                _BankDetailsStep(),
+                _BankDetailsStep(
+                  accountHolderName: _accountHolderName,
+                  accountNumber: _accountNumber,
+                  ifscCode: _ifscCode,
+                  bankName: _bankName,
+                  branchName: _branchName,
+                ),
                 _ReviewStep(
                   businessName: _businessName.text,
                   category: _category,
@@ -289,6 +306,14 @@ class _VendorSetupFlowState extends State<VendorSetupFlow> {
         email: currentUser.email,
         website: null, // Not collected in current form
         description: _description.text.trim().isEmpty ? null : _description.text.trim(),
+        gstNumber: _gstNumber.text.trim().isEmpty ? null : _gstNumber.text.trim(),
+        panNumber: _panNumber.text.trim().isEmpty ? null : _panNumber.text.trim(),
+        aadhaarNumber: _aadhaarNumber.text.trim().isEmpty ? null : _aadhaarNumber.text.trim(),
+        accountHolderName: _accountHolderName.text.trim().isEmpty ? null : _accountHolderName.text.trim(),
+        accountNumber: _accountNumber.text.trim().isEmpty ? null : _accountNumber.text.trim(),
+        ifscCode: _ifscCode.text.trim().isEmpty ? null : _ifscCode.text.trim().toUpperCase(),
+        bankName: _bankName.text.trim().isEmpty ? null : _bankName.text.trim(),
+        branchName: _branchName.text.trim().isEmpty ? null : _branchName.text.trim(),
         services: [], // Will be populated when services are added
         documents: [], // Will be populated when documents are uploaded
         createdAt: DateTime.now(),
@@ -1140,13 +1165,19 @@ class _DocumentTile extends StatelessWidget {
 }
 
 class _BankDetailsStep extends StatelessWidget {
-  final _accountHolderName = TextEditingController();
-  final _accountNumber = TextEditingController();
-  final _ifscCode = TextEditingController();
-  final _bankName = TextEditingController();
-  final _branchName = TextEditingController();
+  final TextEditingController accountHolderName;
+  final TextEditingController accountNumber;
+  final TextEditingController ifscCode;
+  final TextEditingController bankName;
+  final TextEditingController branchName;
 
-  _BankDetailsStep();
+  const _BankDetailsStep({
+    required this.accountHolderName,
+    required this.accountNumber,
+    required this.ifscCode,
+    required this.bankName,
+    required this.branchName,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1172,7 +1203,7 @@ class _BankDetailsStep extends StatelessWidget {
           const SizedBox(height: 24),
           
           TextFormField(
-            controller: _accountHolderName,
+            controller: accountHolderName,
             decoration: const InputDecoration(
               labelText: 'Account Holder Name',
               hintText: 'Enter account holder name',
@@ -1182,7 +1213,7 @@ class _BankDetailsStep extends StatelessWidget {
           const SizedBox(height: 16),
           
           TextFormField(
-            controller: _accountNumber,
+            controller: accountNumber,
             decoration: const InputDecoration(
               labelText: 'Account Number',
               hintText: 'Enter account number',
@@ -1193,7 +1224,7 @@ class _BankDetailsStep extends StatelessWidget {
           const SizedBox(height: 16),
           
           TextFormField(
-            controller: _ifscCode,
+            controller: ifscCode,
             decoration: const InputDecoration(
               labelText: 'IFSC Code',
               hintText: 'Enter IFSC code',
@@ -1204,7 +1235,7 @@ class _BankDetailsStep extends StatelessWidget {
           const SizedBox(height: 16),
           
           TextFormField(
-            controller: _bankName,
+            controller: bankName,
             decoration: const InputDecoration(
               labelText: 'Bank Name',
               hintText: 'Enter bank name',
@@ -1214,7 +1245,7 @@ class _BankDetailsStep extends StatelessWidget {
           const SizedBox(height: 16),
           
           TextFormField(
-            controller: _branchName,
+            controller: branchName,
             decoration: const InputDecoration(
               labelText: 'Branch Name',
               hintText: 'Enter branch name',

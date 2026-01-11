@@ -200,3 +200,60 @@ GRANT EXECUTE ON FUNCTION create_booking_payment_milestones() TO authenticated;
 GRANT EXECUTE ON FUNCTION update_milestone_status(UUID, TEXT, TEXT, TEXT, TEXT, TEXT) TO authenticated;
 GRANT EXECUTE ON FUNCTION get_booking_with_milestones(UUID) TO authenticated;
 
+
+-- ------------------------------------------------------------------
+-- Vendor Wallet Schema
+-- ------------------------------------------------------------------
+
+-- Wallet per vendor profile
+CREATE TABLE IF NOT EXISTS vendor_wallets (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  vendor_id UUID NOT NULL UNIQUE REFERENCES vendor_profiles(id) ON DELETE CASCADE,
+  balance DECIMAL(12,2) NOT NULL DEFAULT 0,              -- available balance
+  pending_withdrawal DECIMAL(12,2) NOT NULL DEFAULT 0,   -- locked for withdrawal requests
+  total_earned DECIMAL(12,2) NOT NULL DEFAULT 0,         -- lifetime credits
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Wallet transaction ledger
+CREATE TABLE IF NOT EXISTS wallet_transactions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  wallet_id UUID NOT NULL REFERENCES vendor_wallets(id) ON DELETE CASCADE,
+  vendor_id UUID NOT NULL REFERENCES vendor_profiles(id) ON DELETE CASCADE,
+  txn_type TEXT NOT NULL CHECK (txn_type IN ('credit','debit')),
+  source TEXT NOT NULL CHECK (source IN ('milestone_release','withdrawal','adjustment','refund','admin_adjustment')),
+  amount DECIMAL(12,2) NOT NULL,
+  balance_after DECIMAL(12,2) NOT NULL,
+  booking_id UUID REFERENCES bookings(id) ON DELETE SET NULL,
+  milestone_id UUID REFERENCES payment_milestones(id) ON DELETE SET NULL,
+  escrow_transaction_id UUID REFERENCES escrow_transactions(id) ON DELETE SET NULL,
+  notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Withdrawal requests (reviewed in company_web admin)
+CREATE TABLE IF NOT EXISTS withdrawal_requests (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  vendor_id UUID NOT NULL REFERENCES vendor_profiles(id) ON DELETE CASCADE,
+  wallet_id UUID NOT NULL REFERENCES vendor_wallets(id) ON DELETE CASCADE,
+  amount DECIMAL(12,2) NOT NULL CHECK (amount > 0),
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','approved','rejected','processing','paid','failed')),
+  requested_at TIMESTAMPTZ DEFAULT NOW(),
+  processed_at TIMESTAMPTZ,
+  admin_id UUID, -- admin processing the payout (references auth.users or admin table)
+  rejection_reason TEXT,
+  bank_snapshot JSONB, -- captures account_number, ifsc, holder_name, bank_name at request time
+  notes TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_wallet_transactions_vendor ON wallet_transactions(vendor_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_wallet_transactions_wallet ON wallet_transactions(wallet_id);
+CREATE INDEX IF NOT EXISTS idx_withdrawal_requests_vendor ON withdrawal_requests(vendor_id, status);
+
+-- Grants
+GRANT SELECT, INSERT, UPDATE ON vendor_wallets TO authenticated;
+GRANT SELECT, INSERT, UPDATE ON wallet_transactions TO authenticated;
+GRANT SELECT, INSERT, UPDATE ON withdrawal_requests TO authenticated;
+
+

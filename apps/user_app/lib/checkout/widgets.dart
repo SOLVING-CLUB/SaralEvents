@@ -228,7 +228,7 @@ class PaymentMethodSelector extends StatefulWidget {
 }
 
 class _PaymentMethodSelectorState extends State<PaymentMethodSelector> {
-  PaymentMethodType _type = PaymentMethodType.cash;
+  PaymentMethodType _type = PaymentMethodType.upi;
   final _upi = TextEditingController();
   final _cardNumber = TextEditingController();
   final _cardName = TextEditingController();
@@ -245,7 +245,8 @@ class _PaymentMethodSelectorState extends State<PaymentMethodSelector> {
     super.initState();
     final i = widget.initial;
     if (i != null) {
-      _type = i.type;
+      // Fallback to UPI if previous selection was cash (cash option removed)
+      _type = i.type == PaymentMethodType.cash ? PaymentMethodType.upi : i.type;
       _upi.text = i.upiId ?? '';
       _cardNumber.text = i.cardNumber ?? '';
       _cardName.text = i.cardName ?? '';
@@ -270,7 +271,6 @@ class _PaymentMethodSelectorState extends State<PaymentMethodSelector> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _radioTile('Pay with Cash', PaymentMethodType.cash),
         _radioTile('UPI', PaymentMethodType.upi,
             child: _type == PaymentMethodType.upi ? _upiField() : null),
         _radioTile('Credit / Debit Card', PaymentMethodType.card,

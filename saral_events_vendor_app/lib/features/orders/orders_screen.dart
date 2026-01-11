@@ -181,9 +181,30 @@ class _OrdersScreenState extends State<OrdersScreen> with TickerProviderStateMix
     if (dateString == null) return 'No date';
     try {
       final date = DateTime.parse(dateString);
-      return '${date.day}/${date.month}/${date.year}';
+      final months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      return '${date.day} ${months[date.month - 1]} ${date.year}';
     } catch (e) {
       return 'Invalid date';
+    }
+  }
+
+  String _formatTime(String? timeString) {
+    if (timeString == null || timeString.isEmpty) return 'No time';
+    try {
+      // Handle both "HH:mm:ss" and "HH:mm" formats
+      final parts = timeString.split(':');
+      if (parts.isEmpty) return timeString;
+      
+      final hour = int.parse(parts[0]);
+      final minute = parts.length > 1 ? int.parse(parts[1]) : 0;
+      
+      final period = hour >= 12 ? 'PM' : 'AM';
+      final hour12 = hour == 0 ? 12 : (hour > 12 ? hour - 12 : hour);
+      final minuteStr = minute.toString().padLeft(2, '0');
+      
+      return '$hour12:$minuteStr $period';
+    } catch (e) {
+      return timeString;
     }
   }
 
@@ -343,8 +364,6 @@ class _OrdersScreenState extends State<OrdersScreen> with TickerProviderStateMix
     final bookingTime = booking['booking_time'] as String?;
     final notes = booking['notes'] as String?;
     final customerName = booking['customer_name'] as String? ?? 'Unknown Customer';
-    final customerEmail = booking['customer_email'] as String? ?? 'No email';
-    final customerPhone = booking['customer_phone'] as String?;
     final serviceName = booking['service_name'] as String? ?? 'Unknown Service';
 
     return Card(
@@ -357,30 +376,10 @@ class _OrdersScreenState extends State<OrdersScreen> with TickerProviderStateMix
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header with service name and status
+            // Header with status badge
             Row(
+              mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        serviceName,
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        '₹${amount.toStringAsFixed(2)}',
-                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                          color: Theme.of(context).colorScheme.primary,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   decoration: BoxDecoration(
@@ -396,7 +395,91 @@ class _OrdersScreenState extends State<OrdersScreen> with TickerProviderStateMix
                     style: TextStyle(
                       color: _getStatusColor(status),
                       fontWeight: FontWeight.bold,
-                      fontSize: 12,
+                      fontSize: 11,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            
+            const SizedBox(height: 12),
+            
+            // Service information - prominently displayed
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.primary.withOpacity(0.05),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: Theme.of(context).colorScheme.primary.withOpacity(0.2),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.room_service,
+                    size: 20,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Service',
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: Colors.grey[600],
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          serviceName,
+                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.grey[800],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        'Amount',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Colors.grey[600],
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '₹${amount.toStringAsFixed(2)}',
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          color: Theme.of(context).colorScheme.primary,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            
+            const Divider(height: 24),
+            
+            // Customer information
+            Row(
+              children: [
+                Icon(Icons.person_outline, size: 18, color: Colors.grey[600]),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    customerName,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w500,
                     ),
                   ),
                 ),
@@ -405,59 +488,75 @@ class _OrdersScreenState extends State<OrdersScreen> with TickerProviderStateMix
             
             const SizedBox(height: 16),
             
-            // Customer information
-            _buildInfoRow(
-              icon: Icons.person,
-              label: 'Customer',
-              value: customerName,
-            ),
-            
-            if (customerEmail.isNotEmpty) ...[
-              const SizedBox(height: 8),
-              _buildInfoRow(
-                icon: Icons.email,
-                label: 'Email',
-                value: customerEmail,
+            // Event date and time - stacked vertically for better visibility
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.blue[50],
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.blue[100]!),
               ),
-            ],
-            
-            if (customerPhone != null && customerPhone.isNotEmpty) ...[
-              const SizedBox(height: 8),
-              _buildInfoRow(
-                icon: Icons.phone,
-                label: 'Phone',
-                value: customerPhone,
-              ),
-            ],
-            
-            const SizedBox(height: 8),
-            
-            // Date and time
-            Row(
-              children: [
-                Expanded(
-                  child: _buildInfoRow(
-                    icon: Icons.calendar_today,
-                    label: 'Date',
-                    value: _formatDate(bookingDate),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.event, size: 18, color: Colors.blue[700]),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Event Date',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Colors.grey[600],
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-                if (bookingTime != null) ...[
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: _buildInfoRow(
-                      icon: Icons.access_time,
-                      label: 'Time',
-                      value: bookingTime,
+                  const SizedBox(height: 6),
+                  Padding(
+                    padding: const EdgeInsets.only(left: 26),
+                    child: Text(
+                      _formatDate(bookingDate),
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                        color: Colors.grey[800],
+                      ),
                     ),
                   ),
+                  if (bookingTime != null) ...[
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Icon(Icons.access_time, size: 18, color: Colors.blue[700]),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Time',
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: Colors.grey[600],
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Padding(
+                      padding: const EdgeInsets.only(left: 26),
+                      child: Text(
+                        _formatTime(bookingTime),
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                          color: Colors.grey[800],
+                        ),
+                      ),
+                    ),
+                  ],
                 ],
-              ],
+              ),
             ),
             
             // Notes
             if (notes != null && notes.isNotEmpty) ...[
-              const SizedBox(height: 12),
+              const SizedBox(height: 16),
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
@@ -468,8 +567,8 @@ class _OrdersScreenState extends State<OrdersScreen> with TickerProviderStateMix
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Icon(
-                      Icons.note,
-                      size: 16,
+                      Icons.note_outlined,
+                      size: 18,
                       color: Colors.grey[600],
                     ),
                     const SizedBox(width: 8),
@@ -493,39 +592,6 @@ class _OrdersScreenState extends State<OrdersScreen> with TickerProviderStateMix
           ],
         ),
       ),
-    );
-  }
-
-  Widget _buildInfoRow({
-    required IconData icon,
-    required String label,
-    required String value,
-  }) {
-    return Row(
-      children: [
-        Icon(
-          icon,
-          size: 16,
-          color: Colors.grey[600],
-        ),
-        const SizedBox(width: 8),
-        Text(
-          '$label: ',
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-            color: Colors.grey[600],
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-        Expanded(
-          child: Text(
-            value,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: Colors.grey[800],
-            ),
-            overflow: TextOverflow.ellipsis,
-          ),
-        ),
-      ],
     );
   }
 

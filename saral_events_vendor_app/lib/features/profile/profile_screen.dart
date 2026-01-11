@@ -50,6 +50,16 @@ class ProfileScreen extends StatelessWidget {
           ),
           const Divider(),
           ListTile(
+            leading: const Icon(Icons.account_balance_wallet_outlined, size: 22, color: Colors.black),
+            title: const Text('Wallet'),
+            subtitle: const Text('Balance, transactions, withdraw'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () {
+              context.push('/app/wallet');
+            },
+          ),
+          const Divider(),
+          ListTile(
             leading: const SvgIcon(AppIcons.settingsSvg, size: 22, color: Colors.black),
             title: const Text('Settings'),
             trailing: const Icon(Icons.chevron_right),

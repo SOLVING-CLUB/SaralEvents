@@ -40,6 +40,15 @@ CREATE INDEX IF NOT EXISTS idx_vendor_documents_type ON vendor_documents(documen
 ALTER TABLE vendor_profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE vendor_documents ENABLE ROW LEVEL SECURITY;
 
+-- Bank / KYC fields
+ALTER TABLE vendor_profiles
+ADD COLUMN IF NOT EXISTS account_holder_name TEXT,
+ADD COLUMN IF NOT EXISTS account_number TEXT,
+ADD COLUMN IF NOT EXISTS ifsc_code TEXT,
+ADD COLUMN IF NOT EXISTS bank_name TEXT,
+ADD COLUMN IF NOT EXISTS pan_number TEXT,
+ADD COLUMN IF NOT EXISTS gst_number TEXT;
+
 -- Policy: Users can only see their own vendor profile
 CREATE POLICY "Users can view own vendor profile" ON vendor_profiles
     FOR SELECT USING (auth.uid() = user_id);
