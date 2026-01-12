@@ -1,9 +1,9 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
-// Razorpay configuration - these should be set as environment variables in production
-const RAZORPAY_KEY_ID = 'rzp_live_RNhz4a9K9h6SNQ'
-const RAZORPAY_KEY_SECRET = 'YO1h1gkF3upgD2fClwPVrfjG'
+// Razorpay configuration - loaded from Supabase secrets
+const RAZORPAY_KEY_ID = Deno.env.get('RAZORPAY_KEY_ID') ?? ''
+const RAZORPAY_KEY_SECRET = Deno.env.get('RAZORPAY_KEY_SECRET') ?? ''
 
 interface RazorpayOrderRequest {
   amount: number
@@ -40,6 +40,20 @@ serve(async (req) => {
   }
 
   try {
+    // Validate Razorpay credentials are set
+    if (!RAZORPAY_KEY_ID || !RAZORPAY_KEY_SECRET) {
+      return new Response(
+        JSON.stringify({ error: 'Razorpay credentials not configured. Please set RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET secrets.' }),
+        { 
+          status: 500,
+          headers: {
+            'Content-Type': 'application/json',
+            'Access-Control-Allow-Origin': '*',
+          },
+        }
+      )
+    }
+
     // Parse request body
     const body: RazorpayOrderRequest = await req.json()
     

@@ -1,13 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import 'checkout_state.dart';
-
 /// Screen to display payment result (success or failure)
 class PaymentResultScreen extends StatelessWidget {
   final bool isSuccess;
   final String? paymentId;
   final String? errorMessage;
   final Map<String, dynamic>? responseData;
+  final double? amount;
+  final int? itemsCount;
   final VoidCallback? onRetry;
   final VoidCallback? onContinue;
 
@@ -17,14 +16,14 @@ class PaymentResultScreen extends StatelessWidget {
     this.paymentId,
     this.errorMessage,
     this.responseData,
+    this.amount,
+    this.itemsCount,
     this.onRetry,
     this.onContinue,
   });
 
   @override
   Widget build(BuildContext context) {
-    final state = context.watch<CheckoutState>();
-    
     return Scaffold(
       appBar: AppBar(
         title: Text(isSuccess ? 'Payment Successful' : 'Payment Failed'),
@@ -92,8 +91,10 @@ class PaymentResultScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 8),
                     _buildDetailRow('Payment ID', paymentId!),
-                    _buildDetailRow('Amount', '₹${state.totalPrice.toStringAsFixed(0)}'),
-                    _buildDetailRow('Items', '${state.items.length} item(s)'),
+                    if (amount != null)
+                      _buildDetailRow('Amount', '₹${amount!.toStringAsFixed(0)}'),
+                    if (itemsCount != null)
+                      _buildDetailRow('Items', '$itemsCount item(s)'),
                     if (responseData?['timestamp'] != null)
                       _buildDetailRow('Time', _formatTimestamp(responseData!['timestamp'])),
                   ],

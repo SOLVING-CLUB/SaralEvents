@@ -197,10 +197,14 @@ class PaymentMilestoneService {
   Future<double> getTotalPaidForBooking(String bookingId) async {
     try {
       final milestones = await getMilestonesForBooking(bookingId);
-      return milestones
-          .where((m) => m.status == MilestoneStatus.heldInEscrow ||
-              m.status == MilestoneStatus.released)
-          .fold(0.0, (sum, m) => sum + m.amount);
+      double total = 0.0;
+      for (final m in milestones) {
+        if (m.status == MilestoneStatus.heldInEscrow ||
+            m.status == MilestoneStatus.released) {
+          total += m.amount;
+        }
+      }
+      return total;
     } catch (e) {
       print('Error calculating total paid: $e');
       return 0.0;

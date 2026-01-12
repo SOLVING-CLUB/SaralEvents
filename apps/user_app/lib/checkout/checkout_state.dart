@@ -102,6 +102,7 @@ class CheckoutState extends ChangeNotifier {
   final List<CartItem> _items = <CartItem>[];
   BillingDetails? _billingDetails;
   SelectedPaymentMethod? _paymentMethod;
+  String? _draftId; // Booking draft ID for creating booking after payment
 
   // Installment policy: 3 installments - Today, +30, +60 days
   // Percentages can be tuned if needed; default equal thirds
@@ -110,6 +111,7 @@ class CheckoutState extends ChangeNotifier {
   List<CartItem> get items => List.unmodifiable(_items);
   BillingDetails? get billingDetails => _billingDetails;
   SelectedPaymentMethod? get paymentMethod => _paymentMethod;
+  String? get draftId => _draftId;
 
   double get totalPrice => _items.fold(0.0, (sum, i) => sum + i.price);
 
@@ -154,6 +156,11 @@ class CheckoutState extends ChangeNotifier {
 
   void savePaymentMethod(SelectedPaymentMethod method) {
     _paymentMethod = method;
+    notifyListeners();
+  }
+
+  void setDraftId(String? draftId) {
+    _draftId = draftId;
     notifyListeners();
   }
 }

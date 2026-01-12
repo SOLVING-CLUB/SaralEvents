@@ -29,6 +29,12 @@ class RazorpayOrderService {
         'payment_capture': 1, // Auto-capture
       };
 
+      // Note: This fallback should not be used in production
+      // Order creation should happen via Edge Function which uses Supabase secrets
+      if (RazorpayConfig.keySecret.isEmpty) {
+        throw Exception('Direct order creation requires server-side implementation. Please use Edge Function.');
+      }
+      
       // Create basic auth header
       final credentials = base64Encode(utf8.encode('${RazorpayConfig.keyId}:${RazorpayConfig.keySecret}'));
       

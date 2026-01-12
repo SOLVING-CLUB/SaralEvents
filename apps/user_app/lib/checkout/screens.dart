@@ -1,9 +1,11 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'checkout_state.dart';
 import 'widgets.dart';
 import '../services/payment_service.dart';
+import '../services/booking_draft_service.dart';
 
 // Shared button style
 ButtonStyle _primaryBtn(BuildContext context) => ElevatedButton.styleFrom(
@@ -115,9 +117,74 @@ class PaymentDetailsPage extends StatelessWidget {
           BillingForm(
             key: _billingFormKey,
             initial: state.billingDetails,
-            onSave: (d) {
-              context.read<CheckoutState>().saveBillingDetails(d);
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Details saved')));
+            onSave: (d) async {
+              final checkoutState = context.read<CheckoutState>();
+              checkoutState.saveBillingDetails(d);
+              
+              // Create or update draft when billing details are saved
+              if (checkoutState.items.isNotEmpty) {
+                final item = checkoutState.items.first;
+                final draftService = BookingDraftService(Supabase.instance.client);
+                
+                // Get service details to find vendor_id
+                try {
+                  final serviceResult = await Supabase.instance.client
+                      .from('services')
+                      .select('vendor_id')
+                      .eq('id', item.id)
+                      .maybeSingle();
+                  
+                  if (serviceResult != null) {
+                    final draftId = await draftService.saveDraftFromCheckout(
+                      serviceId: item.id,
+                      vendorId: serviceResult['vendor_id'] as String,
+                      amount: item.price,
+                      billingName: d.name,
+                      billingEmail: d.email,
+                      billingPhone: d.phone,
+                      eventDate: d.eventDate,
+                      messageToVendor: d.messageToVendor,
+                    );
+                    
+                    if (draftId != null) {
+                      checkoutState.setDraftId(draftId);
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Details saved and draft created'),
+                            backgroundColor: Colors.green,
+                          ),
+                        );
+                      }
+                    } else {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Details saved')),
+                        );
+                      }
+                    }
+                  } else {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Details saved')),
+                      );
+                    }
+                  }
+                } catch (e) {
+                  print('Error creating draft from billing details: $e');
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Details saved')),
+                    );
+                  }
+                }
+              } else {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Details saved')),
+                  );
+                }
+              }
             },
           ),
           const SizedBox(height: 12),
@@ -195,15 +262,19 @@ class PaymentSummaryPage extends StatelessWidget {
                 const Text('Billing Summary', style: TextStyle(fontWeight: FontWeight.bold)),
                 const SizedBox(height: 8),
                 if (d == null) const Text('No details saved') else ...[
-                  Text('Name: ${d.name}') ,
-                  Text('Email: ${d.email}') ,
-                  Text('Phone: ${d.phone}') ,
-                  if (d.eventDate != null) Text('Event: ${d.eventDate!.day}/${d.eventDate!.month}/${d.eventDate!.year}') ,
+                  _buildDetailRow('Name', d.name),
+                  _buildDetailRow('Email', d.email),
+                  _buildDetailRow('Phone', d.phone),
+                  if (d.eventDate != null) 
+                    _buildDetailRow(
+                      'Event', 
+                      '${d.eventDate!.day}/${d.eventDate!.month}/${d.eventDate!.year}'
+                    ),
                   if (d.messageToVendor != null)
-                    Text(
-                      'Message: ${d.messageToVendor}',
+                    _buildDetailRow(
+                      'Message', 
+                      d.messageToVendor!,
                       maxLines: 3,
-                      overflow: TextOverflow.ellipsis,
                     ),
                 ],
                 const SizedBox(height: 12),
@@ -215,6 +286,35 @@ class PaymentSummaryPage extends StatelessWidget {
           Row(children: [
             Expanded(child: ElevatedButton(onPressed: onNext, style: _primaryBtn(context), child: const Text('Next'))),
           ]),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDetailRow(String label, String value, {int maxLines = 1}) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 80,
+            child: Text(
+              '$label:',
+              style: TextStyle(
+                fontWeight: FontWeight.w500,
+                color: Colors.grey[700],
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              maxLines: maxLines,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
+          ),
         ],
       ),
     );
@@ -309,6 +409,7 @@ class _PaymentMethodPageState extends State<PaymentMethodPage> {
                     await _paymentService.processPayment(
                       context: context,
                       checkoutState: state,
+                      draftId: state.draftId, // Pass draft ID for booking creation
                       onSuccess: () {
                         setState(() => _isProcessing = false);
                         // Payment success is handled by PaymentResultScreen

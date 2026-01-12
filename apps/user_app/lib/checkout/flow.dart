@@ -5,7 +5,19 @@ import 'screens.dart';
 
 class CheckoutFlow extends StatelessWidget {
   final CartItem initialItem;
-  CheckoutFlow({super.key, required this.initialItem});
+  final String? draftId;
+  final DateTime? bookingDate;
+  final TimeOfDay? bookingTime;
+  final String? notes;
+  
+  CheckoutFlow({
+    super.key, 
+    required this.initialItem,
+    this.draftId,
+    this.bookingDate,
+    this.bookingTime,
+    this.notes,
+  });
 
   final GlobalKey<NavigatorState> _navKey = GlobalKey<NavigatorState>();
 
@@ -68,4 +80,62 @@ class CheckoutFlow extends StatelessWidget {
   }
 }
 
+/// Checkout flow with draft information for booking creation after payment
+class CheckoutFlowWithDraft extends StatelessWidget {
+  final CartItem initialItem;
+  final String draftId;
+  final DateTime? bookingDate;
+  final TimeOfDay? bookingTime;
+  final String? notes;
+  final String? billingName;
+  final String? billingEmail;
+  final String? billingPhone;
+  final DateTime? eventDate;
+  final String? messageToVendor;
+
+  const CheckoutFlowWithDraft({
+    super.key,
+    required this.initialItem,
+    required this.draftId,
+    this.bookingDate,
+    this.bookingTime,
+    this.notes,
+    this.billingName,
+    this.billingEmail,
+    this.billingPhone,
+    this.eventDate,
+    this.messageToVendor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ChangeNotifierProvider(
+      create: (_) {
+        final state = CheckoutState();
+        state.addItem(initialItem);
+        state.setDraftId(draftId);
+        
+        // Load billing details from draft if available
+        if (billingName != null && billingEmail != null && billingPhone != null) {
+          state.saveBillingDetails(BillingDetails(
+            name: billingName!,
+            email: billingEmail!,
+            phone: billingPhone!,
+            eventDate: eventDate,
+            messageToVendor: messageToVendor,
+          ));
+        }
+        
+        return state;
+      },
+      child: CheckoutFlow(
+        initialItem: initialItem,
+        draftId: draftId,
+        bookingDate: bookingDate,
+        bookingTime: bookingTime,
+        notes: notes,
+      ),
+    );
+  }
+}
 

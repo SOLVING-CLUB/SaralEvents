@@ -138,6 +138,105 @@ class Validators {
     final ok = RegExp(r"^[^\s@]+@[^\s@]+\.[^\s@]{2,}$").hasMatch(v);
     return ok ? null : 'Enter a valid email';
   }
+
+  /// Validates card number: 13-19 digits (after removing spaces)
+  static String? cardNumber(String? value) {
+    final v = (value ?? '').trim();
+    if (v.isEmpty) return 'Enter card number';
+    final digitsOnly = v.replaceAll(RegExp(r'[^0-9]'), '');
+    if (digitsOnly.length < 13 || digitsOnly.length > 19) {
+      return 'Card number must be 13-19 digits';
+    }
+    // Basic Luhn algorithm check (optional but recommended)
+    if (!_luhnCheck(digitsOnly)) {
+      return 'Invalid card number';
+    }
+    return null;
+  }
+
+  /// Validates card expiry: MM/YY format, MM must be 01-12, YY must be current year or later
+  static String? cardExpiry(String? value) {
+    final v = (value ?? '').trim();
+    if (v.isEmpty) return 'Enter expiry date';
+    
+    // Check format MM/YY
+    if (!RegExp(r'^\d{2}/\d{2}$').hasMatch(v)) {
+      return 'Enter expiry as MM/YY';
+    }
+    
+    final parts = v.split('/');
+    final mm = int.tryParse(parts[0]);
+    final yy = int.tryParse(parts[1]);
+    
+    if (mm == null || yy == null) {
+      return 'Invalid expiry date';
+    }
+    
+    // Validate month (01-12)
+    if (mm < 1 || mm > 12) {
+      return 'Month must be 01-12';
+    }
+    
+    // Validate year (not expired)
+    final now = DateTime.now();
+    final currentYear = now.year % 100; // Last 2 digits
+    final currentMonth = now.month;
+    
+    if (yy < currentYear || (yy == currentYear && mm < currentMonth)) {
+      return 'Card has expired';
+    }
+    
+    // Check if year is too far in future (e.g., more than 20 years)
+    if (yy > currentYear + 20) {
+      return 'Invalid expiry year';
+    }
+    
+    return null;
+  }
+
+  /// Validates CVV: 3-4 digits
+  static String? cardCvv(String? value) {
+    final v = (value ?? '').trim();
+    if (v.isEmpty) return 'Enter CVV';
+    if (!RegExp(r'^\d{3,4}$').hasMatch(v)) {
+      return 'CVV must be 3-4 digits';
+    }
+    return null;
+  }
+
+  /// Validates cardholder name: letters and spaces only, 2-50 characters
+  static String? cardName(String? value) {
+    final v = (value ?? '').trim();
+    if (v.isEmpty) return 'Enter name on card';
+    if (v.length < 2) return 'Name too short';
+    if (v.length > 50) return 'Name too long';
+    if (!RegExp(r'^[A-Za-z\s]+$').hasMatch(v)) {
+      return 'Use letters and spaces only';
+    }
+    return null;
+  }
+
+  /// Luhn algorithm for card number validation
+  static bool _luhnCheck(String cardNumber) {
+    int sum = 0;
+    bool alternate = false;
+    
+    for (int i = cardNumber.length - 1; i >= 0; i--) {
+      int digit = int.parse(cardNumber[i]);
+      
+      if (alternate) {
+        digit *= 2;
+        if (digit > 9) {
+          digit = (digit % 10) + 1;
+        }
+      }
+      
+      sum += digit;
+      alternate = !alternate;
+    }
+    
+    return (sum % 10) == 0;
+  }
 }
 
 /// Currency input formatter for price fields with ₹ symbol.
@@ -173,6 +272,116 @@ class CurrencyInputFormatter extends TextInputFormatter {
     return TextEditingValue(
       text: newText,
       selection: TextSelection.collapsed(offset: newText.length),
+    );
+  }
+}
+
+/// Card number formatter: adds spaces every 4 digits, max 19 characters (16 digits + 3 spaces)
+/// Example: "1234567812345678" -> "1234 5678 1234 5678"
+class CardNumberInputFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(TextEditingValue oldValue, TextEditingValue newValue) {
+    // Remove all non-digits
+    String digitsOnly = newValue.text.replaceAll(RegExp(r'[^0-9]'), '');
+    
+    // Limit to 16 digits (standard card length)
+    if (digitsOnly.length > 16) {
+      digitsOnly = digitsOnly.substring(0, 16);
+    }
+    
+    // Add spaces every 4 digits
+    StringBuffer formatted = StringBuffer();
+    for (int i = 0; i < digitsOnly.length; i++) {
+      if (i > 0 && i % 4 == 0) {
+        formatted.write(' ');
+      }
+      formatted.write(digitsOnly[i]);
+    }
+    
+    String newText = formatted.toString();
+    
+    // Calculate cursor position
+    int cursorPosition = newText.length;
+    if (oldValue.text.length < newValue.text.length) {
+      // User is typing forward
+      cursorPosition = newText.length;
+    } else {
+      // User is deleting
+      cursorPosition = newValue.selection.baseOffset.clamp(0, newText.length);
+    }
+    
+    return TextEditingValue(
+      text: newText,
+      selection: TextSelection.collapsed(offset: cursorPosition),
+    );
+  }
+}
+
+/// Expiry date formatter: formats as MM/YY, auto-inserts '/', validates MM <= 12
+/// Example: "1225" -> "12/25"
+class CardExpiryInputFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(TextEditingValue oldValue, TextEditingValue newValue) {
+    // Remove all non-digits
+    String digitsOnly = newValue.text.replaceAll(RegExp(r'[^0-9]'), '');
+    
+    // Limit to 4 digits (MMYY)
+    if (digitsOnly.length > 4) {
+      digitsOnly = digitsOnly.substring(0, 4);
+    }
+    
+    String formatted = digitsOnly;
+    
+    // Validate and format MM
+    if (digitsOnly.length >= 2) {
+      final mm = int.tryParse(digitsOnly.substring(0, 2));
+      if (mm != null) {
+        // If MM > 12, cap it at 12
+        if (mm > 12) {
+          formatted = '12${digitsOnly.length > 2 ? digitsOnly.substring(2) : ''}';
+        }
+        // If MM is 0, set to 01
+        if (mm == 0) {
+          formatted = '01${digitsOnly.length > 2 ? digitsOnly.substring(2) : ''}';
+        }
+      }
+      
+      // Add '/' after MM if we have at least 2 digits
+      if (formatted.length >= 2) {
+        formatted = '${formatted.substring(0, 2)}/${formatted.length > 2 ? formatted.substring(2) : ''}';
+      }
+    }
+    
+    // Calculate cursor position
+    int cursorPosition = formatted.length;
+    if (oldValue.text.length > newValue.text.length) {
+      // User is deleting - maintain cursor position relative to the change
+      int deletedChars = oldValue.text.length - newValue.text.length;
+      cursorPosition = (oldValue.selection.baseOffset - deletedChars).clamp(0, formatted.length);
+    }
+    
+    return TextEditingValue(
+      text: formatted,
+      selection: TextSelection.collapsed(offset: cursorPosition),
+    );
+  }
+}
+
+/// CVV formatter: allows only 3-4 digits
+class CardCvvInputFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(TextEditingValue oldValue, TextEditingValue newValue) {
+    // Remove all non-digits
+    String digitsOnly = newValue.text.replaceAll(RegExp(r'[^0-9]'), '');
+    
+    // Limit to 4 digits (some cards have 4-digit CVV)
+    if (digitsOnly.length > 4) {
+      digitsOnly = digitsOnly.substring(0, 4);
+    }
+    
+    return TextEditingValue(
+      text: digitsOnly,
+      selection: TextSelection.collapsed(offset: digitsOnly.length),
     );
   }
 }

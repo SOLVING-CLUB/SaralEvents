@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/service_models.dart';
 import '../services/booking_service.dart';
+import '../services/booking_draft_service.dart';
 import '../widgets/user_availability_calendar.dart';
 import '../widgets/time_slot_picker.dart';
 import '../services/availability_service.dart';
@@ -19,6 +20,7 @@ class BookingScreen extends StatefulWidget {
 
 class _BookingScreenState extends State<BookingScreen> {
   late final BookingService _bookingService;
+  late final BookingDraftService _draftService;
   late final AvailabilityService _availabilityService;
   DateTime? _selectedDate;
   TimeOfDay? _selectedTime;
@@ -26,11 +28,13 @@ class _BookingScreenState extends State<BookingScreen> {
   bool _isLoading = false;
   List<TimeSlot> _availableTimeSlots = [];
   TimeSlot? _selectedTimeSlot;
+  String? _savedDraftId;
 
   @override
   void initState() {
     super.initState();
     _bookingService = BookingService(Supabase.instance.client);
+    _draftService = BookingDraftService(Supabase.instance.client);
     _availabilityService = AvailabilityService(Supabase.instance.client);
     
     // Debug: Print service information
@@ -536,6 +540,8 @@ class _BookingScreenState extends State<BookingScreen> {
   }
 
   Widget _buildBookButton() {
+    final canProceed = _selectedDate != null;
+    
     return Container(
       width: double.infinity,
       height: 56,
@@ -550,15 +556,16 @@ class _BookingScreenState extends State<BookingScreen> {
         ],
       ),
       child: ElevatedButton(
-        onPressed: _isLoading
+        onPressed: (_isLoading || !canProceed)
             ? null
             : () async {
                 setState(() => _isLoading = true);
                 try {
-                  final success = await _bookingService.createBooking(
+                  // Save as draft instead of creating booking
+                  final draftId = await _draftService.saveDraft(
                     serviceId: widget.service.id,
                     vendorId: widget.service.vendorId,
-                    bookingDate: _selectedDate!,
+                    bookingDate: _selectedDate,
                     bookingTime: _selectedTime,
                     amount: widget.service.price,
                     notes: _notesController.text.trim().isNotEmpty ? _notesController.text.trim() : null,
@@ -566,7 +573,12 @@ class _BookingScreenState extends State<BookingScreen> {
 
                   if (!mounted) return;
 
-                  if (success) {
+                  if (draftId != null) {
+                    setState(() => _savedDraftId = draftId);
+                    
+                    // Mark draft as payment pending
+                    await _draftService.markDraftPaymentPending(draftId);
+                    
                     // Launch checkout flow with selected service as initial cart item
                     final item = CartItem(
                       id: widget.service.id,
@@ -575,19 +587,61 @@ class _BookingScreenState extends State<BookingScreen> {
                       price: widget.service.price,
                       subtitle: widget.service.vendorName,
                     );
-                    // Navigate to checkout flow
+                    
+                    // Pass draft ID in route arguments for payment success handler
                     if (mounted) {
-                      Navigator.of(context).push(CheckoutFlow.routeWithItem(item));
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (context) => CheckoutFlowWithDraft(
+                            initialItem: item,
+                            draftId: draftId,
+                            bookingDate: _selectedDate!,
+                            bookingTime: _selectedTime,
+                            notes: _notesController.text.trim(),
+                          ),
+                        ),
+                      );
                     }
                   } else {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Failed to create booking. Please try again.')),
-                    );
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Failed to save booking details. Please try again.'),
+                          backgroundColor: Colors.red,
+                          duration: Duration(seconds: 5),
+                        ),
+                      );
+                    }
                   }
                 } catch (e) {
                   if (mounted) {
+                    final errorMessage = e.toString();
+                    String userMessage = 'Failed to save booking details.';
+                    
+                    // Check for specific errors
+                    if (errorMessage.toLowerCase().contains('relation') && 
+                        errorMessage.toLowerCase().contains('does not exist')) {
+                      userMessage = 'Database table missing. Please contact support.';
+                    } else if (errorMessage.toLowerCase().contains('permission') ||
+                               errorMessage.toLowerCase().contains('policy')) {
+                      userMessage = 'Permission denied. Please check your account.';
+                    } else {
+                      userMessage = 'Error: ${errorMessage.length > 100 ? errorMessage.substring(0, 100) + "..." : errorMessage}';
+                    }
+                    
                     ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Error: $e')),
+                      SnackBar(
+                        content: Text(userMessage),
+                        backgroundColor: Colors.red,
+                        duration: const Duration(seconds: 5),
+                        action: SnackBarAction(
+                          label: 'Dismiss',
+                          textColor: Colors.white,
+                          onPressed: () {
+                            ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                          },
+                        ),
+                      ),
                     );
                   }
                 } finally {

@@ -27,6 +27,9 @@ import '../screens/help_support_screen.dart';
 import '../screens/accessibility_screen.dart';
 import '../screens/settings_screen.dart';
 import '../screens/refer_earn_screen.dart';
+import '../screens/cancellation_flow_screen.dart';
+import '../screens/refund_details_screen.dart';
+import '../screens/support_screen.dart';
 
 
 class AppRouter {
@@ -232,6 +235,22 @@ class AppRouter {
         GoRoute(
           path: '/events',
           builder: (_, __) => const AllEventsScreen(),
+        ),
+        GoRoute(
+          path: '/orders/cancel/:bookingId',
+          builder: (ctx, st) => CancellationFlowScreen(
+            bookingId: st.pathParameters['bookingId']!,
+          ),
+        ),
+        GoRoute(
+          path: '/orders/refund/:bookingId',
+          builder: (ctx, st) => RefundDetailsScreen(
+            bookingId: st.pathParameters['bookingId']!,
+          ),
+        ),
+        GoRoute(
+          path: '/support',
+          builder: (_, __) => const SupportScreen(),
         ),
       ],
     );

@@ -14,12 +14,16 @@ import {
   BarChart3,
   Star,
   HeadphonesIcon,
-  Shield
+  Shield,
+  XCircle,
+  Wallet
 } from 'lucide-react'
 
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Orders', href: '/dashboard/orders', icon: ShoppingBag },
+  { name: 'Cancellations & Refunds', href: '/dashboard/refunds', icon: XCircle },
+  { name: 'Vendor Wallets', href: '/dashboard/vendor-wallets', icon: Wallet },
   { name: 'Services', href: '/dashboard/services', icon: Settings },
   { name: 'Vendors', href: '/dashboard/vendors', icon: Store },
   { name: 'Users', href: '/dashboard/users', icon: Users },

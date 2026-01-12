@@ -101,8 +101,8 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
       );
     }
 
-    final milestoneStatus = _booking!['milestone_status'] as String? ?? 'created';
-    final progress = _calculateProgress(milestoneStatus);
+    final milestoneStatus = _booking!['milestone_status'] as String?; // Can be null now - no vendor acceptance needed
+    final progress = _calculateProgress(milestoneStatus ?? '');
 
     return Scaffold(
       appBar: AppBar(
@@ -202,39 +202,34 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
     );
   }
 
-  Widget _buildProgressIndicator(String status, double progress) {
+  Widget _buildProgressIndicator(String? status, double progress) {
+    // Updated flow: Booking Confirmed (auto-accepted on payment) -> Vendor Arrived -> Setup Completed -> Order Completed
+    // No vendor acceptance step needed - bookings are auto-accepted after payment
     final milestones = [
       _MilestoneStep(
-        title: 'Booking Created',
-        subtitle: 'Your booking is confirmed',
+        title: 'Booking Confirmed',
+        subtitle: 'Payment received, booking confirmed',
         icon: Icons.check_circle,
-        isCompleted: true,
-        isActive: status == 'created',
-      ),
-      _MilestoneStep(
-        title: 'Vendor Accepted',
-        subtitle: 'Vendor has accepted your booking',
-        icon: Icons.handshake,
-        isCompleted: ['accepted', 'vendor_traveling', 'vendor_arrived', 'arrival_confirmed', 'setup_completed', 'setup_confirmed', 'completed'].contains(status),
+        isCompleted: status != null && ['accepted', 'vendor_traveling', 'vendor_arrived', 'arrival_confirmed', 'setup_completed', 'setup_confirmed', 'completed'].contains(status),
         isActive: status == 'accepted',
       ),
       _MilestoneStep(
         title: 'Vendor Arrived',
         subtitle: 'Vendor has arrived at location',
         icon: Icons.location_on,
-        isCompleted: ['vendor_arrived', 'arrival_confirmed', 'setup_completed', 'setup_confirmed', 'completed'].contains(status),
+        isCompleted: status != null && ['vendor_arrived', 'arrival_confirmed', 'setup_completed', 'setup_confirmed', 'completed'].contains(status),
         isActive: status == 'vendor_arrived',
       ),
       _MilestoneStep(
         title: 'Setup Completed',
         subtitle: 'Vendor has completed the setup',
         icon: Icons.build,
-        isCompleted: ['setup_completed', 'setup_confirmed', 'completed'].contains(status),
+        isCompleted: status != null && ['setup_completed', 'setup_confirmed', 'completed'].contains(status),
         isActive: status == 'setup_completed',
       ),
       _MilestoneStep(
         title: 'Order Completed',
-        subtitle: 'All milestones completed',
+        subtitle: 'Task completed successfully',
         icon: Icons.celebration,
         isCompleted: status == 'completed',
         isActive: status == 'completed',
@@ -547,7 +542,8 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
       child: Column(
         children: [
           // Show payment button for next milestone
-          if (status == 'created' || status == 'accepted' || status == 'vendor_arrived' || status == 'setup_completed')
+          // No payment button for 'created' or 'accepted' - bookings are auto-accepted after payment
+          if (status == null || status.isEmpty || status == 'vendor_arrived' || status == 'setup_completed')
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
@@ -627,12 +623,13 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
     );
   }
 
-  double _calculateProgress(String status) {
+  double _calculateProgress(String? status) {
+    if (status == null || status.isEmpty) {
+      return 0.25; // Booking created, waiting for payment
+    }
     switch (status) {
-      case 'created':
-        return 0.2;
       case 'accepted':
-        return 0.3;
+        return 0.3; // Booking confirmed after payment (auto-accepted)
       case 'vendor_traveling':
         return 0.4;
       case 'vendor_arrived':

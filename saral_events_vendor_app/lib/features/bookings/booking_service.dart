@@ -192,6 +192,93 @@ class BookingService {
     }
   }
 
+  // Cancel booking as vendor (triggers 100% refund to customer)
+  Future<Map<String, dynamic>> cancelBookingAsVendor({
+    required String bookingId,
+    String? reason,
+  }) async {
+    try {
+      final vendorId = await _getVendorId();
+      if (vendorId == null) {
+        return {
+          'success': false,
+          'error': 'Vendor not found',
+        };
+      }
+
+      // Verify booking belongs to vendor
+      final bookingCheck = await _supabase
+          .from('bookings')
+          .select('vendor_id, status')
+          .eq('id', bookingId)
+          .eq('vendor_id', vendorId)
+          .maybeSingle();
+
+      if (bookingCheck == null) {
+        return {
+          'success': false,
+          'error': 'Booking not found or does not belong to vendor',
+        };
+      }
+
+      if (bookingCheck['status'] == 'cancelled') {
+        return {
+          'success': false,
+          'error': 'Booking is already cancelled',
+        };
+      }
+
+      // Call refund service RPC function to process vendor cancellation
+      // This will trigger 100% refund and vendor penalties
+      final refundResult = await _supabase.rpc('process_vendor_cancellation', params: {
+        'p_booking_id': bookingId,
+        'p_reason': reason ?? 'Vendor cancellation',
+      });
+
+      if (refundResult == null || refundResult['success'] != true) {
+        return {
+          'success': false,
+          'error': refundResult?['error'] ?? 'Failed to process cancellation',
+        };
+      }
+
+      // Update booking status
+      await _supabase
+          .from('bookings')
+          .update({
+            'status': 'cancelled',
+            'updated_at': DateTime.now().toIso8601String(),
+          })
+          .eq('id', bookingId);
+
+      // Create status update record
+      try {
+        await _supabase
+            .from('booking_status_updates')
+            .insert({
+              'booking_id': bookingId,
+              'status': 'cancelled',
+              'updated_by': _supabase.auth.currentUser?.id,
+              'notes': reason ?? 'Cancelled by vendor - Full refund issued to customer',
+            });
+      } catch (e) {
+        print('Warning: Failed to create status update record: $e');
+      }
+
+      return {
+        'success': true,
+        'message': 'Booking cancelled. Full refund issued to customer.',
+        'refund_amount': refundResult['refund_amount'],
+      };
+    } catch (e) {
+      print('Error cancelling booking as vendor: $e');
+      return {
+        'success': false,
+        'error': e.toString(),
+      };
+    }
+  }
+
   // Get booking statistics
   Future<Map<String, int>> getBookingStats() async {
     try {

@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'dart:convert';
 import '../models/service_models.dart';
 import '../core/cache/simple_cache.dart';
+import 'refund_service.dart';
 
 class BookingService {
   final SupabaseClient _supabase;
+  final RefundService _refundService;
 
-  BookingService(this._supabase);
+  BookingService(this._supabase) : _refundService = RefundService(_supabase);
 
   // Create a new booking
   Future<bool> createBooking({
@@ -42,23 +45,34 @@ class BookingService {
       print('  booking_time: ${bookingTime != null ? '${bookingTime.hour.toString().padLeft(2, '0')}:${bookingTime.minute.toString().padLeft(2, '0')}' : 'null'}');
       print('  amount: $amount');
       print('  notes: $notes');
+      
+      // Verify user_id is not null
+      if (userId.isEmpty) {
+        print('ERROR: user_id is empty!');
+        return false;
+      }
 
-      // Verify that the vendor_id matches the service
+      // Optional safety check: verify that the vendor_id matches the service's vendor.
+      // If this check fails, we log a warning but still proceed with booking creation,
+      // to avoid breaking the booking flow due to data inconsistencies.
       try {
         final serviceResult = await _supabase
             .from('services')
             .select('vendor_id')
             .eq('id', serviceId)
-            .single();
-        
-        final serviceVendorId = serviceResult['vendor_id'];
-        if (serviceVendorId != vendorId) {
-          print('Error: Vendor ID mismatch. Service vendor: $serviceVendorId, provided vendor: $vendorId');
-          return false;
+            .maybeSingle();
+
+        if (serviceResult != null) {
+          final serviceVendorId = serviceResult['vendor_id'];
+          if (serviceVendorId != vendorId) {
+            print('Warning: Vendor ID mismatch. Service vendor: $serviceVendorId, provided vendor: $vendorId');
+          }
+        } else {
+          print('Warning: Service not found while verifying vendor for booking. service_id=$serviceId');
         }
       } catch (e) {
-        print('Error verifying service vendor: $e');
-        return false;
+        print('Warning: Error verifying service vendor for booking: $e');
+        // Continue – do not block booking creation on this check.
       }
 
       final bookingData = {
@@ -71,18 +85,85 @@ class BookingService {
             : null,
         'amount': amount,
         'notes': notes,
-        'status': 'pending',
-        'milestone_status': 'created', // Initial milestone status
+        'status': 'confirmed', // After payment, booking is automatically confirmed (no vendor acceptance needed)
+        'milestone_status': 'accepted', // Auto-accepted on payment
+        'vendor_accepted_at': DateTime.now().toIso8601String(), // Auto-set timestamp on payment
       };
 
       print('Booking data: $bookingData');
+      print('Attempting to insert booking into database...');
 
-      final result = await _supabase.from('bookings').insert(bookingData).select();
-      print('Booking created successfully: $result');
+      List<Map<String, dynamic>> result;
+      try {
+        result = await _supabase.from('bookings').insert(bookingData).select();
+        print('Booking insert result: $result');
+        
+        // Verify booking was actually created
+        if (result.isEmpty) {
+          print('ERROR: Booking insert returned empty result');
+          print('This could indicate:');
+          print('  1. RLS policy blocking insert');
+          print('  2. Constraint violation (check status/milestone_status values)');
+          print('  3. Database error');
+          return false;
+        }
+        
+        print('✅ Booking insert successful, got ${result.length} row(s) back');
+      } catch (insertError) {
+        print('❌ ERROR inserting booking: $insertError');
+        print('Error type: ${insertError.runtimeType}');
+        print('Error details: ${insertError.toString()}');
+        
+        // Check for specific error types
+        if (insertError.toString().contains('violates check constraint')) {
+          print('⚠️ Constraint violation detected!');
+          print('Check if status="confirmed" and milestone_status="accepted" are allowed');
+        }
+        if (insertError.toString().contains('permission denied') || insertError.toString().contains('RLS')) {
+          print('⚠️ RLS policy issue detected!');
+          print('Check if user has INSERT permission on bookings table');
+        }
+        
+        return false;
+      }
+      
+      final createdBooking = result.first;
+      final createdBookingId = createdBooking['id'] as String;
+      final createdUserId = createdBooking['user_id'] as String;
+      
+      print('Created booking ID: $createdBookingId');
+      print('Created booking user_id: $createdUserId');
+      print('Current auth user_id: $userId');
+      
+      // Verify user_id matches
+      if (createdUserId != userId) {
+        print('ERROR: Booking user_id mismatch! Created: $createdUserId, Expected: $userId');
+        return false;
+      }
+      
+      // Verify we can read it back immediately
+      try {
+        final verifyResult = await _supabase
+            .from('bookings')
+            .select('id')
+            .eq('id', createdBookingId)
+            .eq('user_id', userId)
+            .maybeSingle();
+        
+        if (verifyResult == null) {
+          print('WARNING: Cannot read back the booking we just created! RLS issue?');
+        } else {
+          print('SUCCESS: Can read back the booking - RLS is working');
+        }
+      } catch (e) {
+        print('ERROR verifying booking: $e');
+      }
 
-      // Invalidate caches impacted by booking
+      // Force cache invalidation - clear all booking-related caches
       CacheManager.instance.invalidateByPrefix('availability:$serviceId');
       CacheManager.instance.invalidate('user:bookings');
+      CacheManager.instance.invalidate('user:booking-stats');
+      CacheManager.instance.invalidateByPrefix('user:bookings');
 
       return true;
     } catch (e) {
@@ -92,48 +173,337 @@ class BookingService {
     }
   }
 
+  // Helper: Create bookings from completed drafts that don't have bookings
+  Future<void> _createBookingsFromCompletedDrafts(String userId) async {
+    try {
+      // Get completed drafts (include event_date as fallback for booking_date)
+      final completedDrafts = await _supabase
+          .from('booking_drafts')
+          .select('id, service_id, vendor_id, booking_date, event_date, booking_time, amount, notes')
+          .eq('user_id', userId)
+          .eq('status', 'completed');
+      
+      if (completedDrafts.isEmpty) {
+        return;
+      }
+      
+      print('Found ${completedDrafts.length} completed drafts, checking for missing bookings...');
+      
+      for (final draft in completedDrafts) {
+        // Skip drafts with missing required fields
+        // Use event_date as fallback for booking_date
+        final serviceId = draft['service_id']?.toString();
+        final vendorId = draft['vendor_id']?.toString();
+        final bookingDateStr = draft['booking_date']?.toString() ?? draft['event_date']?.toString();
+        final amount = draft['amount'];
+        
+        if (serviceId == null || vendorId == null || bookingDateStr == null || amount == null) {
+          print('Skipping draft ${draft['id']} - missing required fields (serviceId: $serviceId, vendorId: $vendorId, bookingDate: $bookingDateStr, amount: $amount)');
+          continue;
+        }
+        
+        // Check if booking already exists
+        final existingBooking = await _supabase
+            .from('bookings')
+            .select('id')
+            .eq('user_id', userId)
+            .eq('service_id', serviceId)
+            .eq('booking_date', bookingDateStr)
+            .maybeSingle();
+        
+        if (existingBooking == null) {
+          // Create booking from draft
+          print('Creating booking from completed draft: ${draft['id']}');
+          try {
+            final success = await createBooking(
+              serviceId: serviceId,
+              vendorId: vendorId,
+              bookingDate: DateTime.parse(bookingDateStr),
+              bookingTime: draft['booking_time'] != null
+                  ? TimeOfDay(
+                      hour: int.parse((draft['booking_time'] as String).split(':')[0]),
+                      minute: int.parse((draft['booking_time'] as String).split(':')[1]),
+                    )
+                  : null,
+              amount: (amount as num).toDouble(),
+              notes: draft['notes']?.toString(),
+            );
+            
+            if (success) {
+              print('✅ Created booking from completed draft: ${draft['id']}');
+            } else {
+              print('❌ Failed to create booking from draft: ${draft['id']}');
+            }
+          } catch (e) {
+            print('Error creating booking from draft ${draft['id']}: $e');
+          }
+        }
+      }
+    } catch (e) {
+      print('Error checking completed drafts: $e');
+    }
+  }
+
   // Get user's booking history
-  Future<List<Map<String, dynamic>>> getUserBookings() async {
+  // This combines bookings from both 'bookings' table and 'orders' table (for paid orders)
+  // Also checks for completed drafts without bookings and creates bookings for them
+  Future<List<Map<String, dynamic>>> getUserBookings({bool forceRefresh = false}) async {
     try {
       final userId = _supabase.auth.currentUser?.id;
-      if (userId == null) return [];
-      return await CacheManager.instance.getOrFetch<List<Map<String, dynamic>>>(
-        'user:bookings',
-        const Duration(minutes: 1),
-        () async {
-          final result = await _supabase
-              .rpc('get_user_bookings', params: {'user_uuid': userId});
-          return List<Map<String, dynamic>>.from(result);
-        },
-      );
-    } catch (e) {
+      if (userId == null) {
+        print('ERROR: No authenticated user found for getUserBookings');
+        return [];
+      }
+      
+      print('=== GET USER BOOKINGS DEBUG ===');
+      print('Authenticated user ID: $userId');
+      
+      // Force cache invalidation if requested
+      if (forceRefresh) {
+        CacheManager.instance.invalidate('user:bookings');
+        CacheManager.instance.invalidateByPrefix('user:bookings');
+      }
+      
+      // First, check for completed drafts without bookings and create bookings for them
+      await _createBookingsFromCompletedDrafts(userId);
+      
+      final allBookings = <Map<String, dynamic>>[];
+      
+      // 1. Get bookings from 'bookings' table
+      try {
+        print('Querying bookings table...');
+        final bookingsResult = await _supabase
+            .from('bookings')
+            .select('id, service_id, vendor_id, booking_date, booking_time, status, amount, notes, created_at, user_id')
+            .eq('user_id', userId)
+            .order('created_at', ascending: false);
+        
+        print('Found ${bookingsResult.length} bookings from bookings table');
+        
+        for (final booking in bookingsResult) {
+          String serviceName = 'Unknown Service';
+          String vendorName = 'Unknown Vendor';
+          
+          // Get service name
+          try {
+            if (booking['service_id'] != null) {
+              final serviceResult = await _supabase
+                  .from('services')
+                  .select('name')
+                  .eq('id', booking['service_id'])
+                  .maybeSingle();
+              if (serviceResult != null && serviceResult['name'] != null) {
+                serviceName = serviceResult['name'] as String;
+              }
+            }
+          } catch (e) {
+            print('Error fetching service name: $e');
+          }
+          
+          // Get vendor name
+          try {
+            if (booking['vendor_id'] != null) {
+              final vendorResult = await _supabase
+                  .from('vendor_profiles')
+                  .select('business_name')
+                  .eq('id', booking['vendor_id'])
+                  .maybeSingle();
+              if (vendorResult != null && vendorResult['business_name'] != null) {
+                vendorName = vendorResult['business_name'] as String;
+              }
+            }
+          } catch (e) {
+            print('Error fetching vendor name: $e');
+          }
+          
+          allBookings.add({
+            'booking_id': booking['id'],
+            'service_name': serviceName,
+            'vendor_name': vendorName,
+            'booking_date': booking['booking_date'],
+            'booking_time': booking['booking_time'],
+            'status': booking['status'],
+            'amount': booking['amount'],
+            'notes': booking['notes'],
+            'created_at': booking['created_at'],
+          });
+        }
+      } catch (e) {
+        print('Error querying bookings table: $e');
+      }
+      
+      // 2. Get paid orders from 'orders' table that don't have corresponding bookings
+      // These are orders that were paid but booking creation might have failed
+      try {
+        print('Querying orders table for paid orders...');
+        final ordersResult = await _supabase
+            .from('orders')
+            .select('id, status, total_amount, created_at, items_json, billing_name, event_date')
+            .eq('user_id', userId)
+            .inFilter('status', ['completed', 'confirmed', 'pending'])
+            .order('created_at', ascending: false);
+        
+        print('Found ${ordersResult.length} orders from orders table');
+        
+        // Parse items_json to get service info
+        for (final order in ordersResult) {
+          try {
+            final itemsJson = order['items_json'];
+            if (itemsJson != null && itemsJson is String) {
+              final items = (jsonDecode(itemsJson) as List).cast<Map<String, dynamic>>();
+              if (items.isNotEmpty) {
+                final firstItem = items.first;
+                final serviceName = firstItem['title'] as String? ?? 'Service';
+                final category = firstItem['category'] as String? ?? '';
+                
+                // Extract booking date from event_date or created_at
+                String? bookingDate;
+                if (order['event_date'] != null) {
+                  bookingDate = order['event_date'] as String;
+                } else if (order['created_at'] != null) {
+                  final createdAt = DateTime.parse(order['created_at'] as String);
+                  bookingDate = createdAt.toIso8601String().split('T')[0];
+                }
+                
+                // Check if this order already has a booking (by checking if booking exists with same date/amount)
+                bool hasBooking = false;
+                if (bookingDate != null) {
+                  try {
+                    allBookings.firstWhere(
+                      (b) => b['booking_date'] == bookingDate && 
+                              (b['amount'] as num).toDouble() == (order['total_amount'] as num).toDouble(),
+                    );
+                    hasBooking = true; // Found a match
+                  } catch (e) {
+                    hasBooking = false; // No match found
+                  }
+                }
+                
+                // Only add if no booking exists for this order
+                if (!hasBooking) {
+                  allBookings.add({
+                    'booking_id': order['id'], // Use order ID as booking_id
+                    'service_name': serviceName,
+                    'vendor_name': 'Vendor', // Orders don't have vendor_id, use placeholder
+                    'booking_date': bookingDate,
+                    'booking_time': null,
+                    'status': order['status'] ?? 'pending',
+                    'amount': order['total_amount'],
+                    'notes': null,
+                    'created_at': order['created_at'],
+                    'is_from_order': true, // Flag to indicate this came from orders table
+                  });
+                }
+              }
+            }
+          } catch (e) {
+            print('Error parsing order items: $e');
+          }
+        }
+      } catch (e) {
+        print('Error querying orders table: $e');
+      }
+      
+      // Sort all bookings by created_at descending
+      allBookings.sort((a, b) {
+        final aDate = a['created_at'] as String? ?? '';
+        final bDate = b['created_at'] as String? ?? '';
+        return bDate.compareTo(aDate);
+      });
+      
+      print('Total bookings to return: ${allBookings.length}');
+      CacheManager.instance.set('user:bookings', allBookings, const Duration(minutes: 1));
+      return allBookings;
+    } catch (e, stackTrace) {
       print('Error fetching user bookings: $e');
+      print('Stack trace: $stackTrace');
       return [];
     }
   }
 
-  // Cancel a booking
-  Future<bool> cancelBooking(String bookingId) async {
+  // Cancel a booking with refund calculation
+  Future<Map<String, dynamic>> cancelBookingWithRefund({
+    required String bookingId,
+    bool isVendorCancellation = false,
+  }) async {
     try {
       final userId = _supabase.auth.currentUser?.id;
-      if (userId == null) return false;
+      if (userId == null) {
+        return {
+          'success': false,
+          'error': 'User not authenticated',
+        };
+      }
 
-      await _supabase
-          .from('bookings')
-          .update({
-            'status': 'cancelled',
-            'updated_at': DateTime.now().toIso8601String(),
-          })
-          .eq('id', bookingId)
-          .eq('user_id', userId);
+      // Calculate refund
+      final refundCalculation = await _refundService.calculateRefund(
+        bookingId: bookingId,
+        cancellationDate: DateTime.now(),
+        isVendorCancellation: isVendorCancellation,
+      );
+
+      // Process refund
+      final refundProcessed = await _refundService.processRefund(
+        bookingId: bookingId,
+        calculation: refundCalculation,
+        cancelledBy: isVendorCancellation ? 'vendor' : 'customer',
+      );
+
+      if (!refundProcessed) {
+        return {
+          'success': false,
+          'error': 'Failed to process refund',
+        };
+      }
 
       // Invalidate related caches
       CacheManager.instance.invalidate('user:bookings');
 
-      return true;
+      return {
+        'success': true,
+        'refund_amount': refundCalculation.refundableAmount,
+        'non_refundable_amount': refundCalculation.nonRefundableAmount,
+        'refund_percentage': refundCalculation.refundPercentage,
+        'reason': refundCalculation.reason,
+        'breakdown': refundCalculation.breakdown,
+      };
+    } catch (e) {
+      print('Error cancelling booking: $e');
+      return {
+        'success': false,
+        'error': e.toString(),
+      };
+    }
+  }
+
+  // Cancel a booking (legacy method - kept for backward compatibility)
+  Future<bool> cancelBooking(String bookingId) async {
+    try {
+      final result = await cancelBookingWithRefund(
+        bookingId: bookingId,
+        isVendorCancellation: false,
+      );
+      return result['success'] == true;
     } catch (e) {
       print('Error cancelling booking: $e');
       return false;
+    }
+  }
+
+  // Get refund preview before cancellation
+  Future<RefundCalculation?> getRefundPreview({
+    required String bookingId,
+    bool isVendorCancellation = false,
+  }) async {
+    try {
+      return await _refundService.calculateRefund(
+        bookingId: bookingId,
+        cancellationDate: DateTime.now(),
+        isVendorCancellation: isVendorCancellation,
+      );
+    } catch (e) {
+      print('Error getting refund preview: $e');
+      return null;
     }
   }
 

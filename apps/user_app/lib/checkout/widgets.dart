@@ -316,18 +316,71 @@ class _PaymentMethodSelectorState extends State<PaymentMethodSelector> {
   }
 
   Widget _cardFields() {
-    return Column(
-      children: [
-        TextField(controller: _cardNumber, decoration: const InputDecoration(labelText: 'Card Number', border: OutlineInputBorder())),
-        const SizedBox(height: 8),
-        TextField(controller: _cardName, decoration: const InputDecoration(labelText: 'Name on Card', border: OutlineInputBorder())),
-        const SizedBox(height: 8),
-        Row(children: [
-          Expanded(child: TextField(controller: _cardExpiry, decoration: const InputDecoration(labelText: 'Expiry (MM/YY)', border: OutlineInputBorder()))),
-          const SizedBox(width: 8),
-          Expanded(child: TextField(controller: _cardCvv, decoration: const InputDecoration(labelText: 'CVV', border: OutlineInputBorder()))),
-        ]),
-      ],
+    return Form(
+      child: Column(
+        children: [
+          TextFormField(
+            controller: _cardNumber,
+            decoration: const InputDecoration(
+              labelText: 'Card Number',
+              hintText: '1234 5678 9012 3456',
+              border: OutlineInputBorder(),
+            ),
+            keyboardType: TextInputType.number,
+            inputFormatters: [CardNumberInputFormatter()],
+            validator: Validators.cardNumber,
+            onChanged: (_) => widget.onChanged(_current()),
+          ),
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: _cardName,
+            decoration: const InputDecoration(
+              labelText: 'Name on Card',
+              hintText: 'John Doe',
+              border: OutlineInputBorder(),
+            ),
+            textCapitalization: TextCapitalization.words,
+            inputFormatters: [LettersSpacesTextInputFormatter()],
+            validator: Validators.cardName,
+            onChanged: (_) => widget.onChanged(_current()),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: TextFormField(
+                  controller: _cardExpiry,
+                  decoration: const InputDecoration(
+                    labelText: 'Expiry (MM/YY)',
+                    hintText: '12/25',
+                    border: OutlineInputBorder(),
+                  ),
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [CardExpiryInputFormatter()],
+                  validator: Validators.cardExpiry,
+                  onChanged: (_) => widget.onChanged(_current()),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: TextFormField(
+                  controller: _cardCvv,
+                  decoration: const InputDecoration(
+                    labelText: 'CVV',
+                    hintText: '123',
+                    border: OutlineInputBorder(),
+                  ),
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [CardCvvInputFormatter()],
+                  validator: Validators.cardCvv,
+                  obscureText: true,
+                  onChanged: (_) => widget.onChanged(_current()),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 
