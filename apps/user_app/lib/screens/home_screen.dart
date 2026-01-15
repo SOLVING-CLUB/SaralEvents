@@ -32,7 +32,7 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> with RouteAware {
+class _HomeScreenState extends State<HomeScreen> with RouteAware, WidgetsBindingObserver {
 
   // Static categories with asset mapping to match the provided UI
   final List<Map<String, String>> _categories = [
@@ -78,6 +78,7 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _loadData();
     // Precache category images to avoid flicker on first horizontal scroll
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -91,21 +92,52 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
     });
   }
 
+  bool _hasAppBeenInBackground = false;
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    // Track if app has been in background
+    if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
+      _hasAppBeenInBackground = true;
+    }
+  }
+
   /// Check location status and show bottom sheet if location is off
-  /// Only shows at app startup, not when navigating back to home page
-  /// Works like Swiggy Instamart:
-  /// - On every fresh app start, check if device location service is ON
-  /// - If location is OFF → show bottom sheet (even if we have saved location)
-  /// - If location is ON and permission granted → fetch fresh location
-  /// - Saved addresses are only used when user manually selects from bottom sheet
+  /// Only shows on FRESH APP START, not when resuming from recent apps
+  /// 
+  /// LOGIC EXPLANATION:
+  /// 1. On app startup, main.dart resets 'location_checked_this_session' to false
+  /// 2. We track if app has been in background using WidgetsBindingObserver
+  /// 3. If app has been in background (_hasAppBeenInBackground = true), skip check (it's a resume)
+  /// 4. If app hasn't been in background, it's a fresh start → check location
+  /// 5. After checking, set 'location_checked_this_session' to true to prevent re-checking
+  /// 
+  /// CONDITIONS FOR SHOWING BOTTOM SHEET:
+  /// - Fresh app start (not resumed from background)
+  /// - User is authenticated
+  /// - Device location service is OFF OR permission not granted
+  /// 
+  /// CONDITIONS FOR AUTO-FETCHING LOCATION:
+  /// - Fresh app start
+  /// - User is authenticated
+  /// - Device location service is ON
+  /// - Permission is already granted
   Future<void> _checkLocationAndShowBottomSheet() async {
-    // Check if we've already shown the bottom sheet in this app session
-    // Use SharedPreferences to persist across widget rebuilds
     final prefs = await SharedPreferences.getInstance();
-    final hasCheckedThisSession = prefs.getBool('location_checked_this_session') ?? false;
     
+    // If app has been in background, this is a resume - don't check location again
+    // The location was already fetched when app first started
+    if (_hasAppBeenInBackground) {
+      debugPrint('App resumed from background - skipping location check');
+      return;
+    }
+    
+    // Check if we've already checked in this session (safety check)
+    final hasCheckedThisSession = prefs.getBool('location_checked_this_session') ?? false;
     if (hasCheckedThisSession) {
-      return; // Already checked in this app session, don't show again
+      debugPrint('Location already checked this session - skipping');
+      return;
     }
     
     // Check if user is authenticated
@@ -123,15 +155,14 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
       return;
     }
 
-    // SWIGGY-LIKE BEHAVIOR: Always check device location status FIRST
-    // Don't rely on previously saved location - always check current device status
+    // FRESH APP START: Check device location status
     try {
       final serviceEnabled = await Geolocator.isLocationServiceEnabled();
       
-      // Case 1: Device location is OFF → Show bottom sheet
-      // This happens regardless of any previously saved location
+      // Case 1: Device location is OFF → Show bottom sheet (non-dismissible)
       if (!serviceEnabled) {
         await prefs.setBool('location_checked_this_session', true);
+        debugPrint('Device location is OFF - showing bottom sheet');
         if (mounted) {
           showModalBottomSheet(
             context: context,
@@ -155,12 +186,14 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
       if (status == LocationPermissionStatus.granted) {
         // Permission granted → fetch fresh location automatically
         await prefs.setBool('location_checked_this_session', true);
+        debugPrint('Location ON and permission granted - fetching location automatically');
         await _fetchLocationDirectly();
         return;
       }
       
       // Case 3: Location is ON but permission not granted → Show bottom sheet
       await prefs.setBool('location_checked_this_session', true);
+      debugPrint('Location ON but permission not granted - showing bottom sheet');
       if (mounted) {
         showModalBottomSheet(
           context: context,
@@ -169,8 +202,10 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
           isDismissible: false,
           enableDrag: false,
           builder: (context) => const LocationStartupBottomSheet(),
-        ).then((_) {
+        ).then((result) {
+          // Reload address when bottom sheet closes (address selected or dismissed)
           if (mounted) {
+            debugPrint('Bottom sheet closed, reloading address...');
             _loadActiveAddress();
           }
         });
@@ -187,8 +222,10 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
           isDismissible: false,
           enableDrag: false,
           builder: (context) => const LocationStartupBottomSheet(),
-        ).then((_) {
+        ).then((result) {
+          // Reload address when bottom sheet closes (address selected or dismissed)
           if (mounted) {
+            debugPrint('Bottom sheet closed, reloading address...');
             _loadActiveAddress();
           }
         });
@@ -208,22 +245,16 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
         position.longitude,
       ) ?? 'Current Location';
 
-      // Save as active address
+      // Save as temporary location (session-only, not added to saved addresses)
       final addressInfo = AddressInfo(
-        id: 'current_location_${DateTime.now().millisecondsSinceEpoch}',
+        id: 'temp_location_${DateTime.now().millisecondsSinceEpoch}',
         label: 'Current Location',
         address: address,
         lat: position.latitude,
         lng: position.longitude,
       );
 
-      await AddressStorage.setActive(addressInfo);
-      
-      // Also ensure SharedPreferences is updated
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setDouble('loc_lat', position.latitude);
-      await prefs.setDouble('loc_lng', position.longitude);
-      await prefs.setString('loc_address', address);
+      await AddressStorage.setTemporaryLocation(addressInfo);
       
       // Reload address to update UI
       if (mounted) {
@@ -242,8 +273,10 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
           isDismissible: true,
           enableDrag: true,
           builder: (context) => const LocationStartupBottomSheet(),
-        ).then((_) {
+        ).then((result) {
+          // Reload address when bottom sheet closes (address selected or dismissed)
           if (mounted) {
+            debugPrint('Bottom sheet closed, reloading address...');
             _loadActiveAddress();
           }
         });
@@ -255,13 +288,23 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
   void didChangeDependencies() {
     super.didChangeDependencies();
     // Reload address when returning from location screen
-    _loadActiveAddress();
+    // Use postFrameCallback to ensure this runs after navigation completes
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _loadActiveAddress();
+      }
+    });
   }
 
   @override
   void didPopNext() {
     // Called when returning to this screen from another screen
-    _loadActiveAddress();
+    // Use postFrameCallback to ensure this runs after navigation completes
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _loadActiveAddress();
+      }
+    });
   }
 
   void _attachSessionListenerAndLoadName() {
@@ -301,22 +344,39 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
   Future<void> _loadActiveAddress() async {
     try {
       final activeAddress = await AddressStorage.getActive();
+      debugPrint('Loading active address: ${activeAddress?.label} - ${activeAddress?.address}');
+      
       if (!mounted) return;
+      final displayAddress = activeAddress != null 
+          ? AddressUtils.extractAreaName(activeAddress.address)
+          : 'Select location';
+      
+      debugPrint('Setting homepage address display to: $displayAddress');
+      
       setState(() { 
-        _activeAddress = activeAddress != null 
-            ? AddressUtils.extractAreaName(activeAddress.address)
-            : 'Select location';
+        _activeAddress = displayAddress;
       });
-    } catch (_) {
+    } catch (e) {
+      debugPrint('Error loading active address: $e');
       // Fallback to SharedPreferences if AddressStorage fails
-      final prefs = await SharedPreferences.getInstance();
-      final addr = prefs.getString('loc_address');
-      if (!mounted) return;
-      setState(() { 
-        _activeAddress = addr != null 
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        final addr = prefs.getString('loc_address');
+        if (!mounted) return;
+        final displayAddress = addr != null 
             ? AddressUtils.extractAreaName(addr)
             : 'Select location';
-      });
+        debugPrint('Using fallback address: $displayAddress');
+        setState(() { 
+          _activeAddress = displayAddress;
+        });
+      } catch (e2) {
+        debugPrint('Error in fallback address loading: $e2');
+        if (!mounted) return;
+        setState(() {
+          _activeAddress = 'Select location';
+        });
+      }
     }
   }
 
@@ -968,6 +1028,7 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     if (_sessionListener != null) {
       _sessionRef?.removeListener(_sessionListener!);
     }

@@ -9,6 +9,7 @@ import 'core/theme/app_theme.dart';
 import 'core/widgets/permission_manager.dart';
 import 'screens/app_link_handler.dart';
 import 'checkout/checkout_state.dart';
+import 'core/services/address_storage.dart';
 //test
 
 Future<void> main() async {
@@ -23,6 +24,10 @@ Future<void> main() async {
   // This ensures the bottom sheet only shows once per app session
   final prefs = await SharedPreferences.getInstance();
   await prefs.setBool('location_checked_this_session', false);
+  
+  // Clear temporary location on app start (session-only locations reset)
+  // Saved addresses remain intact
+  await AddressStorage.clearTemporaryLocation();
 
   runApp(const UserApp());
 }

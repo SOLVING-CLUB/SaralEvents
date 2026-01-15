@@ -75,22 +75,16 @@ class _LocationStartupBottomSheetState extends State<LocationStartupBottomSheet>
           position.longitude,
         ) ?? 'Current Location';
 
-        // Save as active address
+        // Save as temporary location (session-only, not added to saved addresses)
         final addressInfo = AddressInfo(
-          id: 'current_location_${DateTime.now().millisecondsSinceEpoch}',
+          id: 'temp_location_${DateTime.now().millisecondsSinceEpoch}',
           label: 'Current Location',
           address: address,
           lat: position.latitude,
           lng: position.longitude,
         );
 
-        await AddressStorage.setActive(addressInfo);
-        
-        // Also ensure SharedPreferences is updated
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setDouble('loc_lat', position.latitude);
-        await prefs.setDouble('loc_lng', position.longitude);
-        await prefs.setString('loc_address', address);
+        await AddressStorage.setTemporaryLocation(addressInfo);
         
         if (mounted) {
           Navigator.of(context).pop();
@@ -128,17 +122,17 @@ class _LocationStartupBottomSheetState extends State<LocationStartupBottomSheet>
   }
 
   Future<void> _selectFromSaved(AddressInfo address) async {
-    // Save the selected address as active
-    await AddressStorage.setActive(address);
+    // Save the selected saved address as active (persists across sessions)
+    // This is a saved address, so it should persist
+    await AddressStorage.setActive(address, addToSaved: true);
     
-    // Also save to SharedPreferences for app-wide access
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setDouble('loc_lat', address.lat);
-    await prefs.setDouble('loc_lng', address.lng);
-    await prefs.setString('loc_address', address.address);
+    // Verify the address was set correctly
+    final verifyActive = await AddressStorage.getActive();
+    debugPrint('Address set active: ${address.label} - ${address.address}');
+    debugPrint('Verified active address: ${verifyActive?.label} - ${verifyActive?.address}');
     
     if (mounted) {
-      Navigator.of(context).pop();
+      Navigator.of(context).pop(address); // Pass address as result to trigger reload
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Location set to: ${address.label}'),
@@ -146,9 +140,6 @@ class _LocationStartupBottomSheetState extends State<LocationStartupBottomSheet>
           duration: const Duration(seconds: 2),
         ),
       );
-      
-      // Trigger a rebuild of the app to reflect the new location
-      // This will be handled by the home screen's _loadActiveAddress() callback
     }
   }
 

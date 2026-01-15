@@ -257,6 +257,15 @@ class BookingService {
       
       print('=== GET USER BOOKINGS DEBUG ===');
       print('Authenticated user ID: $userId');
+
+      // Fast path: return from in-memory cache when not forcing refresh
+      if (!forceRefresh) {
+        final cached = CacheManager.instance.get<List<Map<String, dynamic>>>('user:bookings');
+        if (cached != null) {
+          print('Returning ${cached.length} bookings from CacheManager (user:bookings)');
+          return cached;
+        }
+      }
       
       // Force cache invalidation if requested
       if (forceRefresh) {

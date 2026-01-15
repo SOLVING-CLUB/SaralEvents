@@ -49,22 +49,17 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
   void _onTabChanged() {
     // Refresh bookings when switching to bookings tab
     if (_tabController.index == 0 && !_tabController.indexIsChanging) {
-      _loadBookings();
+      _loadBookings(forceRefresh: false);
     }
   }
 
-  Future<void> _loadBookings({bool forceRefresh = true}) async {
+  Future<void> _loadBookings({bool forceRefresh = false}) async {
     setState(() {
       _isLoading = true;
       _error = null;
     });
 
     try {
-      // Force cache invalidation before loading
-      CacheManager.instance.invalidate('user:bookings');
-      CacheManager.instance.invalidateByPrefix('user:bookings');
-      
-      // Always force refresh to get latest data
       final bookings = await _bookingService.getUserBookings(forceRefresh: forceRefresh);
       
       if (kDebugMode) {

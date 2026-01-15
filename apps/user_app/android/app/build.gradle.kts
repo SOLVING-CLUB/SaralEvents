@@ -6,7 +6,8 @@ plugins {
     id("kotlin-android")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
-    id("com.google.gms.google-services") // Google Services plugin for Google Sign-In
+    // Google Services plugin disabled - not using Firebase/Google Sign-In yet
+    // id("com.google.gms.google-services")
 }
 
 android {
@@ -35,8 +36,8 @@ android {
         versionCode = flutter.versionCode
         versionName = flutter.versionName
         
-        // Google Sign-In configuration (update via resources, avoid hardcoding if possible)
-        manifestPlaceholders["GOOGLE_SIGN_IN_CLIENT_ID"] = "314736791162-afldsldle2v8ddkvt7dg16co5hlgpuus.apps.googleusercontent.com"
+        // Google Sign-In configuration disabled - not using Google Sign-In yet
+        // manifestPlaceholders["GOOGLE_SIGN_IN_CLIENT_ID"] = "314736791162-afldsldle2v8ddkvt7dg16co5hlgpuus.apps.googleusercontent.com"
         // Optionally provide Google Maps key as a placeholder to avoid hardcoding in manifest
         // manifestPlaceholders["GOOGLE_MAPS_API_KEY"] = System.getenv("GOOGLE_MAPS_API_KEY") ?: ""
     }

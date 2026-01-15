@@ -154,9 +154,17 @@ class _SelectLocationScreenState extends State<SelectLocationScreen> {
         _saved.insert(0, home);
       }
       await _persistSaved();
-      await AddressStorage.setActive(home);
+      await AddressStorage.setActive(home, addToSaved: true);
+      
+      // Verify the address was set correctly
+      final verifyActive = await AddressStorage.getActive();
+      debugPrint('Set current location as Home: ${home.address}');
+      debugPrint('Verified active address: ${verifyActive?.label} - ${verifyActive?.address}');
+      
       if (!mounted) return;
       context.go('/app');
+      // Small delay to ensure navigation completes
+      await Future.delayed(const Duration(milliseconds: 300));
     } finally {
       if (mounted) setState(() => _checking = false);
     }
@@ -191,10 +199,17 @@ class _SelectLocationScreenState extends State<SelectLocationScreen> {
                 }
                 
                 // Set as active address
-                await AddressStorage.setActive(newAddress);
+                await AddressStorage.setActive(newAddress, addToSaved: true);
+                
+                // Verify the address was set correctly
+                final verifyActive = await AddressStorage.getActive();
+                debugPrint('Selected new address: ${newAddress.label} - ${newAddress.address}');
+                debugPrint('Verified active address: ${verifyActive?.label} - ${verifyActive?.address}');
                 
                 if (!mounted) return;
                 context.go('/app');
+                // Small delay to ensure navigation completes before potential reload
+                await Future.delayed(const Duration(milliseconds: 300));
               },
             ),
             const SizedBox(height: 16),
@@ -278,9 +293,22 @@ class _SelectLocationScreenState extends State<SelectLocationScreen> {
                   final item = _saved[i];
                   return InkWell(
                     onTap: () async {
-                      await AddressStorage.setActive(item);
+                      // Set the saved address as active
+                      await AddressStorage.setActive(item, addToSaved: true);
+                      
+                      // Verify the address was set correctly
+                      final verifyActive = await AddressStorage.getActive();
+                      debugPrint('Selected saved address: ${item.label} - ${item.address}');
+                      debugPrint('Verified active address: ${verifyActive?.label} - ${verifyActive?.address}');
+                      
                       if (!mounted) return;
+                      
+                      // Navigate to app and ensure homepage reloads
+                      // Using pushReplacement or go with a small delay to ensure state updates
                       context.go('/app');
+                      
+                      // Give the navigation a moment, then trigger reload if homepage is visible
+                      await Future.delayed(const Duration(milliseconds: 300));
                     },
                     child: _SavedAddressCard(
                       label: item.label,

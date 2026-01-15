@@ -39,7 +39,8 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
         floatingActionButton: Consumer<CheckoutState>(
           builder: (context, checkout, _) {
             final count = checkout.items.length;
-            if (count == 0) return const SizedBox.shrink();
+            // Hide cart button on profile page (index 4)
+            if (count == 0 || _currentIndex == 4) return const SizedBox.shrink();
             return Stack(
               clipBehavior: Clip.none,
               children: [
