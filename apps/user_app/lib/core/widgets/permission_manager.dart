@@ -82,41 +82,12 @@ class _PermissionManagerState extends State<PermissionManager>
     if (!mounted) return;
     try {
       final status = await PermissionService.getLocationPermissionStatus();
+      // Don't show MaterialBanner when location is off - the bottom sheet handles it at startup
+      // The bottom sheet is shown by HomeScreen when location is off
       if (status == LocationPermissionStatus.serviceDisabled && !_serviceBannerShown) {
         _serviceBannerShown = true;
-        final messenger = ScaffoldMessenger.maybeOf(context);
-        if (messenger != null) {
-          messenger.clearMaterialBanners();
-          messenger.showMaterialBanner(
-            MaterialBanner(
-              backgroundColor: Colors.orange.shade50,
-              elevation: 1,
-              content: Row(
-                children: [
-                  Icon(Icons.location_disabled, color: Colors.orange.shade700),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      'Location services are turned off. Enable for better recommendations.',
-                      style: TextStyle(color: Colors.orange.shade900, fontWeight: FontWeight.w500),
-                    ),
-                  ),
-                ],
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () {
-                    messenger.hideCurrentMaterialBanner();
-                  },
-                  child: const Text('Dismiss'),
-                ),
-              ],
-            ),
-          );
-          Future.delayed(const Duration(seconds: 4), () {
-            if (mounted) messenger.hideCurrentMaterialBanner();
-          });
-        }
+        // Banner disabled - bottom sheet handles location prompts at startup
+        // No need to show MaterialBanner since the bottom sheet provides better UX
       }
     } catch (_) {
       // ignore

@@ -202,6 +202,13 @@ class _PlanningScreenState extends State<PlanningScreen>
         ),
         backgroundColor: Colors.white,
         elevation: 0,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.add),
+            onPressed: _navigateToCreateEvent,
+            tooltip: 'New Event',
+          ),
+        ],
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
@@ -215,16 +222,6 @@ class _PlanningScreenState extends State<PlanningScreen>
                     ),
                   ],
                 ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _navigateToCreateEvent,
-        backgroundColor: const Color(0xFFFDBB42),
-        foregroundColor: Colors.black87,
-        icon: const Icon(Icons.add),
-        label: const Text(
-          'New Event',
-          style: TextStyle(fontWeight: FontWeight.w600),
-        ),
-      ),
     );
   }
 

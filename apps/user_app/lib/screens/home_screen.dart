@@ -19,7 +19,11 @@ import '../widgets/events_section.dart';
 // LocationPermissionBanner removed in favor of global transient banner
 import '../services/banner_service.dart';
 import '../services/featured_services_service.dart';
+import '../core/services/location_service.dart';
+import '../core/services/permission_service.dart';
+import '../widgets/location_startup_bottom_sheet.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:geolocator/geolocator.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -83,7 +87,168 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
       );
       _attachSessionListenerAndLoadName();
       _loadActiveAddress();
+      _checkLocationAndShowBottomSheet();
     });
+  }
+
+  /// Check location status and show bottom sheet if location is off
+  /// Only shows at app startup, not when navigating back to home page
+  /// Works like Swiggy Instamart:
+  /// - On every fresh app start, check if device location service is ON
+  /// - If location is OFF → show bottom sheet (even if we have saved location)
+  /// - If location is ON and permission granted → fetch fresh location
+  /// - Saved addresses are only used when user manually selects from bottom sheet
+  Future<void> _checkLocationAndShowBottomSheet() async {
+    // Check if we've already shown the bottom sheet in this app session
+    // Use SharedPreferences to persist across widget rebuilds
+    final prefs = await SharedPreferences.getInstance();
+    final hasCheckedThisSession = prefs.getBool('location_checked_this_session') ?? false;
+    
+    if (hasCheckedThisSession) {
+      return; // Already checked in this app session, don't show again
+    }
+    
+    // Check if user is authenticated
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user == null) {
+      await prefs.setBool('location_checked_this_session', true);
+      return;
+    }
+
+    // Wait a bit for the UI to be fully ready
+    await Future.delayed(const Duration(milliseconds: 800));
+
+    if (!mounted) {
+      await prefs.setBool('location_checked_this_session', true);
+      return;
+    }
+
+    // SWIGGY-LIKE BEHAVIOR: Always check device location status FIRST
+    // Don't rely on previously saved location - always check current device status
+    try {
+      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      
+      // Case 1: Device location is OFF → Show bottom sheet
+      // This happens regardless of any previously saved location
+      if (!serviceEnabled) {
+        await prefs.setBool('location_checked_this_session', true);
+        if (mounted) {
+          showModalBottomSheet(
+            context: context,
+            isScrollControlled: true,
+            backgroundColor: Colors.transparent,
+            isDismissible: false, // User must select a location
+            enableDrag: false,
+            builder: (context) => const LocationStartupBottomSheet(),
+          ).then((_) {
+            if (mounted) {
+              _loadActiveAddress();
+            }
+          });
+        }
+        return;
+      }
+      
+      // Case 2: Device location is ON - check permission
+      final status = await PermissionService.getLocationPermissionStatus();
+      
+      if (status == LocationPermissionStatus.granted) {
+        // Permission granted → fetch fresh location automatically
+        await prefs.setBool('location_checked_this_session', true);
+        await _fetchLocationDirectly();
+        return;
+      }
+      
+      // Case 3: Location is ON but permission not granted → Show bottom sheet
+      await prefs.setBool('location_checked_this_session', true);
+      if (mounted) {
+        showModalBottomSheet(
+          context: context,
+          isScrollControlled: true,
+          backgroundColor: Colors.transparent,
+          isDismissible: false,
+          enableDrag: false,
+          builder: (context) => const LocationStartupBottomSheet(),
+        ).then((_) {
+          if (mounted) {
+            _loadActiveAddress();
+          }
+        });
+      }
+    } catch (e) {
+      // If there's an error checking location, show bottom sheet as fallback
+      await prefs.setBool('location_checked_this_session', true);
+      debugPrint('Error checking location: $e');
+      if (mounted) {
+        showModalBottomSheet(
+          context: context,
+          isScrollControlled: true,
+          backgroundColor: Colors.transparent,
+          isDismissible: false,
+          enableDrag: false,
+          builder: (context) => const LocationStartupBottomSheet(),
+        ).then((_) {
+          if (mounted) {
+            _loadActiveAddress();
+          }
+        });
+      }
+    }
+  }
+
+  /// Fetch location directly when service is enabled and permission is granted
+  Future<void> _fetchLocationDirectly() async {
+    try {
+      // Get current location
+      final position = await LocationService.getCurrentPosition();
+      
+      // Reverse geocode to get address
+      final address = await LocationService.reverseGeocode(
+        position.latitude,
+        position.longitude,
+      ) ?? 'Current Location';
+
+      // Save as active address
+      final addressInfo = AddressInfo(
+        id: 'current_location_${DateTime.now().millisecondsSinceEpoch}',
+        label: 'Current Location',
+        address: address,
+        lat: position.latitude,
+        lng: position.longitude,
+      );
+
+      await AddressStorage.setActive(addressInfo);
+      
+      // Also ensure SharedPreferences is updated
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setDouble('loc_lat', position.latitude);
+      await prefs.setDouble('loc_lng', position.longitude);
+      await prefs.setString('loc_address', address);
+      
+      // Reload address to update UI
+      if (mounted) {
+        _loadActiveAddress();
+      }
+      
+      debugPrint('Location fetched automatically at startup');
+    } catch (e) {
+      debugPrint('Error fetching location directly: $e');
+      // If fetching fails, show bottom sheet as fallback
+      if (mounted) {
+        showModalBottomSheet(
+          context: context,
+          isScrollControlled: true,
+          backgroundColor: Colors.transparent,
+          isDismissible: true,
+          enableDrag: true,
+          builder: (context) => const LocationStartupBottomSheet(),
+        ).then((_) {
+          if (mounted) {
+            _loadActiveAddress();
+          }
+        });
+      }
+    }
   }
 
   @override

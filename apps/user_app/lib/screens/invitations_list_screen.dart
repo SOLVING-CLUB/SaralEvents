@@ -56,10 +56,15 @@ class _InvitationsListScreenState extends State<InvitationsListScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('My E-Invitations')),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _createNew,
-        child: const Icon(Icons.add),
+      appBar: AppBar(
+        title: const Text('My E-Invitations'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.add),
+            onPressed: _createNew,
+            tooltip: 'Create Invitation',
+          ),
+        ],
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())

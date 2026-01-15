@@ -64,6 +64,9 @@
 			<key>CFBundleURLSchemes</key>
 			<array>
 				<string>saralevents</string>
+				<!-- Google Sign-In: Reversed Client ID -->
+				<!-- Update this with your actual reversed client ID from GoogleService-Info.plist -->
+				<string>com.googleusercontent.apps.314736791162-8pq9o3hr42ibap3oesifibeotdamgdj2</string>
 			</array>
 		</dict>
 	</array>

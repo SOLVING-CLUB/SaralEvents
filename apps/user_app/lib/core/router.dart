@@ -132,10 +132,10 @@ class AppRouter {
           redirect: (ctx, state) {
             final s = Provider.of<UserSession>(ctx, listen: false);
             if (s.isPasswordRecovery) return '/auth/reset';
-            // If authenticated, check setup then location
+            // If authenticated, navigate to homepage first (location check happens on homepage)
+            // Profile setup can be completed later from the profile section
             if (s.isAuthenticated) {
-              if (!s.isProfileSetupComplete) return '/auth/setup';
-              return '/location/check';
+              return '/app'; // Go directly to homepage
             }
             // Only show onboarding for unauthenticated users who haven't completed it
             if (!s.isOnboardingComplete) return '/onboarding';

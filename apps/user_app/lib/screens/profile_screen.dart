@@ -5,8 +5,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../core/session.dart';
 import '../services/profile_service.dart';
 import 'profile_details_screen.dart';
-import 'invitations_list_screen.dart';
 import 'wallet_payments_screen.dart';
+import 'orders_screen.dart';
 import 'help_support_screen.dart';
 import 'accessibility_screen.dart';
 import 'settings_screen.dart';
@@ -143,11 +143,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     children: [
                       _buildMenuTile(
                         context,
-                        icon: Icons.card_giftcard,
-                        title: 'My Invitations',
-                        subtitle: 'Track active and past invites',
+                        icon: Icons.receipt_long,
+                        title: 'My Orders',
+                        subtitle: 'Bookings and payment history',
                         onTap: () => Navigator.of(context).push(
-                          MaterialPageRoute(builder: (_) => const InvitationsListScreen()),
+                          MaterialPageRoute(builder: (_) => const OrdersScreen()),
                         ),
                       ),
                       const Divider(height: 1),

@@ -177,7 +177,7 @@ class _WalletPaymentsScreenState extends State<WalletPaymentsScreen> {
           : RefreshIndicator(
               onRefresh: _load,
               child: ListView(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 100), // Extra bottom padding for cart button
                 children: [
                   Card(
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),

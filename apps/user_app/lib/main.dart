@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'core/supabase/supabase_config.dart';
 import 'core/session.dart';
 import 'core/router.dart';
 import 'core/theme/app_theme.dart';
 import 'core/widgets/permission_manager.dart';
 import 'screens/app_link_handler.dart';
+import 'checkout/checkout_state.dart';
 //test
 
 Future<void> main() async {
@@ -17,6 +19,11 @@ Future<void> main() async {
     anonKey: supabaseAnonKey,
   );
 
+  // Reset location check flag on app startup
+  // This ensures the bottom sheet only shows once per app session
+  final prefs = await SharedPreferences.getInstance();
+  await prefs.setBool('location_checked_this_session', false);
+
   runApp(const UserApp());
 }
 
@@ -25,8 +32,12 @@ class UserApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider(
-      create: (_) => UserSession(),
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => UserSession()),
+        // Global checkout/cart state available throughout the app
+        ChangeNotifierProvider(create: (_) => CheckoutState()),
+      ],
       child: Consumer<UserSession>(
         builder: (context, session, _) {
           return MaterialApp.router(

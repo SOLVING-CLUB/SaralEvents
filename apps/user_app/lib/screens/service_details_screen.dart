@@ -4,12 +4,14 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:provider/provider.dart';
 import '../models/service_models.dart';
 import '../services/service_service.dart';
 import '../widgets/location_aware_widget.dart';
 import '../widgets/wishlist_button.dart';
 import '../utils/deep_link_helper.dart';
-import 'booking_screen.dart';
+import '../checkout/checkout_state.dart';
+import '../checkout/flow.dart';
 
 
 class ServiceDetailsScreen extends StatefulWidget {
@@ -135,8 +137,11 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen>
     }
 
     return Scaffold(
-      body: CustomScrollView(
-        slivers: [
+      body: Padding(
+        // Add bottom padding to prevent overlap with cart button from main navigation
+        padding: const EdgeInsets.only(bottom: 80),
+        child: CustomScrollView(
+          slivers: [
           // Enhanced App Bar with Image Gallery
           SliverAppBar(
             pinned: true,
@@ -194,6 +199,7 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen>
             ),
           ),
         ],
+        ),
       ),
       // Floating Action Button for Quick Booking
       floatingActionButton: _buildFloatingBookingButton(service),
@@ -579,8 +585,8 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen>
             ),
           ),
           ElevatedButton.icon(
-            onPressed: () => _bookService(service),
-            icon: const Icon(Icons.calendar_today),
+            onPressed: () => _addToCartAndCheckout(service),
+            icon: const Icon(Icons.shopping_cart_checkout),
             label: const Text('Book Now'),
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFFF4B63E),
@@ -1293,10 +1299,10 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen>
       margin: const EdgeInsets.symmetric(horizontal: 20),
       width: double.infinity,
       child: ElevatedButton.icon(
-        onPressed: () => _bookService(service),
-        icon: const Icon(Icons.calendar_today),
+        onPressed: () => _addToCartAndCheckout(service),
+        icon: const Icon(Icons.shopping_cart_checkout),
         label: const Text(
-          'Check Availability & Book',
+          'Add to Cart & Checkout',
           style: TextStyle(
             fontSize: 16,
             fontWeight: FontWeight.bold,
@@ -1360,11 +1366,25 @@ Tap the link above to view and book on Saral Events! 🎉''';
     );
   }
 
-  void _bookService(ServiceItem service) {
+  void _addToCartAndCheckout(ServiceItem service) {
     HapticFeedback.mediumImpact();
+
+    final checkout = Provider.of<CheckoutState>(context, listen: false);
+    // Add this service as a cart item
+    checkout.addItem(CartItem(
+      id: service.id,
+      title: service.name,
+      category: 'Service',
+      price: service.price,
+      subtitle: service.vendorName,
+    ));
+
+    // Navigate to the cart/checkout flow
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => BookingScreen(service: service),
+        builder: (_) => CheckoutFlow(
+          initialItem: checkout.items.first,
+        ),
       ),
     );
   }

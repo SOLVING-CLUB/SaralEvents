@@ -99,7 +99,10 @@ class SelectedPaymentMethod {
 
 /// Provider-backed state for the checkout flow
 class CheckoutState extends ChangeNotifier {
+  // Active items that will be included in the current checkout
   final List<CartItem> _items = <CartItem>[];
+  // Items saved for later (not included in totals or current booking)
+  final List<CartItem> _savedItems = <CartItem>[];
   BillingDetails? _billingDetails;
   SelectedPaymentMethod? _paymentMethod;
   String? _draftId; // Booking draft ID for creating booking after payment
@@ -109,6 +112,7 @@ class CheckoutState extends ChangeNotifier {
   final List<double> _installmentPercentages = const [0.34, 0.33, 0.33];
 
   List<CartItem> get items => List.unmodifiable(_items);
+  List<CartItem> get savedItems => List.unmodifiable(_savedItems);
   BillingDetails? get billingDetails => _billingDetails;
   SelectedPaymentMethod? get paymentMethod => _paymentMethod;
   String? get draftId => _draftId;
@@ -139,13 +143,54 @@ class CheckoutState extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Add item directly to saved-for-later list
+  void addSavedItem(CartItem item) {
+    _savedItems.add(item);
+    notifyListeners();
+  }
+
+  /// Remove all items with the given id (used when you want to clear a
+  /// particular service from the cart everywhere).
   void removeItem(String itemId) {
     _items.removeWhere((e) => e.id == itemId);
     notifyListeners();
   }
 
+  /// Remove a single cart entry at the given index. This is useful when there
+  /// are multiple entries for the same service and only one line item should
+  /// be removed.
+  void removeItemAt(int index) {
+    if (index < 0 || index >= _items.length) return;
+    _items.removeAt(index);
+    notifyListeners();
+  }
+
+  /// Move an active cart item to the saved-for-later list.
+  void saveItemForLater(int index) {
+    if (index < 0 || index >= _items.length) return;
+    final item = _items.removeAt(index);
+    _savedItems.add(item);
+    notifyListeners();
+  }
+
+  /// Move a saved-for-later item back into the active cart.
+  void moveSavedItemToCart(int index) {
+    if (index < 0 || index >= _savedItems.length) return;
+    final item = _savedItems.removeAt(index);
+    _items.add(item);
+    notifyListeners();
+  }
+
+  /// Remove a single saved-for-later item.
+  void removeSavedItemAt(int index) {
+    if (index < 0 || index >= _savedItems.length) return;
+    _savedItems.removeAt(index);
+    notifyListeners();
+  }
+
   void clearCart() {
     _items.clear();
+    _savedItems.clear();
     notifyListeners();
   }
 

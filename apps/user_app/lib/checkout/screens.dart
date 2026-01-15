@@ -22,6 +22,7 @@ class CartPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final state = context.watch<CheckoutState>();
     final items = state.items;
+    final savedItems = state.savedItems;
     final installments = state.installmentBreakdown;
     return Scaffold(
       appBar: AppBar(title: const Text('Cart')),
@@ -29,10 +30,37 @@ class CartPage extends StatelessWidget {
         children: [
           InstallmentCard(installments: installments, total: state.totalPrice),
           Expanded(
-            child: ListView.builder(
+            child: ListView(
               padding: const EdgeInsets.all(16),
-              itemCount: items.length,
-              itemBuilder: (context, i) => _cartTile(context, items[i]),
+              children: [
+                // Active cart items
+                if (items.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 24),
+                    child: Center(child: Text('No items in cart')),
+                  )
+                else
+                  ...List.generate(
+                    items.length,
+                    (i) => _cartTile(context, items[i], i),
+                  ),
+
+                // Saved for later section
+                if (savedItems.isNotEmpty) ...[
+                  const SizedBox(height: 24),
+                  const Divider(),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Saved for later',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 8),
+                  ...List.generate(
+                    savedItems.length,
+                    (i) => _savedTile(context, savedItems[i], i),
+                  ),
+                ],
+              ],
             ),
           ),
           _userDetailsSummary(),
@@ -49,7 +77,7 @@ class CartPage extends StatelessWidget {
     );
   }
 
-  Widget _cartTile(BuildContext context, CartItem item) {
+  Widget _cartTile(BuildContext context, CartItem item, int index) {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
@@ -60,7 +88,90 @@ class CartPage extends StatelessWidget {
       child: ListTile(
         title: Text(item.title),
         subtitle: Text(item.subtitle ?? item.category),
-        trailing: Text('₹${item.price.toStringAsFixed(0)}', style: const TextStyle(fontWeight: FontWeight.bold)),
+        trailing: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Text(
+              '₹${item.price.toStringAsFixed(0)}',
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 4),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextButton(
+                  onPressed: () {
+                    final state = context.read<CheckoutState>();
+                    state.saveItemForLater(index);
+                  },
+                  child: const Text(
+                    'Save for later',
+                    style: TextStyle(fontSize: 12),
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close, size: 18),
+                  tooltip: 'Remove from cart',
+                  onPressed: () {
+                    final state = context.read<CheckoutState>();
+                    state.removeItemAt(index);
+                  },
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Tile for saved-for-later items
+  Widget _savedTile(BuildContext context, CartItem item, int index) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.shade300),
+      ),
+      child: ListTile(
+        title: Text(item.title),
+        subtitle: Text(item.subtitle ?? item.category),
+        trailing: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Text(
+              '₹${item.price.toStringAsFixed(0)}',
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 4),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextButton(
+                  onPressed: () {
+                    final state = context.read<CheckoutState>();
+                    state.moveSavedItemToCart(index);
+                  },
+                  child: const Text(
+                    'Move to cart',
+                    style: TextStyle(fontSize: 12),
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close, size: 18),
+                  tooltip: 'Remove',
+                  onPressed: () {
+                    final state = context.read<CheckoutState>();
+                    state.removeSavedItemAt(index);
+                  },
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -333,6 +444,7 @@ class _PaymentMethodPageState extends State<PaymentMethodPage> {
   SelectedPaymentMethod? _method;
   final PaymentService _paymentService = PaymentService();
   bool _isProcessing = false;
+  bool _acceptedPolicies = false;
 
   @override
   void dispose() {
@@ -353,12 +465,67 @@ class _PaymentMethodPageState extends State<PaymentMethodPage> {
             initial: state.paymentMethod,
             onChanged: (m) => setState(() => _method = m),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 12),
+          // Cancellation & refund policies block
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.04),
+                  blurRadius: 6,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Cancellation & Refund Policy',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  '• Refunds for cancellations depend on the service type and how many days before the event you cancel.\n'
+                  '• In general, cancelling closer to the event date results in a lower or no refund.\n'
+                  '• Platform fees and applicable taxes are non‑refundable.\n'
+                  '• Detailed refund will be shown at the time of cancellation in the bookings section.',
+                  style: TextStyle(fontSize: 12, height: 1.4),
+                ),
+                const SizedBox(height: 8),
+                CheckboxListTile(
+                  value: _acceptedPolicies,
+                  onChanged: (v) => setState(() => _acceptedPolicies = v ?? false),
+                  contentPadding: EdgeInsets.zero,
+                  controlAffinity: ListTileControlAffinity.leading,
+                  dense: true,
+                  title: const Text(
+                    'I have read and agree to the cancellation and refund policy for this order.',
+                    style: TextStyle(fontSize: 12),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
           Row(children: [
             Expanded(
               child: ElevatedButton(
                 onPressed: _isProcessing ? null : () async {
                   final state = context.read<CheckoutState>();
+
+                  // Require explicit acceptance of policies before payment
+                  if (!_acceptedPolicies) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Please agree to the cancellation and refund policy before paying.'),
+                      ),
+                    );
+                    return;
+                  }
 
                   // Hard guard: do not allow payment if billing details are missing
                   if (state.billingDetails == null) {

@@ -37,6 +37,16 @@ class AddressStorage {
 
   static Future<void> setActive(AddressInfo info) async {
     final prefs = await SharedPreferences.getInstance();
+    
+    // Ensure the address is in the saved list
+    final list = await loadSaved();
+    final exists = list.any((e) => e.id == info.id);
+    if (!exists) {
+      list.add(info);
+      await saveAll(list);
+    }
+    
+    // Set as active
     await prefs.setString(_kActive, info.id);
     await prefs.setDouble('loc_lat', info.lat);
     await prefs.setDouble('loc_lng', info.lng);
@@ -46,13 +56,34 @@ class AddressStorage {
   static Future<AddressInfo?> getActive() async {
     final prefs = await SharedPreferences.getInstance();
     final id = prefs.getString(_kActive);
-    if (id == null) return null;
-    final list = await loadSaved();
-    try {
-      return list.firstWhere((e) => e.id == id);
-    } catch (_) {
-      return null;
+    
+    // If we have an active ID, try to find it in saved addresses
+    if (id != null) {
+      final list = await loadSaved();
+      try {
+        return list.firstWhere((e) => e.id == id);
+      } catch (_) {
+        // Address not found in saved list, fallback to SharedPreferences
+      }
     }
+    
+    // Fallback: check if location data exists in SharedPreferences
+    final lat = prefs.getDouble('loc_lat');
+    final lng = prefs.getDouble('loc_lng');
+    final address = prefs.getString('loc_address');
+    
+    if (lat != null && lng != null && address != null) {
+      // Create a temporary AddressInfo from SharedPreferences
+      return AddressInfo(
+        id: id ?? 'current_location_${DateTime.now().millisecondsSinceEpoch}',
+        label: 'Current Location',
+        address: address,
+        lat: lat,
+        lng: lng,
+      );
+    }
+    
+    return null;
   }
 
   static Future<String?> getActiveId() async {

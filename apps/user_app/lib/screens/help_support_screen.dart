@@ -24,15 +24,9 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
   File? _issueAttachment;
   bool _submittingIssue = false;
 
-  final GlobalKey<FormState> _feedbackFormKey = GlobalKey<FormState>();
-  final TextEditingController _feedbackCommentController = TextEditingController();
-  double _feedbackRating = 4;
-  bool _submittingFeedback = false;
-
   @override
   void dispose() {
     _issueDescriptionController.dispose();
-    _feedbackCommentController.dispose();
     super.dispose();
   }
 
@@ -73,31 +67,6 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
     }
   }
 
-  Future<void> _submitFeedback() async {
-    if (!_feedbackFormKey.currentState!.validate()) return;
-    setState(() => _submittingFeedback = true);
-    try {
-      await Supabase.instance.client.functions.invoke('user-feedback', body: {
-        'rating': _feedbackRating,
-        'comment': _feedbackCommentController.text.trim(),
-      });
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Thank you for sharing your feedback!')),
-      );
-      _feedbackFormKey.currentState!.reset();
-      _feedbackCommentController.clear();
-      setState(() => _feedbackRating = 4);
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to send feedback: $e')),
-      );
-    } finally {
-      if (mounted) setState(() => _submittingFeedback = false);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -108,10 +77,6 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
           _buildFaqSection(),
           const SizedBox(height: 24),
           _buildIssueSection(),
-          const SizedBox(height: 24),
-          _buildFeedbackSection(),
-          const SizedBox(height: 24),
-          _buildAboutSection(),
           const SizedBox(height: 32),
         ],
       ),
@@ -216,97 +181,6 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
     );
   }
 
-  Widget _buildFeedbackSection() {
-    return Card(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Form(
-          key: _feedbackFormKey,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('Send feedback', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  const Text('Rate your experience:'),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Slider(
-                      value: _feedbackRating,
-                      min: 1,
-                      max: 5,
-                      divisions: 4,
-                      label: _feedbackRating.toStringAsFixed(1),
-                      onChanged: (value) => setState(() => _feedbackRating = value),
-                    ),
-                  ),
-                  Text(_feedbackRating.toStringAsFixed(1)),
-                ],
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: _feedbackCommentController,
-                decoration: const InputDecoration(
-                  labelText: 'Tell us more',
-                  alignLabelWithHint: true,
-                ),
-                minLines: 3,
-                maxLines: 5,
-                validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
-                    return 'Please add a short comment';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 16),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton(
-                  onPressed: _submittingFeedback ? null : _submitFeedback,
-                  child: _submittingFeedback
-                      ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                      : const Text('Send feedback'),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildAboutSection() {
-    return Card(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: const [
-            Text('About Saral Events', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
-            SizedBox(height: 8),
-            Text(
-              'Saral Events connects you with trusted vendors to plan weddings, celebrations and corporate events seamlessly. Discover curated services, manage invitations and track bookings in one place.',
-            ),
-            SizedBox(height: 16),
-            Text('Support contacts', style: TextStyle(fontWeight: FontWeight.w600)),
-            SizedBox(height: 4),
-            Text('Email: support@saralevents.com'),
-            Text('Phone: +91 98765 43210'),
-            Text('Address: Plot 10, Hitech City, Hyderabad, Telangana'),
-            SizedBox(height: 16),
-            Text('Policies', style: TextStyle(fontWeight: FontWeight.w600)),
-            SizedBox(height: 4),
-            Text('• Terms of Service'),
-            Text('• Privacy Policy'),
-          ],
-        ),
-      ),
-    );
-  }
 }
 
 class _FaqItem {

@@ -25,6 +25,8 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
   late final TabController _tabController;
   List<Map<String, dynamic>> _bookings = [];
   List<Map<String, dynamic>> _orders = [];
+  // Kept for compatibility with existing draft-loading logic, even though
+  // drafts are no longer shown as a separate tab in the UI.
   List<Map<String, dynamic>> _drafts = [];
   bool _isLoading = true;
   String? _error;
@@ -36,11 +38,11 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
     _bookingService = BookingService(Supabase.instance.client);
     _orderRepo = OrderRepository(Supabase.instance.client);
     _draftService = BookingDraftService(Supabase.instance.client);
-    _tabController = TabController(length: 3, vsync: this);
+    // Only two tabs now: Bookings and Payments (Drafts removed from UI)
+    _tabController = TabController(length: 2, vsync: this);
     _tabController.addListener(_onTabChanged);
     _loadBookings();
     _loadOrders();
-    _loadDrafts();
     _subscribeOrdersRealtime();
   }
 
@@ -213,7 +215,6 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
           tabs: const [
             Tab(text: 'Bookings'),
             Tab(text: 'Payments'),
-            Tab(text: 'Drafts'),
           ],
         ),
         backgroundColor: Colors.white,
@@ -224,7 +225,6 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
             onPressed: () {
               _loadBookings(forceRefresh: true);
               _loadOrders();
-              _loadDrafts();
             },
             tooltip: 'Refresh all',
           ),
@@ -235,7 +235,6 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
         children: [
           _buildBookingsTab(context),
           _buildOrdersTab(context),
-          _buildDraftsTab(context),
         ],
       ),
     );
