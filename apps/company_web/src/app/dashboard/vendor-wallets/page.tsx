@@ -33,6 +33,7 @@ type WithdrawalRequest = {
   status: string
   requested_at: string
   processed_at: string | null
+  rejection_reason?: string | null
   bank_snapshot: any
   vendor_profiles?: {
     business_name: string

@@ -310,20 +310,29 @@ export async function creditVendorWalletFromMilestone(milestoneId: string) {
   if (bErr || !booking) throw new Error(bErr?.message || 'Booking not found')
 
   // Ensure wallet
-  const { data: wallet } = await supabase
+  let wallet
+  const { data: newWallet, error: insertErr } = await supabase
     .from('vendor_wallets')
     .insert({ vendor_id: booking.vendor_id })
     .select()
     .maybeSingle()
-    .catch(async () => {
-      // If insert fails due to unique, fetch existing
-      const { data: w } = await supabase
-          .from('vendor_wallets')
-          .select('*')
-          .eq('vendor_id', booking.vendor_id)
-          .maybeSingle()
-      return { data: w }
-    })
+
+  if (insertErr) {
+    // Wallet might already exist, try to fetch it
+    const { data: existingWallet, error: fetchErr } = await supabase
+      .from('vendor_wallets')
+      .select('*')
+      .eq('vendor_id', booking.vendor_id)
+      .maybeSingle()
+    
+    if (fetchErr || !existingWallet) {
+      throw new Error(fetchErr?.message || 'Failed to get or create wallet')
+    }
+    wallet = existingWallet
+  } else {
+    wallet = newWallet
+  }
+
   if (!wallet) throw new Error('Wallet not found/created')
 
   const newBalance = Number(wallet.balance) + Number(milestone.amount)

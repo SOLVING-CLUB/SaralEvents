@@ -1006,6 +1006,7 @@ export default function SupportPage() {
                       question: '',
                       answer: '',
                       category: 'General',
+                      app_type: faqAppTypeFilter,
                       display_order: 0,
                       is_active: true
                     })

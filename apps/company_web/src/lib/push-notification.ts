@@ -81,7 +81,7 @@ class PushNotificationService {
         // Subscribe with VAPID key
         this.subscription = await this.registration.pushManager.subscribe({
           userVisibleOnly: true,
-          applicationServerKey: this.urlBase64ToUint8Array(this.vapidPublicKey!),
+          applicationServerKey: this.urlBase64ToUint8Array(this.vapidPublicKey!) as BufferSource,
         });
       }
 
@@ -178,8 +178,8 @@ class PushNotificationService {
   private getBrowserFingerprint(): string {
     // Simple fingerprint based on user agent and screen resolution
     const ua = navigator.userAgent;
-    const screen = `${screen.width}x${screen.height}`;
-    return btoa(`${ua}-${screen}`).substring(0, 32);
+    const screenSize = `${window.screen.width}x${window.screen.height}`;
+    return btoa(`${ua}-${screenSize}`).substring(0, 32);
   }
 
   /**
