@@ -50,58 +50,51 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [supabase.auth])
 
   const signIn = async (email: string, password: string) => {
-    // Company portal is allowlist-based: only emails present (and active) in admin_users can sign in.
-    const access = await checkCompanyPortalAccess(email)
-    if (!access.ok) {
-      return { error: { message: access.message } }
-    }
-
     const { error } = await supabase.auth.signInWithPassword({
       email,
       password,
     })
     
-    // Link admin user and update last login after successful sign in
-    if (!error) {
-      await linkAdminUser()
-      await ensureCompanyUserRole()
-      await updateAdminUserLastLogin()
-    }
-    
-    return { error }
-  }
+    if (error) return { error }
 
-  const signUp = async (email: string, password: string) => {
-    // Company portal sign-up is also allowlist-based (invited admins only).
+    // Now that we're authenticated, enforce allowlist
     const access = await checkCompanyPortalAccess(email)
     if (!access.ok) {
+      await supabase.auth.signOut()
       return { error: { message: access.message } }
     }
 
+    await linkAdminUser()
+    await ensureCompanyUserRole()
+    await updateAdminUserLastLogin()
+    
+    return { error: null }
+  }
+
+  const signUp = async (email: string, password: string) => {
     const { error } = await supabase.auth.signUp({ email, password })
 
-    // If the auth user already exists (shared across apps), treat this as "sign in instead"
-    // so the same email can have separate app accounts without conflicts.
     const msg = (error?.message || '').toLowerCase()
     if (error && (msg.includes('already registered') || msg.includes('already exists') || msg.includes('user already'))) {
+      // User exists; sign in instead
       const { error: signInErr } = await supabase.auth.signInWithPassword({ email, password })
-      if (!signInErr) {
-        await linkAdminUser()
-        await ensureCompanyUserRole()
-        await updateAdminUserLastLogin()
-        return { error: null }
-      }
-      return { error: signInErr }
+      if (signInErr) return { error: signInErr }
+    } else if (error) {
+      return { error }
     }
 
-    // If sign-up succeeded and session is created immediately, link role/table.
-    if (!error) {
-      await linkAdminUser()
-      await ensureCompanyUserRole()
-      await updateAdminUserLastLogin()
+    // Now authenticated, enforce allowlist
+    const access = await checkCompanyPortalAccess(email)
+    if (!access.ok) {
+      await supabase.auth.signOut()
+      return { error: { message: access.message } }
     }
 
-    return { error }
+    await linkAdminUser()
+    await ensureCompanyUserRole()
+    await updateAdminUserLastLogin()
+
+    return { error: null }
   }
 
   const signOut = async () => {
