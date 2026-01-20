@@ -17,6 +17,7 @@ export function AuthForm({ mode }: AuthFormProps) {
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const [info, setInfo] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
 
@@ -25,6 +26,7 @@ export function AuthForm({ mode }: AuthFormProps) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
+    setInfo(null)
     setLoading(true)
 
     try {
@@ -43,7 +45,9 @@ export function AuthForm({ mode }: AuthFormProps) {
         if (error) {
           setError(error.message)
         } else {
-          setError('Check your email for a confirmation link!')
+          // In company portal we often convert "signup" into "signin" if the auth user already exists.
+          // So keep messaging neutral and helpful.
+          setInfo('Account ready. If you were already registered, you are now signed in. Otherwise, check your email for confirmation (if enabled).')
         }
       } else {
         const { error } = await signIn(email, password)
@@ -128,6 +132,11 @@ export function AuthForm({ mode }: AuthFormProps) {
           {error && (
             <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-md text-sm">
               {error}
+            </div>
+          )}
+          {info && (
+            <div className="bg-blue-50 border border-blue-200 text-blue-700 px-4 py-3 rounded-md text-sm">
+              {info}
             </div>
           )}
 
