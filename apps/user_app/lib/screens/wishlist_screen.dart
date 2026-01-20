@@ -122,11 +122,16 @@ class _WishlistScreenState extends State<WishlistScreen>
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
               child: Row(
                 children: [
-                  const Icon(Icons.favorite, color: Color(0xFFA51414)),
+                  Icon(
+                    Icons.favorite, 
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
                   const SizedBox(width: 8),
-                  const Text(
+                  Text(
                     'Wish List', 
-                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
                   const Spacer(),
                   ListenableBuilder(
@@ -136,14 +141,13 @@ class _WishlistScreenState extends State<WishlistScreen>
                       return Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                         decoration: BoxDecoration(
-                          color: const Color(0xFFA51414).withValues(alpha: 0.1),
+                          color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Text(
                           '$count items',
-                          style: const TextStyle(
-                            color: Color(0xFFA51414),
-                            fontSize: 12,
+                          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                            color: Theme.of(context).colorScheme.primary,
                             fontWeight: FontWeight.w600,
                           ),
                         ),
@@ -155,11 +159,13 @@ class _WishlistScreenState extends State<WishlistScreen>
             ),
             
             // Subtitle
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 16),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Text(
                 'Your favorite services',
-                style: TextStyle(color: Colors.grey, fontSize: 14),
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                ),
               ),
             ),
             
@@ -191,16 +197,18 @@ class _WishlistScreenState extends State<WishlistScreen>
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          const Icon(
+                          Icon(
                             Icons.error_outline,
                             size: 48,
-                            color: Colors.red,
+                            color: Theme.of(context).colorScheme.error,
                           ),
                           const SizedBox(height: 16),
                           Text(
                             'Error: ${wishlistError ?? _error}',
                             textAlign: TextAlign.center,
-                            style: const TextStyle(color: Colors.red),
+                            style: TextStyle(
+                              color: Theme.of(context).colorScheme.error,
+                            ),
                           ),
                           const SizedBox(height: 16),
                           ElevatedButton(
@@ -218,29 +226,27 @@ class _WishlistScreenState extends State<WishlistScreen>
                       child: ListView(
                         children: [
                           const SizedBox(height: 120),
-                          const Icon(
+                          Icon(
                             Icons.favorite_border,
                             size: 64,
-                            color: Colors.grey,
+                            color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
                           ),
                           const SizedBox(height: 16),
-                          const Center(
+                          Center(
                             child: Text(
                               'No items in your wishlist',
-                              style: TextStyle(
-                                fontSize: 16,
-                                color: Colors.grey,
+                              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
                                 fontWeight: FontWeight.w500,
                               ),
                             ),
                           ),
                           const SizedBox(height: 8),
-                          const Center(
+                          Center(
                             child: Text(
                               'Start adding services you love!',
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: Colors.grey,
+                              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
                               ),
                             ),
                           ),
@@ -304,17 +310,17 @@ class _WishlistCard extends StatelessWidget {
             borderRadius: BorderRadius.circular(16),
             child: Container(
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: Theme.of(context).cardColor,
                 borderRadius: BorderRadius.circular(16),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.06),
+                    color: Theme.of(context).colorScheme.shadow.withOpacity(0.06),
                     blurRadius: 12,
                     offset: const Offset(0, 6),
                   ),
                 ],
                 border: Border.all(
-                  color: Colors.black.withValues(alpha: 0.06),
+                  color: Theme.of(context).colorScheme.outline.withOpacity(0.06),
                 ),
               ),
               child: Column(
@@ -333,24 +339,24 @@ class _WishlistCard extends StatelessWidget {
                               imageUrl: Uri.encodeFull(service.media.first.url),
                               fit: BoxFit.cover,
                               placeholder: (context, url) => Container(
-                                color: Colors.grey.shade100,
+                                color: Theme.of(context).colorScheme.surfaceContainerHighest,
                                 child: const Center(
                                   child: CircularProgressIndicator(strokeWidth: 2),
                                 ),
                               ),
                               errorWidget: (context, url, error) => Container(
-                                color: Colors.grey.shade100,
-                                child: const Icon(
+                                color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                                child: Icon(
                                   Icons.image_not_supported,
-                                  color: Colors.grey,
+                                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
                                 ),
                               ),
                             )
                           : Container(
-                              color: Colors.grey.shade100,
-                              child: const Icon(
+                              color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                              child: Icon(
                                 Icons.image_not_supported,
-                                color: Colors.grey,
+                                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
                               ),
                             ),
                     ),
@@ -375,9 +381,8 @@ class _WishlistCard extends StatelessWidget {
                           const SizedBox(height: 4),
                           Text(
                             service.vendorName,
-                            style: TextStyle(
-                              color: Colors.grey[600],
-                              fontSize: 12,
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
                             ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,

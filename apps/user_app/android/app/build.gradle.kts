@@ -6,8 +6,8 @@ plugins {
     id("kotlin-android")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
-    // Google Services plugin disabled - not using Firebase/Google Sign-In yet
-    // id("com.google.gms.google-services")
+    // Google Services plugin for Firebase (FCM)
+    id("com.google.gms.google-services")
 }
 
 android {
@@ -20,6 +20,8 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
+        // Enable core library desugaring for flutter_local_notifications
+        isCoreLibraryDesugaringEnabled = true
     }
 
     kotlinOptions {
@@ -91,4 +93,6 @@ flutter {
 
 dependencies {
     // ProGuard annotations are already included by Razorpay SDK, no need to add separately
+    // Core library desugaring for flutter_local_notifications
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.4")
 }

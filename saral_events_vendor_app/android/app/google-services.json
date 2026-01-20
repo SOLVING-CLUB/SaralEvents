@@ -1,37 +1,78 @@
 {
   "project_info": {
-    "project_number": "314736791162",
-    "project_id": "saraleventsnew",
-    "storage_bucket": "saraleventsnew.appspot.com"
+    "project_number": "460598868043",
+    "project_id": "saralevents-6fe20",
+    "storage_bucket": "saralevents-6fe20.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:314736791162:android:1234567890abcdef",
+        "mobilesdk_app_id": "1:460598868043:android:13250ab86b7dee8e8675ce",
         "android_client_info": {
-          "package_name": "com.example.saral_events_vendor_app"
+          "package_name": "com.saralevents.userapp"
         }
       },
       "oauth_client": [
         {
-          "client_id": "314736791162-afldsldle2v8ddkvt7dg16co5hlgpuus.apps.googleusercontent.com",
-          "client_type": 3
+          "client_id": "460598868043-71o0ov8eepgspo57og77s21vvl7j92dv.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.saralevents.userapp",
+            "certificate_hash": "b7392702d02bf6df575ba233cdf59a3b785fc6ec"
+          }
         },
         {
-          "client_id": "314736791162-8pq9o3hr42ibap3oesifibeotdamgdj2.apps.googleusercontent.com",
+          "client_id": "460598868043-tk6pnifpvu24b8b5pm1h5vdoin6vqhr3.apps.googleusercontent.com",
           "client_type": 3
         }
       ],
       "api_key": [
         {
-          "current_key": "AIzaSyBwKQKQKQKQKQKQKQKQKQKQKQKQKQKQKQ"
+          "current_key": "AIzaSyBIPu_fkSs5eC0ExngfRxj_DFGZmII65WI"
         }
       ],
       "services": {
         "appinvite_service": {
           "other_platform_oauth_client": [
             {
-              "client_id": "314736791162-8pq9o3hr42ibap3oesifibeotdamgdj2.apps.googleusercontent.com",
+              "client_id": "460598868043-tk6pnifpvu24b8b5pm1h5vdoin6vqhr3.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:460598868043:android:c9a7711157c290218675ce",
+        "android_client_info": {
+          "package_name": "com.saralevents.vendorapp"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "460598868043-rkq3a8drsqqq03349s4ape07gme20pmj.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.saralevents.vendorapp",
+            "certificate_hash": "2a7e462f0b05466af85b23fbb89ee9e875b4a33d"
+          }
+        },
+        {
+          "client_id": "460598868043-tk6pnifpvu24b8b5pm1h5vdoin6vqhr3.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBIPu_fkSs5eC0ExngfRxj_DFGZmII65WI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "460598868043-tk6pnifpvu24b8b5pm1h5vdoin6vqhr3.apps.googleusercontent.com",
               "client_type": 3
             }
           ]

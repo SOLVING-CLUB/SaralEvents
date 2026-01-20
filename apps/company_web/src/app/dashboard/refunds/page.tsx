@@ -25,6 +25,7 @@ type Refund = {
   status: string
   created_at: string
   processed_at: string | null
+  processed_by: string | null
   bookings?: {
     booking_date: string
     amount: number
@@ -77,21 +78,46 @@ export default function RefundsPage() {
   }
 
   async function updateRefundStatus(refundId: string, newStatus: string) {
+    // Get current admin user for processed_by field
+    const { data: { user } } = await supabase.auth.getUser()
+    const adminUserId = user?.id || null
+
+    const updateData: any = {
+      status: newStatus,
+      updated_at: new Date().toISOString()
+    }
+
+    // Only set processed_at and processed_by when completing the refund
+    if (newStatus === 'completed') {
+      updateData.processed_at = new Date().toISOString()
+      updateData.processed_by = adminUserId
+    } else {
+      // Clear processed fields if status is changed from completed
+      updateData.processed_at = null
+      updateData.processed_by = null
+    }
+
     const { error } = await supabase
       .from('refunds')
-      .update({ 
-        status: newStatus,
-        processed_at: newStatus === 'completed' ? new Date().toISOString() : null,
-        updated_at: new Date().toISOString()
-      })
+      .update(updateData)
       .eq('id', refundId)
     
     if (!error) {
       await loadRefunds()
       if (selectedRefund?.id === refundId) {
-        setSelectedRefund(prev => prev ? { ...prev, status: newStatus } : null)
+        setSelectedRefund(prev => prev ? { ...prev, status: newStatus, processed_by: adminUserId, processed_at: updateData.processed_at } : null)
       }
+    } else {
+      alert(`Error updating refund: ${error.message}`)
     }
+  }
+
+  async function releaseRefund(refundId: string) {
+    if (!confirm('Are you sure you want to release this refund? This action will mark the refund as completed and notify the customer.')) {
+      return
+    }
+
+    await updateRefundStatus(refundId, 'completed')
   }
 
   const filtered = refunds.filter(r => {
@@ -255,16 +281,23 @@ export default function RefundsPage() {
                       View
                     </Button>
                     {r.status === 'pending' && (
-                      <select
-                        className="text-xs border rounded px-2 py-1"
-                        onChange={(e) => updateRefundStatus(r.id, e.target.value)}
-                        value={r.status}
+                      <Button
+                        size="sm"
+                        onClick={() => releaseRefund(r.id)}
+                        className="bg-green-600 hover:bg-green-700 text-white"
                       >
-                        <option value="pending">Pending</option>
-                        <option value="processing">Processing</option>
-                        <option value="completed">Complete</option>
-                        <option value="rejected">Reject</option>
-                      </select>
+                        Release Refund
+                      </Button>
+                    )}
+                    {r.status === 'pending' && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => updateRefundStatus(r.id, 'rejected')}
+                        className="text-red-600 border-red-600 hover:bg-red-50"
+                      >
+                        Reject
+                      </Button>
                     )}
                   </div>
                 </td>
@@ -311,20 +344,38 @@ export default function RefundsPage() {
               </div>
               {selectedRefund.status === 'pending' && (
                 <div className="pt-4 border-t">
-                  <p className="text-sm font-medium mb-2">Update Status</p>
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
+                    <p className="text-sm font-medium text-yellow-800 mb-1">⚠️ Admin Approval Required</p>
+                    <p className="text-xs text-yellow-700">
+                      This refund is pending approval. Review the details and release the refund to complete the process. 
+                      The customer will be notified once the refund is released.
+                    </p>
+                  </div>
+                  <p className="text-sm font-medium mb-2">Actions</p>
                   <div className="flex gap-2">
-                    <Button onClick={() => updateRefundStatus(selectedRefund.id, 'processing')}>
-                      Mark Processing
-                    </Button>
-                    <Button onClick={() => updateRefundStatus(selectedRefund.id, 'completed')}>
-                      Complete Refund
+                    <Button 
+                      onClick={() => releaseRefund(selectedRefund.id)}
+                      className="bg-green-600 hover:bg-green-700 text-white"
+                    >
+                      ✓ Release Refund
                     </Button>
                     <Button 
                       variant="outline" 
                       onClick={() => updateRefundStatus(selectedRefund.id, 'rejected')}
+                      className="text-red-600 border-red-600 hover:bg-red-50"
                     >
-                      Reject
+                      ✗ Reject Refund
                     </Button>
+                  </div>
+                </div>
+              )}
+              {selectedRefund.status === 'completed' && selectedRefund.processed_at && (
+                <div className="pt-4 border-t">
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                    <p className="text-sm font-medium text-green-800 mb-1">✓ Refund Released</p>
+                    <p className="text-xs text-green-700">
+                      This refund was released on {new Date(selectedRefund.processed_at).toLocaleString()}
+                    </p>
                   </div>
                 </div>
               )}

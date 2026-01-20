@@ -16,12 +16,16 @@ import {
   HeadphonesIcon,
   Shield,
   XCircle,
-  Wallet
+  Wallet,
+  CreditCard,
+  Bell,
+  X
 } from 'lucide-react'
 
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Orders', href: '/dashboard/orders', icon: ShoppingBag },
+  { name: 'Payment Milestones', href: '/dashboard/payment-milestones', icon: CreditCard },
   { name: 'Cancellations & Refunds', href: '/dashboard/refunds', icon: XCircle },
   { name: 'Vendor Wallets', href: '/dashboard/vendor-wallets', icon: Wallet },
   { name: 'Services', href: '/dashboard/services', icon: Settings },
@@ -29,17 +33,34 @@ const navigation = [
   { name: 'Users', href: '/dashboard/users', icon: Users },
   { name: 'Reviews & Feedback', href: '/dashboard/reviews', icon: Star },
   { name: 'Support Tickets', href: '/dashboard/support', icon: HeadphonesIcon },
+  { name: 'Campaigns', href: '/dashboard/campaigns', icon: Bell },
   { name: 'Marketing & Promotions', href: '/dashboard/marketing', icon: Megaphone },
   { name: 'Analytics', href: '/dashboard/analytics', icon: BarChart3 },
   { name: 'Access Control', href: '/dashboard/access-control', icon: Shield },
 ]
 
-export function Sidebar() {
+interface SidebarProps {
+  onClose?: () => void
+}
+
+export function Sidebar({ onClose }: SidebarProps) {
   const pathname = usePathname()
 
   return (
-    <div className="w-64 bg-white border-r border-gray-200 min-h-[calc(100vh-64px)]">
-      <nav className="mt-6 px-4">
+    <div className="w-64 bg-white border-r border-gray-200 h-full overflow-y-auto">
+      {/* Mobile close button */}
+      <div className="lg:hidden flex items-center justify-between p-4 border-b border-gray-200">
+        <h2 className="text-lg font-semibold text-gray-900">Menu</h2>
+        <button
+          onClick={onClose}
+          className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+          aria-label="Close menu"
+        >
+          <X className="h-5 w-5" />
+        </button>
+      </div>
+      
+      <nav className="mt-6 px-4 pb-6">
         <ul className="space-y-1">
           {navigation.map((item) => {
             // For Dashboard, only match exactly; for others, match subpaths too
@@ -50,6 +71,7 @@ export function Sidebar() {
               <li key={item.name}>
                 <Link
                   href={item.href}
+                  onClick={onClose}
                   className={cn(
                     'flex items-center px-3 py-2.5 text-sm font-medium rounded-lg transition-colors',
                     isActive
@@ -58,7 +80,7 @@ export function Sidebar() {
                   )}
                 >
                   <item.icon className="h-5 w-5 mr-3 flex-shrink-0" />
-                  {item.name}
+                  <span className="truncate">{item.name}</span>
                 </Link>
               </li>
             )

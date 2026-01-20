@@ -54,10 +54,6 @@ class _PlanningScreenState extends State<PlanningScreen>
 
   
 
-  @override
-  void dispose() {
-    super.dispose();
-  }
 
   Future<void> _loadEvents() async {
     setState(() {
@@ -190,17 +186,16 @@ class _PlanningScreenState extends State<PlanningScreen>
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Scaffold(
-      backgroundColor: Colors.grey.shade50,
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
-        title: const Text(
+        title: Text(
           'Event Planning',
-          style: TextStyle(
+          style: theme.textTheme.headlineSmall?.copyWith(
             fontWeight: FontWeight.bold,
-            fontSize: 24,
           ),
         ),
-        backgroundColor: Colors.white,
         elevation: 0,
         actions: [
           IconButton(
@@ -240,15 +235,16 @@ class _PlanningScreenState extends State<PlanningScreen>
         final double containerPadding = width >= 700 ? 20 : 16;
         final double spacing = width >= 700 ? 16 : 12;
 
+        final theme = Theme.of(context);
         return Container(
           margin: EdgeInsets.all(containerPadding),
           padding: EdgeInsets.all(containerPadding),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: theme.cardColor,
             borderRadius: BorderRadius.circular(16),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: 0.05),
+                color: theme.colorScheme.shadow.withOpacity(0.05),
                 blurRadius: 10,
                 offset: const Offset(0, 2),
               ),
@@ -257,10 +253,9 @@ class _PlanningScreenState extends State<PlanningScreen>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
+              Text(
                 'Planning Tools',
-                style: TextStyle(
-                  fontSize: 18,
+                style: theme.textTheme.titleLarge?.copyWith(
                   fontWeight: FontWeight.bold,
                 ),
               ),
@@ -503,25 +498,28 @@ class _PlanningScreenState extends State<PlanningScreen>
   }
 
   Widget _buildErrorState() {
+    final theme = Theme.of(context);
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(
+          Icon(
             Icons.error_outline,
             size: 64,
-            color: Colors.red,
+            color: theme.colorScheme.error,
           ),
           const SizedBox(height: 16),
           Text(
             'Error loading events',
-            style: Theme.of(context).textTheme.headlineSmall,
+            style: theme.textTheme.headlineSmall,
           ),
           const SizedBox(height: 8),
           Text(
             _error!,
             textAlign: TextAlign.center,
-            style: const TextStyle(color: Colors.grey),
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.colorScheme.onSurface.withOpacity(0.6),
+            ),
           ),
           const SizedBox(height: 16),
           ElevatedButton(
@@ -578,6 +576,7 @@ class _PlanningScreenState extends State<PlanningScreen>
   }
 
   Widget _buildEmptyState(bool isUpcoming) {
+    final theme = Theme.of(context);
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -585,13 +584,13 @@ class _PlanningScreenState extends State<PlanningScreen>
           Icon(
             isUpcoming ? Icons.event_available : Icons.event_busy,
             size: 64,
-            color: Colors.grey,
+            color: theme.colorScheme.onSurface.withOpacity(0.5),
           ),
           const SizedBox(height: 16),
           Text(
             isUpcoming ? 'No Upcoming Events' : 'No Previous Events',
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-              color: Colors.grey,
+            style: theme.textTheme.headlineSmall?.copyWith(
+              color: theme.colorScheme.onSurface.withOpacity(0.6),
             ),
           ),
           const SizedBox(height: 8),
@@ -600,7 +599,9 @@ class _PlanningScreenState extends State<PlanningScreen>
                 ? 'Create your first event to get started!'
                 : 'Your completed events will appear here.',
             textAlign: TextAlign.center,
-            style: const TextStyle(color: Colors.grey),
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.colorScheme.onSurface.withOpacity(0.6),
+            ),
           ),
           if (isUpcoming) ...[
             const SizedBox(height: 24),
@@ -608,10 +609,6 @@ class _PlanningScreenState extends State<PlanningScreen>
               onPressed: _navigateToCreateEvent,
               icon: const Icon(Icons.add),
               label: const Text('Create Event'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFFDBB42),
-                foregroundColor: Colors.black87,
-              ),
             ),
           ],
         ],
@@ -620,14 +617,15 @@ class _PlanningScreenState extends State<PlanningScreen>
   }
 
   Widget _buildEventCard(Event event, {required bool isUpcoming}) {
+    final theme = Theme.of(context);
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: theme.cardColor,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
+            color: theme.colorScheme.shadow.withOpacity(0.05),
             blurRadius: 10,
             offset: const Offset(0, 2),
           ),
@@ -657,8 +655,7 @@ class _PlanningScreenState extends State<PlanningScreen>
                           children: [
                             Text(
                               event.name,
-                              style: const TextStyle(
-                                fontSize: 18,
+                              style: Theme.of(context).textTheme.titleLarge?.copyWith(
                                 fontWeight: FontWeight.bold,
                               ),
                               maxLines: 2,
@@ -690,7 +687,7 @@ class _PlanningScreenState extends State<PlanningScreen>
                         onPressed: () => _showEventOptions(event),
                         icon: const Icon(Icons.more_vert),
                         style: IconButton.styleFrom(
-                          backgroundColor: Colors.grey.shade100,
+                          backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
                         ),
                       ),
                     ],
@@ -733,7 +730,7 @@ class _PlanningScreenState extends State<PlanningScreen>
                 imageUrl: event.imageUrl!,
                 fit: BoxFit.cover,
                 placeholder: (context, url) => Container(
-                  color: Colors.grey.shade200,
+                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
                   child: const Center(
                     child: CircularProgressIndicator(),
                   ),
@@ -771,12 +768,16 @@ class _PlanningScreenState extends State<PlanningScreen>
       children: [
         Row(
           children: [
-            const Icon(Icons.calendar_today, size: 16, color: Colors.grey),
+            Icon(
+              Icons.calendar_today, 
+              size: 16, 
+              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+            ),
             const SizedBox(width: 8),
             Text(
               '$dateFormat at $timeFormat',
-              style: const TextStyle(
-                color: Colors.grey,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
                 fontWeight: FontWeight.w500,
               ),
             ),
@@ -786,13 +787,17 @@ class _PlanningScreenState extends State<PlanningScreen>
           const SizedBox(height: 4),
           Row(
             children: [
-              const Icon(Icons.location_on, size: 16, color: Colors.grey),
+              Icon(
+                Icons.location_on, 
+                size: 16, 
+                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+              ),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
                   event.venue!,
-                  style: const TextStyle(
-                    color: Colors.grey,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
                     fontWeight: FontWeight.w500,
                   ),
                   maxLines: 1,
@@ -842,20 +847,24 @@ class _PlanningScreenState extends State<PlanningScreen>
     final timeUntil = event.timeUntilEvent;
     
     if (timeUntil.isNegative) {
+      final theme = Theme.of(context);
       return Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: Colors.grey.shade100,
+          color: theme.colorScheme.surfaceContainerHighest,
           borderRadius: BorderRadius.circular(8),
         ),
-        child: const Row(
+        child: Row(
           children: [
-            Icon(Icons.event_busy, color: Colors.grey),
-            SizedBox(width: 8),
+            Icon(
+              Icons.event_busy, 
+              color: theme.colorScheme.onSurface.withOpacity(0.6),
+            ),
+            const SizedBox(width: 8),
             Text(
               'Event has passed',
-              style: TextStyle(
-                color: Colors.grey,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.onSurface.withOpacity(0.6),
                 fontWeight: FontWeight.w500,
               ),
             ),
@@ -868,24 +877,25 @@ class _PlanningScreenState extends State<PlanningScreen>
     final hours = timeUntil.inHours % 24;
     final minutes = timeUntil.inMinutes % 60;
 
+    final theme = Theme.of(context);
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: const Color(0xFFFDBB42).withValues(alpha: 0.1),
+        color: theme.colorScheme.primary.withOpacity(0.1),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Row(
         children: [
-          const Icon(
+          Icon(
             Icons.timer,
-            color: Color(0xFFFDBB42),
+            color: theme.colorScheme.primary,
           ),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
               '$days days, $hours hours, $minutes minutes left',
-              style: const TextStyle(
-                color: Color(0xFFFDBB42),
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.primary,
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -910,7 +920,7 @@ class _PlanningScreenState extends State<PlanningScreen>
               width: 40,
               height: 4,
               decoration: BoxDecoration(
-                color: Colors.grey.shade300,
+                color: Theme.of(context).colorScheme.surfaceContainerHighest,
                 borderRadius: BorderRadius.circular(2),
               ),
             ),

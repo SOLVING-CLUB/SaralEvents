@@ -100,18 +100,74 @@ export default function VendorWalletsPage() {
     setLoading(false)
   }
 
-  async function updateWithdrawalStatus(id: string, status: string) {
+  async function updateWithdrawalStatus(id: string, status: string, rejectionReason?: string) {
+    const updateData: any = { 
+      status,
+      updated_at: new Date().toISOString()
+    }
+
+    if (status === 'paid' || status === 'rejected') {
+      updateData.processed_at = new Date().toISOString()
+    }
+
+    if (status === 'rejected' && rejectionReason) {
+      updateData.rejection_reason = rejectionReason
+    }
+
     const { error } = await supabase
       .from('withdrawal_requests')
-      .update({ 
-        status,
-        processed_at: status === 'paid' || status === 'rejected' ? new Date().toISOString() : null,
-        updated_at: new Date().toISOString()
-      })
+      .update(updateData)
       .eq('id', id)
     
     if (!error) {
       await loadData()
+    } else {
+      alert(`Error: ${error.message}`)
+    }
+  }
+
+  async function approveAndProcessWithdrawal(id: string) {
+    // First approve
+    await updateWithdrawalStatus(id, 'approved')
+    
+    // Then mark as paid (this should trigger wallet deduction)
+    const { data: req } = await supabase
+      .from('withdrawal_requests')
+      .select('*, vendor_wallets(*)')
+      .eq('id', id)
+      .maybeSingle()
+
+    if (req) {
+      const wallet = Array.isArray(req.vendor_wallets) ? req.vendor_wallets[0] : req.vendor_wallets
+      if (wallet) {
+        const newBalance = Number(wallet.balance) - Number(req.amount)
+        const newPending = Number(wallet.pending_withdrawal) - Number(req.amount)
+
+        if (newBalance >= 0 && newPending >= 0) {
+          await supabase
+            .from('vendor_wallets')
+            .update({
+              balance: newBalance,
+              pending_withdrawal: newPending,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', wallet.id)
+
+          await supabase
+            .from('wallet_transactions')
+            .insert({
+              wallet_id: wallet.id,
+              vendor_id: req.vendor_id,
+              txn_type: 'debit',
+              source: 'withdrawal',
+              amount: req.amount,
+              balance_after: newBalance,
+              notes: 'Withdrawal processed by admin'
+            })
+
+          await updateWithdrawalStatus(id, 'paid')
+        }
+      }
     }
   }
 
@@ -345,14 +401,19 @@ export default function VendorWalletsPage() {
                           <div className="flex gap-2">
                             <Button
                               size="sm"
-                              onClick={() => updateWithdrawalStatus(w.id, 'approved')}
+                              onClick={() => approveAndProcessWithdrawal(w.id)}
                             >
-                              Approve
+                              Approve & Process
                             </Button>
                             <Button
                               variant="outline"
                               size="sm"
-                              onClick={() => updateWithdrawalStatus(w.id, 'rejected')}
+                              onClick={() => {
+                                const reason = prompt('Rejection reason:')
+                                if (reason) {
+                                  updateWithdrawalStatus(w.id, 'rejected', reason)
+                                }
+                              }}
                             >
                               Reject
                             </Button>
@@ -365,6 +426,17 @@ export default function VendorWalletsPage() {
                           >
                             Mark Paid
                           </Button>
+                        )}
+                        {w.status === 'paid' && (
+                          <span className="text-xs text-green-600">
+                            <CheckCircle className="h-4 w-4 inline mr-1" />
+                            Processed
+                          </span>
+                        )}
+                        {w.status === 'rejected' && w.rejection_reason && (
+                          <div className="text-xs text-red-600 max-w-xs">
+                            {w.rejection_reason}
+                          </div>
                         )}
                       </td>
                     </tr>

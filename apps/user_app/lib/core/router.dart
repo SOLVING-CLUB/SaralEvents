@@ -22,7 +22,6 @@ import '../screens/all_categories_screen.dart';
 import '../screens/all_events_screen.dart';
 import '../screens/profile_screen.dart';
 import '../screens/profile_details_screen.dart';
-import '../screens/wallet_payments_screen.dart';
 import '../screens/help_support_screen.dart';
 import '../screens/accessibility_screen.dart';
 import '../screens/settings_screen.dart';
@@ -66,7 +65,7 @@ class AppRouter {
           // Invitations: saralevents://invite/:slug
           if (uri.toString().contains('/invite/')) {
             final match = RegExp(r'/invite/([^/?#]+)').firstMatch(uri.toString());
-            final slug = match != null ? match.group(1) : null;
+            final slug = match?.group(1);
             if (slug != null && slug.isNotEmpty) {
               targetRoute = '/invite/$slug';
             }
@@ -75,7 +74,7 @@ class AppRouter {
           // Referrals: saralevents://refer/:code
           if (targetRoute == null && uri.toString().contains('/refer/')) {
             final match = RegExp(r'/refer/([^/?#]+)').firstMatch(uri.toString());
-            final code = match != null ? match.group(1) : null;
+            final code = match?.group(1);
             if (code != null && code.isNotEmpty) {
               targetRoute = '/profile/refer?code=$code';
             }
@@ -220,7 +219,6 @@ class AppRouter {
         ),
         GoRoute(path: '/profile', builder: (_, __) => const ProfileScreen()),
         GoRoute(path: '/profile/details', builder: (_, __) => const ProfileDetailsScreen()),
-        GoRoute(path: '/profile/wallet', builder: (_, __) => const WalletPaymentsScreen()),
         GoRoute(path: '/profile/help', builder: (_, __) => const HelpSupportScreen()),
         GoRoute(path: '/profile/accessibility', builder: (_, __) => const AccessibilityScreen()),
         GoRoute(path: '/profile/settings', builder: (_, __) => const SettingsScreen()),

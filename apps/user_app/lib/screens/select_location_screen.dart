@@ -101,7 +101,9 @@ class _SelectLocationScreenState extends State<SelectLocationScreen> {
           ),
           ElevatedButton(
             onPressed: () => Navigator.of(context).pop(true),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.error,
+            ),
             child: const Text('Delete'),
           ),
         ],
@@ -216,15 +218,19 @@ class _SelectLocationScreenState extends State<SelectLocationScreen> {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: Theme.of(context).cardColor,
                 borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: Colors.black.withOpacity(0.1)),
+                border: Border.all(
+                  color: Theme.of(context).colorScheme.outline.withOpacity(0.1),
+                ),
               ),
               child: Row(
                 children: [
                   Icon(
                     _locationEnabled ? Icons.location_on : Icons.my_location, 
-                    color: _locationEnabled ? Colors.green : theme.colorScheme.primary
+                    color: _locationEnabled 
+                        ? theme.colorScheme.primary 
+                        : theme.colorScheme.primary,
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -239,9 +245,8 @@ class _SelectLocationScreenState extends State<SelectLocationScreen> {
                           _locationEnabled 
                             ? 'Location is enabled. Tap to get current address'
                             : 'Enable your current location for better services',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey[600],
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
                           ),
                         ),
                       ],
@@ -278,11 +283,16 @@ class _SelectLocationScreenState extends State<SelectLocationScreen> {
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: Theme.of(context).cardColor,
                   borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: Colors.black.withOpacity(0.08)),
+                  border: Border.all(
+                    color: Theme.of(context).colorScheme.outline.withOpacity(0.08),
+                  ),
                 ),
-                child: const Text('No saved addresses yet.'),
+                child: Text(
+                  'No saved addresses yet.',
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
               )
             else
               ListView.separated(
@@ -348,9 +358,11 @@ class _SavedAddressCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: Theme.of(context).cardColor,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.black.withOpacity(0.08)),
+        border: Border.all(
+          color: Theme.of(context).colorScheme.outline.withOpacity(0.08),
+        ),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -401,13 +413,22 @@ class _SavedAddressCard extends StatelessWidget {
                   ],
                 ),
               ),
-              const PopupMenuItem(
+              PopupMenuItem(
                 value: 'delete',
                 child: Row(
                   children: [
-                    Icon(Icons.delete, size: 20, color: Colors.red),
-                    SizedBox(width: 8),
-                    Text('Delete', style: TextStyle(color: Colors.red)),
+                    Icon(
+                      Icons.delete, 
+                      size: 20, 
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Delete', 
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.error,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -458,8 +479,13 @@ class _PlacesSearchFieldState extends State<_PlacesSearchField> {
           onChanged: _onChanged,
           decoration: InputDecoration(
             hintText: 'Search Address',
-            hintStyle: TextStyle(color: Colors.grey[500]),
-            prefixIcon: const Icon(Icons.search, color: Colors.grey),
+            hintStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
+            ),
+            prefixIcon: Icon(
+              Icons.search, 
+              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+            ),
             suffixIcon: _loading 
                 ? const SizedBox(
                     width: 20,
@@ -471,17 +497,23 @@ class _PlacesSearchFieldState extends State<_PlacesSearchField> {
                   ) 
                 : null,
             filled: true,
-            fillColor: Colors.grey[50],
+            fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
             border: OutlineInputBorder(
-              borderSide: BorderSide(color: Colors.grey[300]!),
+              borderSide: BorderSide(
+                color: Theme.of(context).colorScheme.outline.withOpacity(0.3),
+              ),
               borderRadius: BorderRadius.circular(12),
             ),
             enabledBorder: OutlineInputBorder(
-              borderSide: BorderSide(color: Colors.grey[300]!),
+              borderSide: BorderSide(
+                color: Theme.of(context).colorScheme.outline.withOpacity(0.3),
+              ),
               borderRadius: BorderRadius.circular(12),
             ),
             focusedBorder: OutlineInputBorder(
-              borderSide: BorderSide(color: Colors.blue[300]!),
+              borderSide: BorderSide(
+                color: Theme.of(context).colorScheme.primary,
+              ),
               borderRadius: BorderRadius.circular(12),
             ),
           ),
@@ -490,9 +522,11 @@ class _PlacesSearchFieldState extends State<_PlacesSearchField> {
           Container(
             margin: const EdgeInsets.only(top: 8),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: Theme.of(context).cardColor,
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.black.withOpacity(0.08)),
+              border: Border.all(
+                color: Theme.of(context).colorScheme.outline.withOpacity(0.08),
+              ),
             ),
             child: ListView.builder(
               shrinkWrap: true,

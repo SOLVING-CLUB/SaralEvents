@@ -5,11 +5,14 @@ import '../services/booking_service.dart';
 import '../services/order_repository.dart';
 import '../services/booking_draft_service.dart';
 import 'order_details_screen.dart';
+import 'order_status_screen.dart';
 import 'cancellation_flow_screen.dart';
 import '../core/utils/time_utils.dart';
-import '../checkout/flow.dart';
+import '../checkout/booking_flow.dart';
 import '../checkout/checkout_state.dart';
+import 'package:provider/provider.dart';
 import '../core/cache/simple_cache.dart';
+import '../core/config/razorpay_config.dart';
 
 class OrdersScreen extends StatefulWidget {
   const OrdersScreen({super.key});
@@ -31,6 +34,7 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
   bool _isLoading = true;
   String? _error;
   RealtimeChannel? _ordersChannel;
+  RealtimeChannel? _bookingsChannel;
 
   @override
   void initState() {
@@ -44,6 +48,7 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
     _loadBookings();
     _loadOrders();
     _subscribeOrdersRealtime();
+    _subscribeBookingsRealtime();
   }
 
   void _onTabChanged() {
@@ -160,9 +165,32 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
     } catch (_) {}
   }
 
+  void _subscribeBookingsRealtime() {
+    try {
+      final client = Supabase.instance.client;
+      final userId = client.auth.currentUser?.id;
+      if (userId == null) return;
+      _bookingsChannel?.unsubscribe();
+      _bookingsChannel = client
+          .channel('bookings_user_$userId')
+          .onPostgresChanges(
+            event: PostgresChangeEvent.all,
+            schema: 'public',
+            table: 'bookings',
+            filter: PostgresChangeFilter(type: PostgresChangeFilterType.eq, column: 'user_id', value: userId),
+            callback: (payload) {
+              // Reload bookings when vendor updates status (accepts, marks arrived, etc.)
+              _loadBookings();
+            },
+          )
+          .subscribe();
+    } catch (_) {}
+  }
+
   @override
   void dispose() {
     _ordersChannel?.unsubscribe();
+    _bookingsChannel?.unsubscribe();
     _tabController.removeListener(_onTabChanged);
     _tabController.dispose();
     super.dispose();
@@ -184,24 +212,25 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
   }
 
   Color _getStatusColor(String status) {
+    final theme = Theme.of(context);
     switch (status.toLowerCase()) {
       case 'pending':
-        return Colors.orange;
+        return theme.colorScheme.primary;
       case 'confirmed':
-        return Colors.blue;
+        return theme.colorScheme.primary;
       case 'completed':
-        return Colors.green;
+        return theme.colorScheme.primary;
       case 'cancelled':
-        return Colors.red;
+        return theme.colorScheme.error;
       default:
-        return Colors.grey;
+        return theme.colorScheme.onSurface.withOpacity(0.6);
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey.shade50,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
         toolbarHeight: 72,
         title: const Text('Orders', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 24)),
@@ -212,7 +241,7 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
             Tab(text: 'Payments'),
           ],
         ),
-        backgroundColor: Colors.white,
+        backgroundColor: Theme.of(context).cardColor,
         elevation: 0,
         actions: [
           IconButton(
@@ -328,6 +357,21 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
     );
   }
 
+  bool _isTestPayment(Map<String, dynamic> order) {
+    // Check if Razorpay key is test mode
+    final isTestKey = RazorpayConfig.keyId.startsWith('rzp_test_');
+    
+    // Check gateway_order_id for test indicators
+    final gatewayOrderId = (order['gateway_order_id'] as String? ?? '').toLowerCase();
+    final hasTestInId = gatewayOrderId.contains('test');
+    
+    // Check payment_id for test indicators
+    final paymentId = (order['payment_id'] as String? ?? '').toLowerCase();
+    final hasTestInPaymentId = paymentId.contains('test');
+    
+    return isTestKey || hasTestInId || hasTestInPaymentId;
+  }
+
   Widget _buildOrdersTab(BuildContext context) {
     if (_orders.isEmpty) {
       return _emptyState(context, 'No payments yet', 'Your payment history will appear here');
@@ -347,19 +391,10 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
           final createdAt = o['created_at'] as String?;
           final createdPretty = TimeUtils.formatDateTime(createdAt);
           final rel = TimeUtils.relativeTime(createdAt);
+          final isTest = _isTestPayment(o);
+          
           return Card(
-            child: ListTile(
-              leading: Icon(Icons.payment, color: _getStatusColor(status)),
-              title: Text('₹${total.toStringAsFixed(2)}'),
-              subtitle: Text(rel.isEmpty ? createdPretty : '$createdPretty  •  $rel'),
-              trailing: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: _getStatusColor(status),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(status.toUpperCase(), style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
-              ),
+            child: InkWell(
               onTap: () {
                 final id = (o['id'] ?? '').toString();
                 if (id.isNotEmpty) {
@@ -368,6 +403,81 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
                   );
                 }
               },
+              borderRadius: BorderRadius.circular(12),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.payment, color: _getStatusColor(status), size: 22),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                '₹${total.toStringAsFixed(2)}',
+                                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                rel.isEmpty ? createdPretty : '$createdPretty  •  $rel',
+                                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                  color: Colors.grey[600],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: _getStatusColor(status),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Text(
+                                status.toUpperCase(), 
+                                style: TextStyle(
+                                  color: Theme.of(context).colorScheme.onError, 
+                                  fontSize: 11, 
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: isTest ? Colors.orange.shade100 : Colors.green.shade100,
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                  color: isTest ? Colors.orange.shade300 : Colors.green.shade300,
+                                  width: 1,
+                                ),
+                              ),
+                              child: Text(
+                                isTest ? 'TEST' : 'LIVE',
+                                style: TextStyle(
+                                  color: isTest ? Colors.orange.shade800 : Colors.green.shade800,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
             ),
           );
         },
@@ -383,52 +493,74 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
     final bookingDate = booking['booking_date'] as String?;
     final bookingTime = booking['booking_time'] as String?;
     final notes = booking['notes'] as String?;
+    final bookingId = booking['booking_id'] as String?;
 
     return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                const Icon(Icons.receipt_long, size: 22),
-                const SizedBox(width: 8),
-                Expanded(child: Text(serviceName, style: Theme.of(context).textTheme.titleMedium)),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(color: _getStatusColor(status), borderRadius: BorderRadius.circular(12)),
-                  child: Text(status.toUpperCase(), style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Row(children: [const Icon(Icons.business, size: 16), const SizedBox(width: 4), Text(vendorName)]),
-            const SizedBox(height: 8),
-            Row(children: [
-              const Icon(Icons.calendar_today, size: 16),
-              const SizedBox(width: 4),
-              Text(bookingDate ?? 'No date'),
-              if (bookingTime != null) ...[
-                const SizedBox(width: 16), const Icon(Icons.access_time, size: 16), const SizedBox(width: 4), Text(bookingTime),
-              ],
-            ]),
-            const SizedBox(height: 8),
-            Row(children: [const Icon(Icons.attach_money, size: 16), const SizedBox(width: 4), Text('₹${amount.toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.bold))]),
-            if (notes != null && notes.isNotEmpty) ...[
+      child: InkWell(
+        onTap: bookingId != null
+            ? () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => OrderStatusScreen(bookingId: bookingId),
+                  ),
+                );
+              }
+            : null,
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Icon(Icons.receipt_long, size: 22),
+                  const SizedBox(width: 8),
+                  Expanded(child: Text(serviceName, style: Theme.of(context).textTheme.titleMedium)),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(color: _getStatusColor(status), borderRadius: BorderRadius.circular(12)),
+                    child: Text(
+                      status.toUpperCase(), 
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.onError, 
+                        fontSize: 12, 
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Row(children: [const Icon(Icons.business, size: 16), const SizedBox(width: 4), Text(vendorName)]),
               const SizedBox(height: 8),
-              Row(crossAxisAlignment: CrossAxisAlignment.start, children: [const Icon(Icons.note, size: 16), const SizedBox(width: 4), Expanded(child: Text(notes))]),
-            ],
-            const SizedBox(height: 12),
-            if (status.toLowerCase() == 'pending' || status.toLowerCase() == 'confirmed')
-              Row(mainAxisAlignment: MainAxisAlignment.end, children: [
-                OutlinedButton(
-                  onPressed: () => _confirmAndCancelBooking(booking['booking_id']),
-                  style: OutlinedButton.styleFrom(foregroundColor: Colors.red),
-                  child: const Text('Cancel Booking'),
-                ),
+              Row(children: [
+                const Icon(Icons.calendar_today, size: 16),
+                const SizedBox(width: 4),
+                Text(bookingDate ?? 'No date'),
+                if (bookingTime != null) ...[
+                  const SizedBox(width: 16), const Icon(Icons.access_time, size: 16), const SizedBox(width: 4), Text(bookingTime),
+                ],
               ]),
-          ],
+              const SizedBox(height: 8),
+              Row(children: [const Icon(Icons.attach_money, size: 16), const SizedBox(width: 4), Text('₹${amount.toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.bold))]),
+              if (notes != null && notes.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Row(crossAxisAlignment: CrossAxisAlignment.start, children: [const Icon(Icons.note, size: 16), const SizedBox(width: 4), Expanded(child: Text(notes))]),
+              ],
+              const SizedBox(height: 12),
+              if (status.toLowerCase() == 'pending' || status.toLowerCase() == 'confirmed')
+                Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+                  OutlinedButton(
+                    onPressed: () => _confirmAndCancelBooking(booking['booking_id']),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Theme.of(context).colorScheme.error,
+                    ),
+                    child: const Text('Cancel Booking'),
+                  ),
+                ]),
+            ],
+          ),
         ),
       ),
     );
@@ -470,16 +602,27 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
           children: [
             Row(
               children: [
-                const Icon(Icons.drafts, size: 22, color: Colors.orange),
+                Icon(
+                  Icons.drafts, 
+                  size: 22, 
+                  color: Theme.of(context).colorScheme.primary,
+                ),
                 const SizedBox(width: 8),
                 Expanded(child: Text(serviceName, style: Theme.of(context).textTheme.titleMedium)),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
-                    color: Colors.orange,
+                    color: Theme.of(context).colorScheme.primary,
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: const Text('DRAFT', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                  child: Text(
+                    'DRAFT', 
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.onError, 
+                      fontSize: 12, 
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -520,7 +663,9 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
               children: [
                 OutlinedButton(
                   onPressed: () => _deleteDraft(draftId),
-                  style: OutlinedButton.styleFrom(foregroundColor: Colors.red),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Theme.of(context).colorScheme.error,
+                  ),
                   child: const Text('Delete'),
                 ),
                 const SizedBox(width: 8),
@@ -536,7 +681,7 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
                   ),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFFFDBB42),
-                    foregroundColor: Colors.white,
+                    foregroundColor: Theme.of(context).colorScheme.onPrimary,
                   ),
                   child: const Text('Continue Booking'),
                 ),
@@ -564,6 +709,7 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
       category: 'Service',
       price: amount,
       subtitle: vendorName,
+      locationLink: null, // Will be set from draft if available
     );
 
       // Navigate to checkout with draft
@@ -574,33 +720,43 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
           bookingDate = DateTime.parse(draft['booking_date'] as String);
         }
         
-        final bookingTimeStr = draft['booking_time'] as String?;
-        TimeOfDay? bookingTime;
-        if (bookingTimeStr != null) {
-          final parts = bookingTimeStr.split(':');
-          bookingTime = TimeOfDay(
-            hour: int.parse(parts[0]),
-            minute: int.parse(parts[1]),
-          );
-        }
+        // booking_time is currently not used in cart item; keep parsing only when needed.
 
         if (mounted) {
+          // Add item to cart (do NOT clear existing cart items)
+          final checkoutState = Provider.of<CheckoutState>(context, listen: false);
+          // Update item with location link from draft if available
+          final itemWithLocation = CartItem(
+            id: item.id,
+            title: item.title,
+            category: item.category,
+            price: item.price,
+            subtitle: item.subtitle,
+            bookingDate: bookingDate,
+            locationLink: draft['location_link'] as String?,
+          );
+          await checkoutState.addItem(itemWithLocation);
+          // NOTE: CheckoutState currently supports only a single draftId; setting it here
+          // would overwrite any previous draft reference when multiple services are added.
+          
+          // Load billing details if available
+          if (draft['billing_name'] != null && 
+              draft['billing_email'] != null && 
+              draft['billing_phone'] != null) {
+            checkoutState.saveBillingDetails(BillingDetails(
+              name: draft['billing_name'] as String,
+              email: draft['billing_email'] as String,
+              phone: draft['billing_phone'] as String,
+              eventDate: draft['event_date'] != null 
+                  ? DateTime.parse(draft['event_date'] as String)
+                  : bookingDate,
+              messageToVendor: draft['message_to_vendor'] as String?,
+            ));
+          }
+          
           Navigator.of(context).push(
             MaterialPageRoute(
-              builder: (context) => CheckoutFlowWithDraft(
-                initialItem: item,
-                draftId: draftId,
-                bookingDate: bookingDate,
-                bookingTime: bookingTime,
-                notes: draft['notes'] as String?,
-                billingName: draft['billing_name'] as String?,
-                billingEmail: draft['billing_email'] as String?,
-                billingPhone: draft['billing_phone'] as String?,
-                eventDate: draft['event_date'] != null 
-                    ? DateTime.parse(draft['event_date'] as String)
-                    : null,
-                messageToVendor: draft['message_to_vendor'] as String?,
-              ),
+              builder: (_) => const BookingFlow(),
             ),
           ).then((_) {
             // Reload drafts after returning
@@ -623,7 +779,9 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            style: TextButton.styleFrom(
+              foregroundColor: Theme.of(context).colorScheme.error,
+            ),
             child: const Text('Delete'),
           ),
         ],
@@ -658,7 +816,7 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: Colors.orange.shade100,
+                    color: Theme.of(context).colorScheme.primaryContainer.withOpacity(0.3),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: const Column(
@@ -676,7 +834,7 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: Colors.blue.shade100,
+                    color: Theme.of(context).colorScheme.primaryContainer.withOpacity(0.3),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: const Column(

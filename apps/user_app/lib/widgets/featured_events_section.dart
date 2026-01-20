@@ -120,12 +120,10 @@ class _FeaturedEventsSectionState extends State<FeaturedEventsSection>
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
+                  Text(
                     'Featured Events',
-                    style: TextStyle(
-                      fontSize: 24,
+                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                       fontWeight: FontWeight.w800,
-                      color: Colors.black87,
                       letterSpacing: -0.5,
                     ),
                   ),
@@ -146,15 +144,15 @@ class _FeaturedEventsSectionState extends State<FeaturedEventsSection>
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: Theme.of(context).cardColor,
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(
-                      color: Colors.grey.shade300,
+                      color: Theme.of(context).colorScheme.outline.withOpacity(0.3),
                       width: 1,
                     ),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.05),
+                        color: Theme.of(context).colorScheme.shadow.withOpacity(0.05),
                         blurRadius: 8,
                         offset: const Offset(0, 2),
                       ),
@@ -163,19 +161,17 @@ class _FeaturedEventsSectionState extends State<FeaturedEventsSection>
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Text(
+                      Text(
                         'See All',
-                        style: TextStyle(
-                          fontSize: 14,
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                           fontWeight: FontWeight.w600,
-                          color: Colors.black87,
                         ),
                       ),
                       const SizedBox(width: 6),
                       Icon(
                         Icons.arrow_forward_ios,
                         size: 14,
-                        color: Colors.grey.shade600,
+                        color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
                       ),
                     ],
                   ),
@@ -229,7 +225,7 @@ class _FeaturedEventsSectionState extends State<FeaturedEventsSection>
           height: 210,
           margin: const EdgeInsets.only(right: 16),
           decoration: BoxDecoration(
-            color: Colors.grey.shade200,
+            color: Theme.of(context).colorScheme.surfaceContainerHighest,
             borderRadius: BorderRadius.circular(16),
           ),
           child: Column(
@@ -238,7 +234,7 @@ class _FeaturedEventsSectionState extends State<FeaturedEventsSection>
                 flex: 3,
                 child: Container(
                   decoration: BoxDecoration(
-                    color: Colors.grey.shade300,
+                    color: Theme.of(context).colorScheme.surfaceContainerHighest,
                     borderRadius: const BorderRadius.only(
                       topLeft: Radius.circular(16),
                       topRight: Radius.circular(16),
@@ -257,7 +253,7 @@ class _FeaturedEventsSectionState extends State<FeaturedEventsSection>
                         height: 14,
                         width: double.infinity,
                         decoration: BoxDecoration(
-                          color: Colors.grey.shade300,
+                          color: Theme.of(context).colorScheme.surfaceContainerHighest,
                           borderRadius: BorderRadius.circular(4),
                         ),
                       ),
@@ -266,7 +262,7 @@ class _FeaturedEventsSectionState extends State<FeaturedEventsSection>
                         height: 12,
                         width: 100,
                         decoration: BoxDecoration(
-                          color: Colors.grey.shade300,
+                          color: Theme.of(context).colorScheme.surfaceContainerHighest,
                           borderRadius: BorderRadius.circular(4),
                         ),
                       ),
@@ -275,7 +271,7 @@ class _FeaturedEventsSectionState extends State<FeaturedEventsSection>
                         height: 16,
                         width: 80,
                         decoration: BoxDecoration(
-                          color: Colors.grey.shade300,
+                          color: Theme.of(context).colorScheme.surfaceContainerHighest,
                           borderRadius: BorderRadius.circular(4),
                         ),
                       ),
@@ -299,24 +295,22 @@ class _FeaturedEventsSectionState extends State<FeaturedEventsSection>
           children: [
             Icon(
               Icons.error_outline,
-              color: Colors.grey.shade400,
+              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.4),
               size: 48,
             ),
             const SizedBox(height: 16),
             Text(
               'Error loading services',
-              style: TextStyle(
-                color: Colors.grey.shade600,
-                fontSize: 16,
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
                 fontWeight: FontWeight.w500,
+                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
               ),
             ),
             const SizedBox(height: 8),
             Text(
               _error!,
-              style: TextStyle(
-                color: Colors.grey.shade500,
-                fontSize: 12,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
               ),
               textAlign: TextAlign.center,
               maxLines: 2,
@@ -334,8 +328,8 @@ class _FeaturedEventsSectionState extends State<FeaturedEventsSection>
               icon: const Icon(Icons.refresh),
               label: const Text('Retry'),
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFFDBB42),
-                foregroundColor: Colors.white,
+                backgroundColor: Theme.of(context).colorScheme.primary,
+                foregroundColor: Theme.of(context).colorScheme.onPrimary,
                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
@@ -357,24 +351,22 @@ class _FeaturedEventsSectionState extends State<FeaturedEventsSection>
           children: [
             Icon(
               Icons.event_busy,
-              color: Colors.grey.shade400,
+              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.4),
               size: 48,
             ),
             const SizedBox(height: 16),
             Text(
               'No featured services available',
-              style: TextStyle(
-                color: Colors.grey.shade600,
-                fontSize: 16,
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
                 fontWeight: FontWeight.w500,
+                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
               ),
             ),
             const SizedBox(height: 8),
             Text(
               'Check back later for new services',
-              style: TextStyle(
-                color: Colors.grey.shade500,
-                fontSize: 14,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
               ),
             ),
           ],

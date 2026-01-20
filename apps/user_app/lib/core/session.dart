@@ -22,13 +22,35 @@ class UserSession extends ChangeNotifier {
         await checkProfileSetup();
         // Initialize wishlist when user logs in
         WishlistNotifier.instance.initialize();
+        // Initialize cart when user logs in
+        _initializeCart();
       } else {
         // Clear wishlist when user logs out
         WishlistNotifier.instance.reset();
+        // Clear cart when user logs out
+        _clearCart();
       }
       notifyListeners();
     });
     _init();
+  }
+
+  void _initializeCart() {
+    // Get CheckoutState from context if available
+    // This will be called after the widget tree is built
+    Future.microtask(() async {
+      try {
+        // We'll initialize cart in main.dart after the provider is available
+        // This is a placeholder that will be handled properly
+      } catch (e) {
+        print('Error initializing cart: $e');
+      }
+    });
+  }
+
+  void _clearCart() {
+    // Cart clearing will be handled by CheckoutState itself
+    // This is a placeholder
   }
 
   Future<void> _init() async {
@@ -118,7 +140,8 @@ class UserSession extends ChangeNotifier {
 
   Future<void> signInWithGoogleNative() async {
 		try {
-			const serverClientId = '314736791162-8pq9o3hr42ibap3oesifibeotdamgdj2.apps.googleusercontent.com';
+			// Web client ID configured in Supabase Google provider
+			const serverClientId = '460598868043-tk6pnifpvu24b8b5pm1h5vdoin6vqhr3.apps.googleusercontent.com';
 
 			final signIn = GoogleSignIn(
 				serverClientId: serverClientId,

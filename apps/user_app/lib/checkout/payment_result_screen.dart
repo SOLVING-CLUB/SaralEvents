@@ -7,6 +7,8 @@ class PaymentResultScreen extends StatelessWidget {
   final Map<String, dynamic>? responseData;
   final double? amount;
   final int? itemsCount;
+  final String? bookingId;
+  final String? orderId;
   final VoidCallback? onRetry;
   final VoidCallback? onContinue;
 
@@ -18,6 +20,8 @@ class PaymentResultScreen extends StatelessWidget {
     this.responseData,
     this.amount,
     this.itemsCount,
+    this.bookingId,
+    this.orderId,
     this.onRetry,
     this.onContinue,
   });

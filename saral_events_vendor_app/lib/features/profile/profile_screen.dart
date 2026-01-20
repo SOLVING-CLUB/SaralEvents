@@ -9,13 +9,6 @@ class ProfileScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Ensure latest vendor profile when arriving here
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (context.mounted) {
-        context.read<AppSession>().reloadVendorProfile();
-      }
-    });
-
     return Scaffold(
       appBar: AppBar(title: const Text('Profile')),
       body: ListView(
@@ -50,12 +43,11 @@ class ProfileScreen extends StatelessWidget {
           ),
           const Divider(),
           ListTile(
-            leading: const Icon(Icons.account_balance_wallet_outlined, size: 22, color: Colors.black),
-            title: const Text('Wallet'),
-            subtitle: const Text('Balance, transactions, withdraw'),
+            leading: const Icon(Icons.help_outline, size: 22, color: Colors.black),
+            title: const Text('Help & Support'),
             trailing: const Icon(Icons.chevron_right),
             onTap: () {
-              context.push('/app/wallet');
+              context.push('/app/help');
             },
           ),
           const Divider(),

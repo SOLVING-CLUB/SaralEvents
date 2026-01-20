@@ -1,4 +1,4 @@
-package com.example.saral_events_vendor_app
+package com.saralevents.vendorapp
 
 import io.flutter.embedding.android.FlutterActivity
 

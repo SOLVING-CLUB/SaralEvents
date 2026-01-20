@@ -282,7 +282,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
             final isLast = index == milestones.length - 1;
 
             return _buildMilestoneStep(step, isLast);
-          }).toList(),
+          }),
         ],
       ),
     );
@@ -537,13 +537,19 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
   }
 
   Widget _buildActionButtons(String status) {
+    final hasPendingArrival = _milestones.any((m) =>
+        m.type == MilestoneType.arrival &&
+        m.status == MilestoneStatus.pending);
+    final hasPendingCompletion = _milestones.any((m) =>
+        m.type == MilestoneType.completion &&
+        m.status == MilestoneStatus.pending);
+
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Column(
         children: [
-          // Show payment button for next milestone
-          // No payment button for 'created' or 'accepted' - bookings are auto-accepted after payment
-          if (status == null || status.isEmpty || status == 'vendor_arrived' || status == 'setup_completed')
+          // Show payment button for arrival milestone only after arrival is confirmed
+          if (hasPendingArrival && status == 'arrival_confirmed')
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
@@ -557,7 +563,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                   ),
                 ),
                 child: const Text(
-                  'Pay Next Milestone',
+                  'Pay 50% (On Arrival)',
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
@@ -565,7 +571,31 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                 ),
               ),
             ),
-          
+
+          // Show payment button for completion milestone only after setup is confirmed
+          if (hasPendingCompletion && status == 'setup_confirmed')
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () => _handleNextPayment(),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFFDBB42),
+                  foregroundColor: Colors.black87,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: const Text(
+                  'Pay Final 30%',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ),
+
           // Show confirmation buttons
           if (status == 'vendor_arrived')
             Padding(
@@ -648,19 +678,62 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
   }
 
   Future<void> _handleNextPayment() async {
-    // Navigate to payment screen for next milestone
-    final nextMilestone = await _milestoneService.getNextPendingMilestone(widget.bookingId);
-    if (nextMilestone == null) {
+    // Use local milestones to determine next pending
+    late final PaymentMilestone pendingMilestone;
+    try {
+      pendingMilestone = _milestones.firstWhere(
+        (m) => m.status == MilestoneStatus.pending,
+      );
+    } catch (_) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('No pending payments')),
       );
       return;
     }
 
-    // TODO: Navigate to payment screen with milestone details
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Payment for ${nextMilestone.percentage}% milestone (₹${nextMilestone.amount.toStringAsFixed(2)})')),
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Confirm Payment'),
+        content: Text(
+          'You are about to pay ${pendingMilestone.percentage}% of the amount (₹${pendingMilestone.amount.toStringAsFixed(2)}). '
+          'This payment will be held safely in escrow. Do you want to continue?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Confirm & Pay'),
+          ),
+        ],
+      ),
     );
+
+    if (confirmed != true) return;
+
+    final success = await _milestoneService.markMilestonePaid(
+      milestoneId: pendingMilestone.id,
+      paymentId: 'manual_${DateTime.now().millisecondsSinceEpoch}',
+    );
+
+    if (!mounted) return;
+
+    if (success) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+              'Payment successful for ${pendingMilestone.percentage}% milestone (₹${pendingMilestone.amount.toStringAsFixed(2)})'),
+        ),
+      );
+      await _loadData();
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Failed to process payment. Please try again.')),
+      );
+    }
   }
 
   Future<void> _confirmArrival() async {

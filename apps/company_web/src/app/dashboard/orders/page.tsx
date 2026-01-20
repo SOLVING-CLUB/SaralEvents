@@ -1,5 +1,6 @@
 "use client"
 import { useEffect, useMemo, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { Input } from '@/components/ui/Input'
 import { Button } from '@/components/ui/Button'
@@ -16,6 +17,7 @@ type Booking = {
 }
 
 export default function OrdersPage() {
+  const router = useRouter()
   const supabase = createClient()
   const [rows, setRows] = useState<Booking[]>([])
   const [loading, setLoading] = useState(true)
@@ -137,9 +139,9 @@ export default function OrdersPage() {
   }
 
   return (
-    <main className="p-6">
-      <div className="flex items-center justify-between mb-4">
-        <h1 className="text-xl font-semibold">Orders</h1>
+    <main className="p-4 lg:p-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
+        <h1 className="text-lg lg:text-xl font-semibold">Orders</h1>
         <div className="flex items-center gap-2">
           <Button variant="outline" onClick={refresh} disabled={loading}>
             {loading ? 'Refreshing...' : 'Refresh'}
@@ -201,11 +203,11 @@ export default function OrdersPage() {
             <tr>
               <th className="p-3">ID</th>
               <th className="p-3">Service</th>
-              <th className="p-3">Vendor</th>
+              <th className="p-3 hidden md:table-cell">Vendor</th>
               <th className="p-3 cursor-pointer" onClick={() => toggleSort('booking_date')}>
                 Date {sortBy === 'booking_date' ? (sortDir === 'asc' ? '↑' : '↓') : ''}
               </th>
-              <th className="p-3">Time</th>
+              <th className="p-3 hidden lg:table-cell">Time</th>
               <th className="p-3 cursor-pointer" onClick={() => toggleSort('amount')}>
                 Amount {sortBy === 'amount' ? (sortDir === 'asc' ? '↑' : '↓') : ''}
               </th>
@@ -222,15 +224,29 @@ export default function OrdersPage() {
             ) : paged.length === 0 ? (
               <tr><td className="p-3" colSpan={7}>No orders</td></tr>
             ) : paged.map(b => (
-              <tr key={b.id} className="border-t">
+              <tr 
+                key={b.id} 
+                className="border-t hover:bg-gray-50 cursor-pointer"
+                onClick={() => router.push(`/dashboard/orders/${b.id}`)}
+              >
                 <td className="p-3 font-mono text-xs break-all select-text">
-                  {b.id}
+                  {b.id.slice(0, 8)}...
                 </td>
-                <td className="p-3">{b.services?.name ?? '-'}</td>
-                <td className="p-3">{b.vendor_profiles?.business_name ?? '-'}</td>
-                <td className="p-3">{b.booking_date}</td>
-                <td className="p-3">{b.booking_time ?? '-'}</td>
-                <td className="p-3">₹{Number(b.amount ?? 0).toFixed(2)}</td>
+                <td className="p-3">
+                  <div>
+                    <div>{b.services?.name ?? '-'}</div>
+                    <div className="md:hidden text-xs text-gray-500 mt-1">{b.vendor_profiles?.business_name ?? '-'}</div>
+                  </div>
+                </td>
+                <td className="p-3 hidden md:table-cell">{b.vendor_profiles?.business_name ?? '-'}</td>
+                <td className="p-3">
+                  <div>
+                    <div>{b.booking_date}</div>
+                    <div className="lg:hidden text-xs text-gray-500 mt-1">{b.booking_time ?? '-'}</div>
+                  </div>
+                </td>
+                <td className="p-3 hidden lg:table-cell">{b.booking_time ?? '-'}</td>
+                <td className="p-3 font-semibold">₹{Number(b.amount ?? 0).toFixed(2)}</td>
                 <td className="p-3">
                   <StatusPill status={(b.status || '').toLowerCase()} />
                 </td>
@@ -241,12 +257,12 @@ export default function OrdersPage() {
       </div>
 
       {/* Pagination */}
-      <div className="flex items-center justify-between mt-4">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mt-4">
         <div className="text-sm text-gray-600">
           Showing {(currentPage - 1) * pageSize + Math.min(1, paged.length)}-
           {(currentPage - 1) * pageSize + paged.length} of {filtered.length}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <select
             className="h-9 rounded-md border border-input bg-background px-2 text-sm"
             value={pageSize}

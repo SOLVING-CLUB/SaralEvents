@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
 import 'package:razorpay_flutter/razorpay_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../core/config/razorpay_config.dart';
@@ -147,9 +146,14 @@ class RazorpayService {
       }
       
       _razorpay!.open(options);
-    } catch (e) {
+      
       if (kDebugMode) {
-        debugPrint('Error opening Razorpay checkout: $e');
+        debugPrint('✅ Razorpay.open() called successfully');
+      }
+    } catch (e, stackTrace) {
+      if (kDebugMode) {
+        debugPrint('❌ Error opening Razorpay checkout: $e');
+        debugPrint('❌ Stack trace: $stackTrace');
       }
       rethrow;
     }

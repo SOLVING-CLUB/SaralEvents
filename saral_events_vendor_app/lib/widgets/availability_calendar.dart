@@ -379,6 +379,14 @@ class _AvailabilityCalendarState extends State<AvailabilityCalendar> {
       await _toggleFullDayBooked(day, true);
       return;
     }
+    
+    // If "Available" is selected, automatically mark all time slots as available
+    if (status == DayStatus.available) {
+      await _applyStatus(day, DayStatus.available);
+      return;
+    }
+    
+    // Only show time slot selection for "Partially Available"
     // Multi-select slot chips flow
     // Persist selection state across setState within the sheet
     final Set<DaySlot> availableSel = <DaySlot>{};
@@ -433,22 +441,12 @@ class _AvailabilityCalendarState extends State<AvailabilityCalendar> {
               }
 
               Future<void> apply() async {
-                bool m = true, a = true, e = true, n = true;
-                if (status == DayStatus.available) {
-                  // If none selected, treat as full day available
-                  if (availableSel.isNotEmpty) {
-                    m = availableSel.contains(DaySlot.morning);
-                    a = availableSel.contains(DaySlot.afternoon);
-                    e = availableSel.contains(DaySlot.evening);
-                    n = availableSel.contains(DaySlot.night);
-                  }
-                } else {
-                  // Partial: available minus booked, booked overrides
-                  m = availableSel.contains(DaySlot.morning) && !bookedSel.contains(DaySlot.morning);
-                  a = availableSel.contains(DaySlot.afternoon) && !bookedSel.contains(DaySlot.afternoon);
-                  e = availableSel.contains(DaySlot.evening) && !bookedSel.contains(DaySlot.evening);
-                  n = availableSel.contains(DaySlot.night) && !bookedSel.contains(DaySlot.night);
-                }
+                // For partial booking: only selected slots are available
+                // If no slots selected, all slots will be unavailable (booked)
+                bool m = availableSel.contains(DaySlot.morning) && !bookedSel.contains(DaySlot.morning);
+                bool a = availableSel.contains(DaySlot.afternoon) && !bookedSel.contains(DaySlot.afternoon);
+                bool e = availableSel.contains(DaySlot.evening) && !bookedSel.contains(DaySlot.evening);
+                bool n = availableSel.contains(DaySlot.night) && !bookedSel.contains(DaySlot.night);
                 final up = ServiceAvailabilityOverride(
                   date: DateTime(day.year, day.month, day.day),
                   morningAvailable: m,

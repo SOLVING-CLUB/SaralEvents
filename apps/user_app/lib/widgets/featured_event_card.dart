@@ -27,17 +27,17 @@ class FeaturedEventCard extends StatelessWidget {
         // Outer spacing so cards don't stick to each other or edges
         margin: const EdgeInsets.only(right: 16),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: Theme.of(context).cardColor,
           borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.06),
+              color: Theme.of(context).colorScheme.shadow.withOpacity(0.06),
               blurRadius: 16,
               offset: const Offset(0, 2),
               spreadRadius: 0,
             ),
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.04),
+              color: Theme.of(context).colorScheme.shadow.withOpacity(0.04),
               blurRadius: 8,
               offset: const Offset(0, 1),
               spreadRadius: 0,
@@ -63,7 +63,7 @@ class FeaturedEventCard extends StatelessWidget {
                             imageUrl: service.media.first.url,
                             fit: BoxFit.cover,
                             placeholder: (context, url) => Container(
-                              color: Colors.grey.shade200,
+                              color: Theme.of(context).colorScheme.surfaceContainerHighest,
                               child: Center(
                                 child: CircularProgressIndicator(
                                   strokeWidth: 2,
@@ -111,23 +111,23 @@ class FeaturedEventCard extends StatelessWidget {
                         constraints: const BoxConstraints(maxWidth: 70),
                         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
                         decoration: BoxDecoration(
-                          color: Colors.black.withValues(alpha: 0.75),
+                          color: Theme.of(context).colorScheme.shadow.withOpacity(0.75),
                           borderRadius: BorderRadius.circular(10),
                         ),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Icon(
+                            Icon(
                               Icons.star,
-                              color: Colors.amber,
+                              color: Theme.of(context).colorScheme.primary,
                               size: 12,
                             ),
                             const SizedBox(width: 2),
                             Flexible(
                               child: Text(
                                 service.ratingAvg!.toStringAsFixed(1),
-                                style: const TextStyle(
-                                  color: Colors.white,
+                                style: TextStyle(
+                                  color: Theme.of(context).colorScheme.onSurface,
                                   fontSize: 11,
                                   fontWeight: FontWeight.w600,
                                 ),
@@ -158,10 +158,8 @@ class FeaturedEventCard extends StatelessWidget {
                     Flexible(
                       child: Text(
                         service.name,
-                        style: const TextStyle(
-                          fontSize: 14,
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                           fontWeight: FontWeight.w700,
-                          color: Colors.black87,
                           height: 1.2,
                         ),
                         maxLines: 2,
@@ -174,9 +172,8 @@ class FeaturedEventCard extends StatelessWidget {
                     // Vendor name
                     Text(
                       service.vendorName,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey.shade600,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
                         fontWeight: FontWeight.w500,
                         height: 1.0,
                       ),
@@ -198,9 +195,8 @@ class FeaturedEventCard extends StatelessWidget {
                             children: [
                               Text(
                                 'Starting from',
-                                style: TextStyle(
-                                  fontSize: 10,
-                                  color: Colors.grey.shade500,
+                                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
                                 ),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
@@ -225,7 +221,7 @@ class FeaturedEventCard extends StatelessWidget {
                             constraints: const BoxConstraints(maxWidth: 60),
                             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
                             decoration: BoxDecoration(
-                              color: Colors.grey.shade100,
+                              color: Theme.of(context).colorScheme.surfaceContainerHighest,
                               borderRadius: BorderRadius.circular(6),
                             ),
                             child: Row(
@@ -234,16 +230,15 @@ class FeaturedEventCard extends StatelessWidget {
                                 Icon(
                                   Icons.people_outline,
                                   size: 10,
-                                  color: Colors.grey.shade600,
+                                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
                                 ),
                                 const SizedBox(width: 2),
                                 Flexible(
                                   child: Text(
                                     '${service.capacityMax}',
-                                    style: TextStyle(
-                                      fontSize: 10,
+                                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
                                       fontWeight: FontWeight.w600,
-                                      color: Colors.grey.shade700,
+                                      color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
                                     ),
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,

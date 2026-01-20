@@ -60,7 +60,7 @@ class LocationService {
     if (list.isEmpty) return null;
     final p = list.first;
     return [p.name, p.subLocality, p.locality, p.administrativeArea, p.postalCode]
-        .where((e) => e != null && e!.isNotEmpty)
+        .where((e) => e != null && e.isNotEmpty)
         .map((e) => e!)
         .join(', ');
   }

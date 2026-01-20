@@ -64,9 +64,15 @@ class InstallmentCard extends StatelessWidget {
 
 class BillingForm extends StatefulWidget {
   final BillingDetails? initial;
-  final void Function(BillingDetails) onSave;
+  final Future<void> Function(BillingDetails) onSave;
+  final bool showSaveButton;
 
-  const BillingForm({super.key, this.initial, required this.onSave});
+  const BillingForm({
+    super.key,
+    this.initial,
+    required this.onSave,
+    this.showSaveButton = true,
+  });
 
   @override
   State<BillingForm> createState() => BillingFormState();
@@ -78,7 +84,6 @@ class BillingFormState extends State<BillingForm> {
   final _email = TextEditingController();
   final _phone = TextEditingController();
   final _message = TextEditingController();
-  DateTime? _eventDate;
 
   @override
   void initState() {
@@ -89,7 +94,6 @@ class BillingFormState extends State<BillingForm> {
       _email.text = i.email;
       _phone.text = i.phone;
       _message.text = i.messageToVendor ?? '';
-      _eventDate = i.eventDate;
     }
   }
 
@@ -120,25 +124,25 @@ class BillingFormState extends State<BillingForm> {
               inputFormatters: [E164PhoneInputFormatter(maxLength: 15)],
               validator: Validators.phone),
           const SizedBox(height: 12),
-          _dateField(context),
-          const SizedBox(height: 12),
           _field(_message, 'Message to vendor (optional)', TextInputType.multiline, maxLines: 3, required: false),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: ElevatedButton(
-                  onPressed: _onSave,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFFDBB42),
-                    foregroundColor: Colors.black87,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          if (widget.showSaveButton) ...[
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: _onSave,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFFDBB42),
+                      foregroundColor: Colors.black87,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    child: const Text('Save Details'),
                   ),
-                  child: const Text('Save Details'),
                 ),
-              ),
-            ],
-          ),
+              ],
+            ),
+          ],
         ],
       ),
     );
@@ -150,51 +154,39 @@ class BillingFormState extends State<BillingForm> {
 
   /// Validate the form and save details via [widget.onSave].
   /// Returns true if the form was valid and details were saved.
-  bool validateAndSave() {
+  Future<bool> validateAndSave() async {
     if (!_formKey.currentState!.validate()) {
       return false;
     }
-    widget.onSave(BillingDetails(
+    // Create billing details
+    final details = BillingDetails(
       name: _name.text.trim(),
       email: _email.text.trim(),
       phone: _phone.text.trim(),
-      eventDate: _eventDate,
+      eventDate: null, // Event date removed as per user request
       messageToVendor: _message.text.trim().isEmpty ? null : _message.text.trim(),
-    ));
-    return true;
+    );
+    
+    // Call onSave and wait for it to complete
+    try {
+      await widget.onSave(details);
+      return true;
+    } catch (e) {
+      print('Error in onSave callback: $e');
+      return false;
+    }
+  }
+
+  /// Load billing details into form
+  void loadDetails(BillingDetails details) {
+    _name.text = details.name;
+    _email.text = details.email;
+    _phone.text = details.phone;
+    _message.text = details.messageToVendor ?? '';
+    _formKey.currentState?.reset();
   }
 
   // Removed custom email validator in favor of Validators.email
-
-  Widget _dateField(BuildContext context) {
-    return InkWell(
-      onTap: () async {
-        final now = DateTime.now();
-        final d = await showDatePicker(
-          context: context,
-          initialDate: _eventDate ?? now.add(const Duration(days: 7)),
-          firstDate: now,
-          lastDate: now.add(const Duration(days: 365 * 2)),
-        );
-        if (d != null) setState(() => _eventDate = d);
-      },
-      child: InputDecorator(
-        decoration: InputDecoration(
-          labelText: 'Event date',
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-          contentPadding: const EdgeInsets.all(16),
-        ),
-        child: Align(
-          alignment: Alignment.centerLeft,
-          child: Text(
-            _eventDate == null
-                ? 'Select event date'
-                : '${_eventDate!.day}/${_eventDate!.month}/${_eventDate!.year}',
-          ),
-        ),
-      ),
-    );
-  }
 
   Widget _field(TextEditingController c, String label, TextInputType type,
       {FormFieldValidator<String>? validator, int maxLines = 1, bool required = true, List<TextInputFormatter>? inputFormatters}) {

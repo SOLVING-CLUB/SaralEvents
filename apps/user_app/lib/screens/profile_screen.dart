@@ -3,9 +3,9 @@ import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../core/session.dart';
+import '../core/theme/theme_notifier.dart';
 import '../services/profile_service.dart';
 import 'profile_details_screen.dart';
-import 'wallet_payments_screen.dart';
 import 'orders_screen.dart';
 import 'help_support_screen.dart';
 import 'accessibility_screen.dart';
@@ -68,14 +68,116 @@ class _ProfileScreenState extends State<ProfileScreen> {
     String? subtitle,
     required VoidCallback onTap,
   }) {
+    final theme = Theme.of(context);
     return ListTile(
-      leading: Icon(icon, color: const Color(0xFFFDBB42)),
-      title: Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
-      subtitle: subtitle != null ? Text(subtitle, style: const TextStyle(fontSize: 12)) : null,
-      trailing: const Icon(Icons.chevron_right),
+      leading: Icon(icon, color: theme.colorScheme.primary),
+      title: Text(title, style: theme.textTheme.titleMedium),
+      subtitle: subtitle != null 
+          ? Text(subtitle, style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurface.withOpacity(0.6),
+            )) 
+          : null,
+      trailing: Icon(Icons.chevron_right, color: theme.colorScheme.onSurface.withOpacity(0.4)),
       onTap: onTap,
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
+    );
+  }
+
+  Widget _buildThemeToggle(BuildContext context) {
+    final theme = Theme.of(context);
+    return Consumer<ThemeNotifier>(
+      builder: (context, themeNotifier, _) {
+        final isDark = themeNotifier.themeMode == ThemeMode.dark;
+        final isSystem = themeNotifier.themeMode == ThemeMode.system;
+        
+        return ListTile(
+          leading: Icon(
+            isDark ? Icons.dark_mode : Icons.light_mode,
+            color: theme.colorScheme.primary,
+          ),
+          title: Text(
+            'Dark Mode',
+            style: theme.textTheme.titleMedium,
+          ),
+          subtitle: Text(
+            isSystem 
+                ? 'Following system setting'
+                : (isDark ? 'Enabled' : 'Disabled'),
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurface.withOpacity(0.6),
+            ),
+          ),
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // System mode option
+              PopupMenuButton<ThemeMode>(
+                icon: Icon(
+                  Icons.settings_brightness,
+                  color: theme.colorScheme.onSurface.withOpacity(0.6),
+                ),
+                onSelected: (mode) => themeNotifier.setThemeMode(mode),
+                itemBuilder: (context) => [
+                  PopupMenuItem(
+                    value: ThemeMode.system,
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.brightness_auto,
+                          size: 20,
+                          color: isSystem ? theme.colorScheme.primary : null,
+                        ),
+                        const SizedBox(width: 12),
+                        Text('System Default'),
+                      ],
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: ThemeMode.light,
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.light_mode,
+                          size: 20,
+                          color: !isDark && !isSystem ? theme.colorScheme.primary : null,
+                        ),
+                        const SizedBox(width: 12),
+                        Text('Light'),
+                      ],
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: ThemeMode.dark,
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.dark_mode,
+                          size: 20,
+                          color: isDark ? theme.colorScheme.primary : null,
+                        ),
+                        const SizedBox(width: 12),
+                        Text('Dark'),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(width: 8),
+              Switch(
+                value: isDark,
+                onChanged: (value) {
+                  themeNotifier.setThemeMode(
+                    value ? ThemeMode.dark : ThemeMode.light,
+                  );
+                },
+                activeColor: theme.colorScheme.primary,
+              ),
+            ],
+          ),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        );
+      },
     );
   }
 
@@ -118,10 +220,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     final imageUrl = (_profile?['image_url'] as String?) ?? fallbackAvatar;
                     return CircleAvatar(
                       radius: 40,
-                      backgroundColor: Colors.grey[100],
+                      backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
                       backgroundImage: (imageUrl != null && imageUrl.isNotEmpty) ? NetworkImage(imageUrl) : null,
                       child: (imageUrl == null || imageUrl.isEmpty)
-                          ? const Icon(Icons.person, size: 40, color: Colors.black87)
+                          ? Icon(
+                              Icons.person, 
+                              size: 40, 
+                              color: Theme.of(context).colorScheme.onSurface,
+                            )
                           : null,
                     );
                   }),
@@ -168,16 +274,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       const Divider(height: 1),
                       _buildMenuTile(
                         context,
-                        icon: Icons.account_balance_wallet_outlined,
-                        title: 'Wallet & Payments',
-                        subtitle: 'Payment methods and transactions',
-                        onTap: () => Navigator.of(context).push(
-                          MaterialPageRoute(builder: (_) => const WalletPaymentsScreen()),
-                        ),
-                      ),
-                      const Divider(height: 1),
-                      _buildMenuTile(
-                        context,
                         icon: Icons.support_agent,
                         title: 'Help & Support',
                         subtitle: 'FAQs, issues, feedback, about',
@@ -186,11 +282,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                       ),
                       const Divider(height: 1),
+                      _buildThemeToggle(context),
+                      const Divider(height: 1),
                       _buildMenuTile(
                         context,
                         icon: Icons.visibility_outlined,
                         title: 'Accessibility',
-                        subtitle: 'Theme and font preferences',
+                        subtitle: 'Font preferences and other settings',
                         onTap: () => Navigator.of(context).push(
                           MaterialPageRoute(builder: (_) => const AccessibilityScreen()),
                         ),

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../services/availability_service.dart';
 
 enum DayStatus {
   available,
@@ -42,6 +43,7 @@ class UserAvailabilityCalendar extends StatefulWidget {
 
 class _UserAvailabilityCalendarState extends State<UserAvailabilityCalendar> {
   final SupabaseClient _supabase = Supabase.instance.client;
+  late final AvailabilityService _availabilityService;
   DateTime _currentMonth = DateTime.now();
   Map<DateTime, DayStatus> _availabilityMap = {};
   bool _isLoading = true;
@@ -50,6 +52,7 @@ class _UserAvailabilityCalendarState extends State<UserAvailabilityCalendar> {
   @override
   void initState() {
     super.initState();
+    _availabilityService = AvailabilityService(_supabase);
     _loadAvailability();
   }
 
@@ -73,7 +76,7 @@ class _UserAvailabilityCalendarState extends State<UserAvailabilityCalendar> {
           .select('*')
           .eq('service_id', widget.serviceId)
           .limit(1);
-      print('Any availability data for this service: ${anyAvailability.length > 0 ? "YES" : "NO"}');
+      print('Any availability data for this service: ${anyAvailability.isNotEmpty ? "YES" : "NO"}');
       if (anyAvailability.isNotEmpty) {
         print('Sample availability record: ${anyAvailability.first}');
       }
@@ -136,28 +139,37 @@ class _UserAvailabilityCalendarState extends State<UserAvailabilityCalendar> {
 
           DayStatus dayStatus;
 
-          // Determine overall day status based on availability
-          final totalAvailable = (morningAvailable ? 1 : 0) + 
-                                (afternoonAvailable ? 1 : 0) + 
-                                (eveningAvailable ? 1 : 0) + 
-                                (nightAvailable ? 1 : 0);
-
-          if (totalAvailable == 0) {
-            // No time periods available
+          // Check actual available time slots (considering bookings and reservations)
+          // This ensures dates with all slots booked are marked as unavailable
+          final availableSlots = await _availabilityService.getAvailableTimeSlots(widget.serviceId, date);
+          
+          print('  Available slots after checking bookings: ${availableSlots.length}');
+          
+          // Determine overall day status based on actual available slots
+          if (availableSlots.isEmpty) {
+            // No slots available (all booked/reserved)
             dayStatus = DayStatus.booked;
-            print('  → Status: BOOKED (no availability)');
-          } else if (totalAvailable == 4) {
-            // All time periods available
-            dayStatus = DayStatus.available;
-            print('  → Status: AVAILABLE (all periods)');
-          } else if (customStart != null && customEnd != null) {
-            // Custom time slots
-            dayStatus = DayStatus.partiallyAvailable;
-            print('  → Status: PARTIALLY AVAILABLE (custom slots)');
+            print('  → Status: BOOKED (all slots taken)');
           } else {
-            // Some time periods available
-            dayStatus = DayStatus.partiallyAvailable;
-            print('  → Status: PARTIALLY AVAILABLE (some periods)');
+            // Check vendor availability to determine if fully or partially available
+            final totalVendorAvailable = (morningAvailable ? 1 : 0) + 
+                                        (afternoonAvailable ? 1 : 0) + 
+                                        (eveningAvailable ? 1 : 0) + 
+                                        (nightAvailable ? 1 : 0);
+            
+            if (totalVendorAvailable == 4 && availableSlots.length >= 4) {
+              // All time periods available and not booked
+              dayStatus = DayStatus.available;
+              print('  → Status: AVAILABLE (all periods free)');
+            } else if (customStart != null && customEnd != null) {
+              // Custom time slots
+              dayStatus = DayStatus.partiallyAvailable;
+              print('  → Status: PARTIALLY AVAILABLE (custom slots)');
+            } else {
+              // Some time periods available (some may be booked)
+              dayStatus = DayStatus.partiallyAvailable;
+              print('  → Status: PARTIALLY AVAILABLE (${availableSlots.length} slots free)');
+            }
           }
 
           availabilityMap[date] = dayStatus;
@@ -238,19 +250,20 @@ class _UserAvailabilityCalendarState extends State<UserAvailabilityCalendar> {
   }
 
   Color _getDayColor(DayStatus status) {
+    final theme = Theme.of(context);
     Color color;
     switch (status) {
       case DayStatus.available:
-        color = Colors.green;
+        color = Colors.green; // Mark available dates in green
         break;
       case DayStatus.partiallyAvailable:
-        color = Colors.orange;
+        color = Colors.yellow; // Partially available in yellow
         break;
       case DayStatus.booked:
-        color = Colors.red;
+        color = theme.colorScheme.error;
         break;
       case DayStatus.unavailable:
-        color = Colors.grey;
+        color = theme.colorScheme.onSurface.withOpacity(0.3);
         break;
     }
     print('Getting color for $status: $color');
@@ -276,31 +289,29 @@ class _UserAvailabilityCalendarState extends State<UserAvailabilityCalendar> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.error_outline, size: 48, color: Colors.red),
+            Icon(
+              Icons.error_outline, 
+              size: 48, 
+              color: Theme.of(context).colorScheme.error,
+            ),
             const SizedBox(height: 16),
-            const Text(
+            Text(
               'Unable to load availability',
-              style: TextStyle(
-                fontSize: 16,
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
                 fontWeight: FontWeight.w500,
               ),
             ),
             const SizedBox(height: 8),
             Text(
               'Please check your connection and try again',
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.grey[600],
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
               ),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 16),
             ElevatedButton(
               onPressed: _loadAvailability,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFFDBB42),
-                foregroundColor: Colors.white,
-              ),
               child: const Text('Retry'),
             ),
           ],
@@ -314,31 +325,29 @@ class _UserAvailabilityCalendarState extends State<UserAvailabilityCalendar> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.calendar_today, size: 48, color: Colors.grey),
+            Icon(
+              Icons.calendar_today, 
+              size: 48, 
+              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
+            ),
             const SizedBox(height: 16),
-            const Text(
+            Text(
               'No Availability Set',
-              style: TextStyle(
-                fontSize: 16,
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
                 fontWeight: FontWeight.w500,
               ),
             ),
             const SizedBox(height: 8),
             Text(
               'The vendor has not set availability for this service yet.\nPlease contact the vendor to set their availability.',
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.grey[600],
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
               ),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 16),
             ElevatedButton(
               onPressed: _loadAvailability,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFFDBB42),
-                foregroundColor: Colors.white,
-              ),
               child: const Text('Refresh'),
             ),
           ],
@@ -383,10 +392,9 @@ class _UserAvailabilityCalendarState extends State<UserAvailabilityCalendar> {
                       child: Center(
                         child: Text(
                           day,
-                          style: const TextStyle(
-                            fontSize: 12,
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
                             fontWeight: FontWeight.w500,
-                            color: Colors.grey,
+                            color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
                           ),
                         ),
                       ),
@@ -449,12 +457,16 @@ class _UserAvailabilityCalendarState extends State<UserAvailabilityCalendar> {
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               color: isSelected
-                  ? const Color(0xFFFDBB42)
-                  : (status == DayStatus.unavailable ? Colors.transparent : _getDayColor(status)),
+                  ? Theme.of(context).colorScheme.primary
+                  : (status == DayStatus.unavailable 
+                      ? Colors.transparent 
+                      : _getDayColor(status)),
               border: isSelected
                   ? null
                   : Border.all(
-                      color: status == DayStatus.unavailable ? Colors.grey[300]! : Colors.transparent,
+                      color: status == DayStatus.unavailable 
+                          ? Theme.of(context).colorScheme.outline.withOpacity(0.3)
+                          : Colors.transparent,
                       width: 1,
                     ),
             ),
@@ -463,8 +475,10 @@ class _UserAvailabilityCalendarState extends State<UserAvailabilityCalendar> {
                 day.toString(),
                 style: TextStyle(
                   color: isSelected
-                      ? Colors.white
-                      : (status == DayStatus.unavailable ? Colors.grey[400] : Colors.white),
+                      ? Theme.of(context).colorScheme.onPrimary
+                      : (status == DayStatus.unavailable 
+                          ? Theme.of(context).colorScheme.onSurface.withOpacity(0.4)
+                          : Theme.of(context).colorScheme.onPrimary),
                   fontWeight: FontWeight.w500,
                 ),
               ),
@@ -489,23 +503,25 @@ class _UserAvailabilityCalendarState extends State<UserAvailabilityCalendar> {
   }
 
   Widget _buildLegend() {
+    final theme = Theme.of(context);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Column(
         children: [
           _buildLegendItem(Colors.green, 'Available', '8:00 AM - 11:00 PM'),
           const SizedBox(height: 8),
-          _buildLegendItem(Colors.orange, 'Partially Available', 'Custom time slots'),
+          _buildLegendItem(Colors.yellow, 'Partially Available', 'Custom time slots'),
           const SizedBox(height: 8),
-          _buildLegendItem(Colors.red, 'Booked', 'Not available'),
+          _buildLegendItem(theme.colorScheme.error, 'Booked', 'Not available'),
           const SizedBox(height: 8),
-          _buildLegendItem(Colors.grey, 'Unavailable', 'Not available'),
+          _buildLegendItem(theme.colorScheme.onSurface.withOpacity(0.3), 'Unavailable', 'Not available'),
         ],
       ),
     );
   }
 
   Widget _buildLegendItem(Color color, String label, String timeRange) {
+    final theme = Theme.of(context);
     return Row(
       children: [
         Container(
@@ -523,15 +539,14 @@ class _UserAvailabilityCalendarState extends State<UserAvailabilityCalendar> {
             children: [
               Text(
                 label,
-                style: const TextStyle(
+                style: theme.textTheme.bodyMedium?.copyWith(
                   fontWeight: FontWeight.w500,
                 ),
               ),
               Text(
                 timeRange,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.grey[600],
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurface.withOpacity(0.6),
                 ),
               ),
             ],

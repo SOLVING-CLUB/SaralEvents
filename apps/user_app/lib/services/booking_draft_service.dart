@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../core/cache/simple_cache.dart';
 
 class BookingDraftService {
   final SupabaseClient _supabase;
@@ -14,6 +15,7 @@ class BookingDraftService {
     TimeOfDay? bookingTime,
     required double amount,
     String? notes,
+    String? locationLink,
     // Billing details
     String? billingName,
     String? billingEmail,
@@ -38,6 +40,7 @@ class BookingDraftService {
             : null,
         'amount': amount,
         'notes': notes,
+        'location_link': locationLink,
         'billing_name': billingName,
         'billing_email': billingEmail,
         'billing_phone': billingPhone,
@@ -53,7 +56,19 @@ class BookingDraftService {
           .select('id')
           .single();
 
-      return result['id'] as String;
+      final draftId = result['id'] as String;
+      
+      // Invalidate availability cache to lock the slot immediately
+      if (bookingDate != null) {
+        final dateStr = bookingDate.toIso8601String().split('T')[0];
+        final cacheKey = 'timeslots:$serviceId:$dateStr';
+        CacheManager.instance.invalidate(cacheKey);
+        CacheManager.instance.invalidateByPrefix('availability:$serviceId');
+        print('🔒 Slot locked: Invalidated cache for service $serviceId on date $dateStr');
+        print('   Draft ID: $draftId, Time: ${bookingTime != null ? '${bookingTime.hour.toString().padLeft(2, '0')}:${bookingTime.minute.toString().padLeft(2, '0')}' : 'null'}');
+      }
+
+      return draftId;
     } catch (e, stackTrace) {
       print('Error saving booking draft: $e');
       print('Stack trace: $stackTrace');
@@ -117,15 +132,41 @@ class BookingDraftService {
   }
 
   /// Update draft status to payment_pending
+  /// Note: This method is deprecated for slot locking. Slots are now only locked
+  /// after payment is confirmed (when booking is created). This method may still
+  /// be used for tracking purposes but does not affect slot availability.
   Future<bool> markDraftPaymentPending(String draftId) async {
     try {
-      await _supabase
-          .from('booking_drafts')
-          .update({
-            'status': 'payment_pending',
-            'updated_at': DateTime.now().toIso8601String(),
-          })
-          .eq('id', draftId);
+      // Get draft details to invalidate cache
+      final draft = await getDraft(draftId);
+      if (draft != null) {
+        final serviceId = draft['service_id'] as String?;
+        final bookingDate = draft['booking_date'] as String?;
+        
+        await _supabase
+            .from('booking_drafts')
+            .update({
+              'status': 'payment_pending',
+              'updated_at': DateTime.now().toIso8601String(),
+            })
+            .eq('id', draftId);
+
+        // Invalidate cache to ensure slot is locked
+        if (serviceId != null && bookingDate != null) {
+          final cacheKey = 'timeslots:$serviceId:$bookingDate';
+          CacheManager.instance.invalidate(cacheKey);
+          CacheManager.instance.invalidateByPrefix('availability:$serviceId');
+          print('🔒 Slot locked (payment pending): Invalidated cache for service $serviceId on date $bookingDate');
+        }
+      } else {
+        await _supabase
+            .from('booking_drafts')
+            .update({
+              'status': 'payment_pending',
+              'updated_at': DateTime.now().toIso8601String(),
+            })
+            .eq('id', draftId);
+      }
 
       return true;
     } catch (e) {
@@ -250,8 +291,14 @@ class BookingDraftService {
   }
 
   /// Mark draft as completed (booking created)
+  /// Mark draft as completed (booking created, slot remains locked via booking)
   Future<bool> markDraftCompleted(String draftId) async {
     try {
+      // Get draft details before updating to invalidate cache
+      final draft = await getDraft(draftId);
+      final serviceId = draft?['service_id'] as String?;
+      final bookingDate = draft?['booking_date'] as String?;
+      
       await _supabase
           .from('booking_drafts')
           .update({
@@ -259,6 +306,15 @@ class BookingDraftService {
             'updated_at': DateTime.now().toIso8601String(),
           })
           .eq('id', draftId);
+
+      // Invalidate cache (booking now locks the slot, not the draft)
+      if (serviceId != null && bookingDate != null) {
+        final cacheKey = 'timeslots:$serviceId:$bookingDate';
+        CacheManager.instance.invalidate(cacheKey);
+        CacheManager.instance.invalidateByPrefix('availability:$serviceId');
+        print('✅ Draft completed: Cache invalidated for service $serviceId on date $bookingDate');
+        print('   Slot now locked by booking (not draft)');
+      }
 
       return true;
     } catch (e) {

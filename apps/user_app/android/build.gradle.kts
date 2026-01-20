@@ -11,8 +11,8 @@ buildscript {
         mavenCentral()
     }
     dependencies {
-        // Google Services classpath disabled - not using Firebase/Google Sign-In yet
-        // classpath("com.google.gms:google-services:4.4.2")
+    // Google Services classpath for Firebase (FCM)
+    classpath("com.google.gms:google-services:4.4.2")
     }
 }
 

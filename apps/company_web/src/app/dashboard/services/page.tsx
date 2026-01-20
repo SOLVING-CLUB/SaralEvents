@@ -1,10 +1,10 @@
 "use client"
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useCallback } from 'react'
 import Image from 'next/image'
 import { createClient } from '@/lib/supabase'
 import { Input } from '@/components/ui/Input'
 import { Button } from '@/components/ui/Button'
-import { ChevronRight, Search as SearchIcon, X as XIcon, ArrowUpDown } from 'lucide-react'
+import { ChevronRight, Search as SearchIcon, X as XIcon, ArrowUpDown, Filter, X } from 'lucide-react'
 
 type ServiceRow = {
   id: string
@@ -13,6 +13,8 @@ type ServiceRow = {
   is_active: boolean
   is_visible_to_users: boolean | null
   category?: string | null
+  category_id?: string | null
+  tags?: string[] | null
   media_urls?: string[] | null
   vendor_id?: string | null
   is_featured?: boolean | null
@@ -31,29 +33,133 @@ export default function ServicesPage() {
   const [groupByVendor, setGroupByVendor] = useState(true)
   const [sortBy, setSortBy] = useState<'vendor' | 'service' | 'price'>('vendor')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
+  
+  // Filter state
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([])
+  const [selectedTags, setSelectedTags] = useState<string[]>([])
+  const [showFilters, setShowFilters] = useState(false)
 
   const load = async () => {
     setLoading(true)
     setErr(null)
-    let { data, error } = await supabase
-      .from('services')
-      .select('id, name, price, is_active, is_visible_to_users, category, media_urls, vendor_id, is_featured, vendor_profiles(id,business_name)')
-      .order('created_at', { ascending: false })
-      .limit(500)
-    if (error) {
-      // Fallback if is_featured column does not exist yet
-      const fb = await supabase
+    try {
+      // Try to load with all fields including tags
+      let { data, error } = await supabase
         .from('services')
-        .select('id, name, price, is_active, is_visible_to_users, category, media_urls, vendor_id, vendor_profiles(id,business_name)')
+        .select('id, name, price, is_active, is_visible_to_users, category, category_id, tags, media_urls, vendor_id, is_featured, vendor_profiles(id,business_name)')
         .order('created_at', { ascending: false })
         .limit(500)
-      if (fb.error) setErr(`${error.message} | Fallback: ${fb.error.message}`)
-      data = fb.data as any
+      
+      if (error) {
+        // Fallback if tags column doesn't exist yet
+        const fb = await supabase
+          .from('services')
+          .select('id, name, price, is_active, is_visible_to_users, category, category_id, media_urls, vendor_id, is_featured, vendor_profiles(id,business_name)')
+          .order('created_at', { ascending: false })
+          .limit(500)
+        if (fb.error) {
+          // Final fallback without category_id
+          const fb2 = await supabase
+            .from('services')
+            .select('id, name, price, is_active, is_visible_to_users, category, media_urls, vendor_id, vendor_profiles(id,business_name)')
+            .order('created_at', { ascending: false })
+            .limit(500)
+          if (fb2.error) {
+            setErr(`${error.message} | Fallback: ${fb.error.message} | Fallback2: ${fb2.error.message}`)
+          } else {
+            data = fb2.data as any
+          }
+        } else {
+          data = fb.data as any
+        }
+      }
+      
+      // Ensure tags field exists (default to empty array if missing)
+      if (data) {
+        data = data.map((row: any) => ({
+          ...row,
+          tags: row.tags || []
+        }))
+        setRows(data as any)
+      }
+    } catch (e: any) {
+      setErr(e.message || 'Failed to load services')
     }
-    if (data) setRows(data as any)
     setLoading(false)
   }
   useEffect(() => { load() }, [])
+  
+  // Extract unique categories and tags from services (performance optimized)
+  const availableCategories = useMemo(() => {
+    const categories = new Set<string>()
+    rows.forEach(row => {
+      if (row.category) categories.add(row.category)
+    })
+    return Array.from(categories).sort()
+  }, [rows])
+  
+  const availableTags = useMemo(() => {
+    const tags = new Set<string>()
+    rows.forEach(row => {
+      if (row.tags && Array.isArray(row.tags)) {
+        row.tags.forEach(tag => tags.add(tag))
+      }
+    })
+    return Array.from(tags).sort()
+  }, [rows])
+  
+  // Filtered rows based on search and filters (performance optimized)
+  const filteredRows = useMemo(() => {
+    let filtered = rows
+    
+    // Search filter
+    const searchLower = search.trim().toLowerCase()
+    if (searchLower) {
+      filtered = filtered.filter(r =>
+        (r.vendor_profiles?.business_name || '').toLowerCase().includes(searchLower) ||
+        (r.name || '').toLowerCase().includes(searchLower)
+      )
+    }
+    
+    // Category filter (multi-select)
+    if (selectedCategories.length > 0) {
+      filtered = filtered.filter(r => 
+        r.category && selectedCategories.includes(r.category)
+      )
+    }
+    
+    // Tags filter (multi-select)
+    if (selectedTags.length > 0) {
+      filtered = filtered.filter(r => {
+        if (!r.tags || !Array.isArray(r.tags)) return false
+        return selectedTags.some(tag => r.tags!.includes(tag))
+      })
+    }
+    
+    return filtered
+  }, [rows, search, selectedCategories, selectedTags])
+  
+  const toggleCategory = useCallback((category: string) => {
+    setSelectedCategories(prev => 
+      prev.includes(category)
+        ? prev.filter(c => c !== category)
+        : [...prev, category]
+    )
+  }, [])
+  
+  const toggleTag = useCallback((tag: string) => {
+    setSelectedTags(prev => 
+      prev.includes(tag)
+        ? prev.filter(t => t !== tag)
+        : [...prev, tag]
+    )
+  }, [])
+  
+  const clearFilters = useCallback(() => {
+    setSelectedCategories([])
+    setSelectedTags([])
+    setSearch('')
+  }, [])
 
   const toggleFeatured = async (id: string, next: boolean) => {
     setSavingId(id)
@@ -79,7 +185,7 @@ export default function ServicesPage() {
       <div className="bg-white rounded-xl border p-4 md:p-5 mb-4 shadow-sm">
         <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
           {/* Search */}
-          <div className="md:col-span-6">
+          <div className="md:col-span-5">
             <div className="relative">
               <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-gray-400">
                 <SearchIcon className="h-4 w-4" />
@@ -104,8 +210,25 @@ export default function ServicesPage() {
             </div>
           </div>
 
+          {/* Filter Toggle */}
+          <div className="md:col-span-2">
+            <Button
+              variant="outline"
+              onClick={() => setShowFilters(!showFilters)}
+              className="w-full"
+            >
+              <Filter className="h-4 w-4 mr-2" />
+              Filters
+              {(selectedCategories.length > 0 || selectedTags.length > 0) && (
+                <span className="ml-2 bg-blue-500 text-white text-xs rounded-full px-2 py-0.5">
+                  {selectedCategories.length + selectedTags.length}
+                </span>
+              )}
+            </Button>
+          </div>
+
           {/* View mode */}
-          <div className="md:col-span-3">
+          <div className="md:col-span-2">
             <label className="block mb-1 text-xs font-medium text-gray-600">View</label>
             <select
               className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
@@ -145,11 +268,132 @@ export default function ServicesPage() {
             </div>
           </div>
         </div>
+        
+        {/* Filters Panel */}
+        {showFilters && (
+          <div className="mt-4 pt-4 border-t border-gray-200">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-semibold text-gray-700">Filters</h3>
+              {(selectedCategories.length > 0 || selectedTags.length > 0) && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={clearFilters}
+                  className="text-xs"
+                >
+                  Clear All
+                </Button>
+              )}
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Category Filter */}
+              <div>
+                <label className="block mb-2 text-xs font-medium text-gray-600">
+                  Categories ({selectedCategories.length} selected)
+                </label>
+                <div className="max-h-48 overflow-y-auto border border-gray-200 rounded-md p-2 space-y-1">
+                  {availableCategories.length === 0 ? (
+                    <p className="text-xs text-gray-500 py-2">No categories available</p>
+                  ) : (
+                    availableCategories.map(category => (
+                      <label
+                        key={category}
+                        className="flex items-center space-x-2 p-2 hover:bg-gray-50 rounded cursor-pointer"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedCategories.includes(category)}
+                          onChange={() => toggleCategory(category)}
+                          className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                        />
+                        <span className="text-sm text-gray-700">{category}</span>
+                      </label>
+                    ))
+                  )}
+                </div>
+              </div>
+              
+              {/* Tags Filter */}
+              <div>
+                <label className="block mb-2 text-xs font-medium text-gray-600">
+                  Tags / Attributes ({selectedTags.length} selected)
+                </label>
+                <div className="max-h-48 overflow-y-auto border border-gray-200 rounded-md p-2 space-y-1">
+                  {availableTags.length === 0 ? (
+                    <p className="text-xs text-gray-500 py-2">No tags available</p>
+                  ) : (
+                    availableTags.map(tag => (
+                      <label
+                        key={tag}
+                        className="flex items-center space-x-2 p-2 hover:bg-gray-50 rounded cursor-pointer"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedTags.includes(tag)}
+                          onChange={() => toggleTag(tag)}
+                          className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                        />
+                        <span className="text-sm text-gray-700">{tag}</span>
+                      </label>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+            
+            {/* Active Filters Display */}
+            {(selectedCategories.length > 0 || selectedTags.length > 0) && (
+              <div className="mt-3 pt-3 border-t border-gray-200">
+                <div className="flex flex-wrap gap-2">
+                  {selectedCategories.map(category => (
+                    <span
+                      key={category}
+                      className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full"
+                    >
+                      {category}
+                      <button
+                        onClick={() => toggleCategory(category)}
+                        className="hover:bg-blue-200 rounded-full p-0.5"
+                        aria-label={`Remove ${category} filter`}
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </span>
+                  ))}
+                  {selectedTags.map(tag => (
+                    <span
+                      key={tag}
+                      className="inline-flex items-center gap-1 px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full"
+                    >
+                      {tag}
+                      <button
+                        onClick={() => toggleTag(tag)}
+                        className="hover:bg-green-200 rounded-full p-0.5"
+                        aria-label={`Remove ${tag} filter`}
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+      
+      {/* Results Count */}
+      <div className="mb-3 text-sm text-gray-600">
+        Showing {filteredRows.length} of {rows.length} services
+        {(selectedCategories.length > 0 || selectedTags.length > 0) && (
+          <span className="text-blue-600"> (filtered)</span>
+        )}
       </div>
 
       {groupByVendor ? (
         <VendorsGrouped
-          rows={rows}
+          rows={filteredRows}
           search={search}
           sortBy={sortBy}
           sortDir={sortDir}
@@ -158,7 +402,7 @@ export default function ServicesPage() {
         />
       ) : (
         <FlatList
-          rows={rows}
+          rows={filteredRows}
           search={search}
           sortBy={sortBy}
           sortDir={sortDir}

@@ -135,6 +135,120 @@ CREATE TRIGGER trigger_create_payment_milestones
   FOR EACH ROW
   EXECUTE FUNCTION create_booking_payment_milestones();
 
+-- Helper: auto release a specific milestone to vendor wallet (no commission)
+CREATE OR REPLACE FUNCTION auto_release_milestone_to_wallet(
+  p_booking_id UUID,
+  p_milestone_type TEXT
+)
+RETURNS VOID AS $$
+DECLARE
+  v_milestone payment_milestones%ROWTYPE;
+  v_booking   bookings%ROWTYPE;
+  v_wallet    vendor_wallets%ROWTYPE;
+  v_new_balance DECIMAL(12,2);
+  v_new_total   DECIMAL(12,2);
+  v_escrow_txn_id UUID;
+BEGIN
+  -- Get milestone that is currently held in escrow
+  SELECT *
+  INTO v_milestone
+  FROM payment_milestones
+  WHERE booking_id = p_booking_id
+    AND milestone_type = p_milestone_type
+  FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RETURN;
+  END IF;
+
+  -- Only release milestones that are actually held in escrow
+  IF v_milestone.status <> 'held_in_escrow' THEN
+    RETURN;
+  END IF;
+
+  -- Get booking to find vendor
+  SELECT *
+  INTO v_booking
+  FROM bookings
+  WHERE id = v_milestone.booking_id;
+
+  IF NOT FOUND OR v_booking.vendor_id IS NULL THEN
+    RETURN;
+  END IF;
+
+  -- Ensure vendor wallet exists (upsert style)
+  INSERT INTO vendor_wallets (vendor_id)
+  VALUES (v_booking.vendor_id)
+  ON CONFLICT (vendor_id) DO UPDATE
+  SET updated_at = NOW()
+  RETURNING * INTO v_wallet;
+
+  -- Create escrow transaction record (simple release, no commission)
+  INSERT INTO escrow_transactions (
+    booking_id,
+    milestone_id,
+    transaction_type,
+    amount,
+    commission_amount,
+    vendor_amount,
+    status,
+    notes
+  ) VALUES (
+    v_milestone.booking_id,
+    v_milestone.id,
+    'release',
+    v_milestone.amount,
+    0,
+    v_milestone.amount,
+    'completed',
+    'Auto-release of ' || v_milestone.milestone_type || ' milestone to vendor wallet'
+  )
+  RETURNING id INTO v_escrow_txn_id;
+
+  -- Update milestone status to released
+  UPDATE payment_milestones
+  SET status = 'released',
+      escrow_released_at = NOW(),
+      updated_at = NOW()
+  WHERE id = v_milestone.id;
+
+  -- Update vendor wallet balances
+  v_new_balance := v_wallet.balance + v_milestone.amount;
+  v_new_total   := v_wallet.total_earned + v_milestone.amount;
+
+  UPDATE vendor_wallets
+  SET balance = v_new_balance,
+      total_earned = v_new_total,
+      updated_at = NOW()
+  WHERE id = v_wallet.id;
+
+  -- Insert wallet transaction
+  INSERT INTO wallet_transactions (
+    wallet_id,
+    vendor_id,
+    txn_type,
+    source,
+    amount,
+    balance_after,
+    booking_id,
+    milestone_id,
+    escrow_transaction_id,
+    notes
+  ) VALUES (
+    v_wallet.id,
+    v_booking.vendor_id,
+    'credit',
+    'milestone_release',
+    v_milestone.amount,
+    v_new_balance,
+    v_milestone.booking_id,
+    v_milestone.id,
+    v_escrow_txn_id,
+    'Auto-credited ' || v_milestone.milestone_type || ' milestone to vendor wallet'
+  );
+END;
+$$ LANGUAGE plpgsql;
+
 -- Function to update milestone status
 CREATE OR REPLACE FUNCTION update_milestone_status(
   p_booking_id UUID,
@@ -145,18 +259,45 @@ CREATE OR REPLACE FUNCTION update_milestone_status(
   p_gateway_payment_id TEXT DEFAULT NULL
 )
 RETURNS BOOLEAN AS $$
+DECLARE
+  v_prev_status TEXT;
 BEGIN
+  -- Remember previous status so we can detect transitions
+  SELECT status
+  INTO v_prev_status
+  FROM payment_milestones
+  WHERE booking_id = p_booking_id
+    AND milestone_type = p_milestone_type;
+
   UPDATE payment_milestones
   SET 
     status = p_status,
     payment_id = COALESCE(p_payment_id, payment_id),
     gateway_order_id = COALESCE(p_gateway_order_id, gateway_order_id),
     gateway_payment_id = COALESCE(p_gateway_payment_id, gateway_payment_id),
-    escrow_held_at = CASE WHEN p_status = 'held_in_escrow' THEN NOW() ELSE escrow_held_at END,
+    escrow_held_at = CASE WHEN p_status = 'held_in_escrow' AND escrow_held_at IS NULL THEN NOW() ELSE escrow_held_at END,
     updated_at = NOW()
   WHERE booking_id = p_booking_id AND milestone_type = p_milestone_type;
   
-  RETURN FOUND;
+  IF NOT FOUND THEN
+    RETURN FALSE;
+  END IF;
+
+  -- When a milestone is newly moved into escrow, trigger automatic wallet releases
+  IF v_prev_status IS DISTINCT FROM 'held_in_escrow'
+     AND p_status = 'held_in_escrow' THEN
+    -- If ARRIVAL (50%) is paid, release ADVANCE (20%) to vendor wallet
+    IF p_milestone_type = 'arrival' THEN
+      PERFORM auto_release_milestone_to_wallet(p_booking_id, 'advance');
+    END IF;
+
+    -- If COMPLETION (30%) is paid, release ARRIVAL (50%) to vendor wallet
+    IF p_milestone_type = 'completion' THEN
+      PERFORM auto_release_milestone_to_wallet(p_booking_id, 'arrival');
+    END IF;
+  END IF;
+  
+  RETURN TRUE;
 END;
 $$ LANGUAGE plpgsql;
 
@@ -198,6 +339,7 @@ GRANT SELECT, INSERT, UPDATE ON escrow_transactions TO authenticated;
 GRANT SELECT, INSERT, UPDATE ON order_notifications TO authenticated;
 GRANT EXECUTE ON FUNCTION create_booking_payment_milestones() TO authenticated;
 GRANT EXECUTE ON FUNCTION update_milestone_status(UUID, TEXT, TEXT, TEXT, TEXT, TEXT) TO authenticated;
+GRANT EXECUTE ON FUNCTION auto_release_milestone_to_wallet(UUID, TEXT) TO authenticated;
 GRANT EXECUTE ON FUNCTION get_booking_with_milestones(UUID) TO authenticated;
 
 

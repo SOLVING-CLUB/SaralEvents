@@ -14,9 +14,12 @@ class _SupportScreenState extends State<SupportScreen> {
   final _subjectController = TextEditingController();
   final _messageController = TextEditingController();
   final _categoryController = TextEditingController();
+  final _orderIdController = TextEditingController();
+  final _contactNumberController = TextEditingController();
   
   bool _isSubmitting = false;
   String? _selectedCategory;
+  String? _contactNumber; // Will be loaded from user profile or can be entered manually
 
   final List<String> _categories = [
     'Booking Issue',
@@ -29,11 +32,55 @@ class _SupportScreenState extends State<SupportScreen> {
   ];
 
   @override
+  void initState() {
+    super.initState();
+    _loadUserContactNumber();
+  }
+
+  Future<void> _loadUserContactNumber() async {
+    try {
+      final userId = Supabase.instance.client.auth.currentUser?.id;
+      if (userId != null) {
+        final response = await Supabase.instance.client
+            .from('user_profiles')
+            .select('phone_number')
+            .eq('user_id', userId)
+            .maybeSingle();
+        
+        if (mounted && response != null && response['phone_number'] != null) {
+          setState(() {
+            _contactNumber = response['phone_number'] as String?;
+            _contactNumberController.text = _contactNumber ?? '';
+          });
+        }
+      }
+    } catch (e) {
+      // Silently fail - user can enter manually
+    }
+  }
+
+  @override
   void dispose() {
     _subjectController.dispose();
     _messageController.dispose();
     _categoryController.dispose();
+    _orderIdController.dispose();
+    _contactNumberController.dispose();
     super.dispose();
+  }
+
+  // Validate UUID format (8-4-4-4-12 hexadecimal characters)
+  String? _validateOrderId(String? value) {
+    if (value == null || value.trim().isEmpty) {
+      return null; // Order ID is optional
+    }
+    final trimmed = value.trim();
+    // UUID format: 8-4-4-4-12 hexadecimal characters
+    final uuidPattern = RegExp(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$');
+    if (!uuidPattern.hasMatch(trimmed)) {
+      return 'Please enter a valid Order ID format (e.g., 550e8400-e29b-41d4-a716-446655440000)';
+    }
+    return null;
   }
 
   Future<void> _submitSupportRequest() async {
@@ -55,15 +102,30 @@ class _SupportScreenState extends State<SupportScreen> {
         throw Exception('User not authenticated');
       }
 
-      // Create support ticket
-      await Supabase.instance.client.from('support_tickets').insert({
+      // Prepare ticket data
+      final ticketData = {
         'user_id': userId,
         'category': _selectedCategory,
         'subject': _subjectController.text,
         'message': _messageController.text,
         'status': 'open',
         'created_at': DateTime.now().toIso8601String(),
-      });
+      };
+
+      // Add order_id if provided
+      final orderId = _orderIdController.text.trim();
+      if (orderId.isNotEmpty) {
+        ticketData['order_id'] = orderId;
+      }
+
+      // Add contact_number if provided
+      final contactNumber = _contactNumberController.text.trim();
+      if (contactNumber.isNotEmpty) {
+        ticketData['contact_number'] = contactNumber;
+      }
+
+      // Create support ticket
+      await Supabase.instance.client.from('support_tickets').insert(ticketData);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -77,6 +139,8 @@ class _SupportScreenState extends State<SupportScreen> {
         _subjectController.clear();
         _messageController.clear();
         _categoryController.clear();
+        _orderIdController.clear();
+        // Keep contact number as it's from profile
         setState(() {
           _selectedCategory = null;
         });
@@ -239,6 +303,43 @@ class _SupportScreenState extends State<SupportScreen> {
                           }
                           return null;
                         },
+                      ),
+
+                      const SizedBox(height: 16),
+
+                      // Contact Number
+                      TextFormField(
+                        controller: _contactNumberController,
+                        decoration: const InputDecoration(
+                          labelText: 'Contact Number',
+                          hintText: 'Your contact number for support',
+                          border: OutlineInputBorder(),
+                          prefixIcon: Icon(Icons.phone),
+                        ),
+                        keyboardType: TextInputType.phone,
+                        validator: (value) {
+                          if (value != null && value.trim().isNotEmpty) {
+                            final digits = value.replaceAll(RegExp(r'[^0-9]'), '');
+                            if (digits.length < 10) {
+                              return 'Please enter a valid phone number';
+                            }
+                          }
+                          return null;
+                        },
+                      ),
+
+                      const SizedBox(height: 16),
+
+                      // Order ID
+                      TextFormField(
+                        controller: _orderIdController,
+                        decoration: const InputDecoration(
+                          labelText: 'Order ID (Optional)',
+                          hintText: 'Enter Order ID if related to an order',
+                          border: OutlineInputBorder(),
+                          prefixIcon: Icon(Icons.receipt_long),
+                        ),
+                        validator: _validateOrderId,
                       ),
 
                       const SizedBox(height: 16),

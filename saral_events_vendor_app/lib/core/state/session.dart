@@ -117,7 +117,8 @@ class AppSession extends ChangeNotifier {
 
   Future<void> signInWithGoogleNative() async {
     try {
-      const serverClientId = '314736791162-8pq9o3hr42ibap3oesifibeotdamgdj2.apps.googleusercontent.com';
+      // Web client ID configured in Supabase Google provider
+      const serverClientId = '460598868043-tk6pnifpvu24b8b5pm1h5vdoin6vqhr3.apps.googleusercontent.com';
 
       final signIn = GoogleSignIn(
         serverClientId: serverClientId,

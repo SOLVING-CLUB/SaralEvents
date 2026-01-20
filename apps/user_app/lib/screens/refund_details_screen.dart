@@ -315,7 +315,7 @@ class _RefundDetailsScreenState extends State<RefundDetailsScreen> {
                             ],
                           ),
                         );
-                      }).toList(),
+                      }),
                     ],
                   ),
                 ),

@@ -18,6 +18,7 @@ class ServiceItem {
   final bool enabled;
   final String vendorId; // Add vendor ID for user app
   final String vendorName; // Add vendor name for user app
+  final String? vendorCategory; // Vendor category (Photography, Decoration, etc.)
   final int? capacityMin;
   final int? capacityMax;
   final int? parkingSpaces;
@@ -38,6 +39,7 @@ class ServiceItem {
     this.enabled = true,
     required this.vendorId,
     required this.vendorName,
+    this.vendorCategory,
     this.capacityMin,
     this.capacityMax,
     this.parkingSpaces,

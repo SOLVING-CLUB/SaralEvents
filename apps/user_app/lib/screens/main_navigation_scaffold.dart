@@ -7,7 +7,7 @@ import 'invitations_list_screen.dart';
 import '../widgets/wishlist_manager.dart';
 import '../core/wishlist_notifier.dart';
 import '../checkout/checkout_state.dart';
-import '../checkout/flow.dart';
+import '../checkout/booking_flow.dart';
 import 'package:provider/provider.dart';
 
 class MainNavigationScaffold extends StatefulWidget {
@@ -38,26 +38,35 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
         body: _tabs[_currentIndex],
         floatingActionButton: Consumer<CheckoutState>(
           builder: (context, checkout, _) {
+            // Prevent rebuilds from affecting navigation stack
+            // Only rebuild the FAB, not the entire scaffold
             final count = checkout.items.length;
+            debugPrint('🛒 MainNavigationScaffold: Cart has $count item(s)');
             // Hide cart button on profile page (index 4)
-            if (count == 0 || _currentIndex == 4) return const SizedBox.shrink();
+            if (count == 0 || _currentIndex == 4) {
+              if (count == 0) {
+                debugPrint('   → Hiding cart button: cart is empty');
+              } else {
+                debugPrint('   → Hiding cart button: on profile page');
+              }
+              return const SizedBox.shrink();
+            }
+            debugPrint('   → Showing cart button with $count item(s)');
             return Stack(
               clipBehavior: Clip.none,
               children: [
                 FloatingActionButton.extended(
                   onPressed: () {
                     if (checkout.items.isEmpty) return;
+                    // Navigate to clean booking flow
                     Navigator.of(context).push(
                       MaterialPageRoute(
-                        builder: (_) => CheckoutFlow(
-                          // initialItem is not used inside the flow, but required by ctor
-                          initialItem: checkout.items.first,
-                        ),
+                        builder: (_) => const BookingFlow(),
                       ),
                     );
                   },
-                  backgroundColor: const Color(0xFFFDBB42),
-                  foregroundColor: Colors.black87,
+                  backgroundColor: Theme.of(context).colorScheme.primary,
+                  foregroundColor: Theme.of(context).colorScheme.onPrimary,
                   icon: const Icon(Icons.shopping_cart),
                   label: Text('Cart ($count)'),
                 ),
@@ -68,9 +77,12 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
                   child: Container(
                     padding: const EdgeInsets.all(4),
                     decoration: BoxDecoration(
-                      color: Colors.redAccent,
+                      color: Theme.of(context).colorScheme.error,
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.white, width: 1.5),
+                      border: Border.all(
+                        color: Theme.of(context).colorScheme.surface,
+                        width: 1.5,
+                      ),
                     ),
                     constraints: const BoxConstraints(
                       minWidth: 18,
@@ -79,8 +91,8 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
                     child: Center(
                       child: Text(
                         count > 9 ? '9+' : '$count',
-                        style: const TextStyle(
-                          color: Colors.white,
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.onError,
                           fontSize: 10,
                           fontWeight: FontWeight.bold,
                         ),
@@ -102,32 +114,32 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
               onTap: (index) => setState(() => _currentIndex = index),
               selectedLabelStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
               unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w400, fontSize: 12),
-              selectedItemColor: const Color(0xFFFDBB42),
-              unselectedItemColor: Colors.grey.shade600,
-              items: const [
+              selectedItemColor: Theme.of(context).colorScheme.primary,
+              unselectedItemColor: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+              items: [
                 BottomNavigationBarItem(
-                  icon: Icon(Icons.home),
-                  activeIcon: Icon(Icons.home, color: Color(0xFFFDBB42)),
+                  icon: const Icon(Icons.home),
+                  activeIcon: Icon(Icons.home, color: Theme.of(context).colorScheme.primary),
                   label: 'Home',
                 ),
                 BottomNavigationBarItem(
-                  icon: Icon(Icons.event_note),
-                  activeIcon: Icon(Icons.event_note, color: Color(0xFFFDBB42)),
+                  icon: const Icon(Icons.event_note),
+                  activeIcon: Icon(Icons.event_note, color: Theme.of(context).colorScheme.primary),
                   label: 'Planning',
                 ),
                 BottomNavigationBarItem(
-                  icon: Icon(Icons.card_giftcard),
-                  activeIcon: Icon(Icons.card_giftcard, color: Color(0xFFFDBB42)),
+                  icon: const Icon(Icons.card_giftcard),
+                  activeIcon: Icon(Icons.card_giftcard, color: Theme.of(context).colorScheme.primary),
                   label: 'Invitations',
                 ),
                 BottomNavigationBarItem(
-                  icon: Icon(Icons.favorite_border),
-                  activeIcon: Icon(Icons.favorite, color: Color(0xFFFDBB42)),
+                  icon: const Icon(Icons.favorite_border),
+                  activeIcon: Icon(Icons.favorite, color: Theme.of(context).colorScheme.primary),
                   label: 'Wishlist',
                 ),
                 BottomNavigationBarItem(
-                  icon: Icon(Icons.person),
-                  activeIcon: Icon(Icons.person, color: Color(0xFFFDBB42)),
+                  icon: const Icon(Icons.person),
+                  activeIcon: Icon(Icons.person, color: Theme.of(context).colorScheme.primary),
                   label: 'Profile',
                 ),
               ],

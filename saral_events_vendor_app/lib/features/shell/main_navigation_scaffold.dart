@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../../core/ui/app_icons.dart';
 import '../dashboard/dashboard_screen.dart';
 import '../orders/orders_screen.dart';
-import '../chat/chat_screen.dart';
+import '../wallet/wallet_screen.dart';
 import '../services/services_screen.dart';
 import '../profile/profile_screen.dart';
 
@@ -31,7 +31,7 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
     _tabs.addAll([
       DashboardScreen(onNavigateToTab: _changeTab),
       OrdersScreen(),
-      ChatScreen(),
+      WalletScreen(),
       ServicesScreen(),
       ProfileScreen(),
     ]);
@@ -86,9 +86,9 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
               label: 'Orders',
             ),
             BottomNavigationBarItem(
-              icon: SvgIcon(AppIcons.chatLineSvg, size: 22),
-              activeIcon: SvgIcon(AppIcons.chatSolidSvg, size: 22),
-              label: 'Chat',
+              icon: Icon(Icons.account_balance_wallet_outlined, size: 22),
+              activeIcon: Icon(Icons.account_balance_wallet, size: 24),
+              label: 'Wallet',
             ),
             BottomNavigationBarItem(
               icon: SvgIcon(AppIcons.catalogLineSvg, size: 22),

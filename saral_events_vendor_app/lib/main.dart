@@ -1,10 +1,35 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'app.dart';
 import 'core/supabase/supabase_config.dart';
+import 'services/push_notification_service.dart';
+
+// Top-level background message handler (must be top-level)
+@pragma('vm:entry-point')
+Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  debugPrint('📬 [Vendor] Background message handler: ${message.messageId}');
+  debugPrint('   Title: ${message.notification?.title}');
+  debugPrint('   Body: ${message.notification?.body}');
+  debugPrint('   Data: ${message.data}');
+}
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  
+  // Initialize Firebase
+  try {
+    await Firebase.initializeApp();
+    debugPrint('✅ [Vendor] Firebase initialized');
+    
+    // Set up background message handler
+    FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+  } catch (e) {
+    debugPrint('⚠️ [Vendor] Firebase initialization error: $e');
+    debugPrint('   Push notifications may not work. Check google-services.json configuration.');
+  }
+  
   await Supabase.initialize(
     url: supabaseUrl,
     anonKey: supabaseAnonKey,

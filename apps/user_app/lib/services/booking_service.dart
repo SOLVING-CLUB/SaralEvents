@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:convert';
-import '../models/service_models.dart';
 import '../core/cache/simple_cache.dart';
 import 'refund_service.dart';
 
@@ -19,6 +18,7 @@ class BookingService {
     required TimeOfDay? bookingTime,
     required double amount,
     String? notes,
+    String? locationLink,
   }) async {
     try {
       final userId = _supabase.auth.currentUser?.id;
@@ -85,13 +85,21 @@ class BookingService {
             : null,
         'amount': amount,
         'notes': notes,
-        'status': 'confirmed', // After payment, booking is automatically confirmed (no vendor acceptance needed)
-        'milestone_status': 'accepted', // Auto-accepted on payment
-        'vendor_accepted_at': DateTime.now().toIso8601String(), // Auto-set timestamp on payment
+        'location_link': locationLink,
+        'status': 'pending', // Waiting for vendor acceptance
+        'milestone_status': 'created', // Initial state - vendor must accept or reject
+        'vendor_accepted_at': null, // Will be set when vendor accepts
       };
 
-      print('Booking data: $bookingData');
-      print('Attempting to insert booking into database...');
+      print('📋 BookingService: Creating booking with data:');
+      print('   status: ${bookingData['status']}');
+      print('   milestone_status: ${bookingData['milestone_status']}');
+      print('   vendor_accepted_at: ${bookingData['vendor_accepted_at']}');
+      print('   service_id: $serviceId');
+      print('   vendor_id: $vendorId');
+      print('   amount: $amount');
+      print('📋 Full booking data: $bookingData');
+      print('📋 Attempting to insert booking into database...');
 
       List<Map<String, dynamic>> result;
       try {
@@ -114,14 +122,45 @@ class BookingService {
         print('Error type: ${insertError.runtimeType}');
         print('Error details: ${insertError.toString()}');
         
+        // Extract detailed error information
+        final errorStr = insertError.toString();
+        print('📋 Booking data that failed:');
+        print('   user_id: ${bookingData['user_id']}');
+        print('   service_id: ${bookingData['service_id']}');
+        print('   vendor_id: ${bookingData['vendor_id']}');
+        print('   status: ${bookingData['status']} (type: ${bookingData['status'].runtimeType})');
+        print('   milestone_status: ${bookingData['milestone_status']} (type: ${bookingData['milestone_status'].runtimeType})');
+        print('   booking_date: ${bookingData['booking_date']}');
+        print('   booking_time: ${bookingData['booking_time']}');
+        print('   amount: ${bookingData['amount']}');
+        
         // Check for specific error types
-        if (insertError.toString().contains('violates check constraint')) {
+        if (errorStr.contains('violates check constraint')) {
           print('⚠️ Constraint violation detected!');
-          print('Check if status="confirmed" and milestone_status="accepted" are allowed');
+          if (errorStr.contains('milestone_status')) {
+            print('   → milestone_status constraint violation');
+            print('   → Attempted value: ${bookingData['milestone_status']}');
+            print('   → Allowed values should be: created, accepted, vendor_traveling, vendor_arrived, arrival_confirmed, setup_completed, setup_confirmed, completed, cancelled, or NULL');
+          } else if (errorStr.contains('status')) {
+            print('   → status constraint violation');
+            print('   → Attempted value: ${bookingData['status']}');
+            print('   → Allowed values should be: pending, confirmed, completed, cancelled');
+          } else {
+            print('   → Unknown constraint violation - check database constraints');
+          }
         }
-        if (insertError.toString().contains('permission denied') || insertError.toString().contains('RLS')) {
+        if (errorStr.contains('permission denied') || errorStr.contains('RLS') || errorStr.contains('row-level security')) {
           print('⚠️ RLS policy issue detected!');
-          print('Check if user has INSERT permission on bookings table');
+          print('   → Check if user has INSERT permission on bookings table');
+          print('   → User ID: $userId');
+        }
+        if (errorStr.contains('foreign key')) {
+          print('⚠️ Foreign key constraint violation!');
+          print('   → Check if service_id, vendor_id, or user_id are valid');
+        }
+        if (errorStr.contains('not null')) {
+          print('⚠️ NOT NULL constraint violation!');
+          print('   → Check if all required fields are provided');
         }
         
         return false;
@@ -130,10 +169,22 @@ class BookingService {
       final createdBooking = result.first;
       final createdBookingId = createdBooking['id'] as String;
       final createdUserId = createdBooking['user_id'] as String;
+      final createdStatus = createdBooking['status'] as String?;
+      final createdMilestoneStatus = createdBooking['milestone_status'] as String?;
       
-      print('Created booking ID: $createdBookingId');
-      print('Created booking user_id: $createdUserId');
-      print('Current auth user_id: $userId');
+      print('✅ Created booking ID: $createdBookingId');
+      print('✅ Created booking user_id: $createdUserId');
+      print('✅ Current auth user_id: $userId');
+      print('✅ Created booking status: $createdStatus');
+      print('✅ Created booking milestone_status: $createdMilestoneStatus');
+      
+      // Verify the booking was created with correct status
+      if (createdStatus != 'pending') {
+        print('⚠️ WARNING: Booking created with status="$createdStatus" instead of "pending"!');
+      }
+      if (createdMilestoneStatus != 'created') {
+        print('⚠️ WARNING: Booking created with milestone_status="$createdMilestoneStatus" instead of "created"!');
+      }
       
       // Verify user_id matches
       if (createdUserId != userId) {
@@ -160,10 +211,18 @@ class BookingService {
       }
 
       // Force cache invalidation - clear all booking-related caches
+      // This ensures availability slots are updated immediately after booking
+      final bookingDateStr = bookingDate.toIso8601String().split('T')[0];
+      final cacheKey = 'timeslots:$serviceId:$bookingDateStr';
+      CacheManager.instance.invalidate(cacheKey);
       CacheManager.instance.invalidateByPrefix('availability:$serviceId');
+      CacheManager.instance.invalidateByPrefix('timeslots:$serviceId');
       CacheManager.instance.invalidate('user:bookings');
       CacheManager.instance.invalidate('user:booking-stats');
       CacheManager.instance.invalidateByPrefix('user:bookings');
+      
+      print('🗑️ Invalidated cache for: $cacheKey');
+      print('🗑️ Invalidated all availability caches for service: $serviceId');
 
       return true;
     } catch (e) {
@@ -283,7 +342,7 @@ class BookingService {
         print('Querying bookings table...');
         final bookingsResult = await _supabase
             .from('bookings')
-            .select('id, service_id, vendor_id, booking_date, booking_time, status, amount, notes, created_at, user_id')
+            .select('id, service_id, vendor_id, booking_date, booking_time, status, milestone_status, amount, notes, created_at, user_id, vendor_accepted_at, vendor_arrived_at, arrival_confirmed_at, setup_completed_at, setup_confirmed_at, completed_at')
             .eq('user_id', userId)
             .order('created_at', ascending: false);
         
@@ -332,9 +391,16 @@ class BookingService {
             'booking_date': booking['booking_date'],
             'booking_time': booking['booking_time'],
             'status': booking['status'],
+            'milestone_status': booking['milestone_status'],
             'amount': booking['amount'],
             'notes': booking['notes'],
             'created_at': booking['created_at'],
+            'vendor_accepted_at': booking['vendor_accepted_at'],
+            'vendor_arrived_at': booking['vendor_arrived_at'],
+            'arrival_confirmed_at': booking['arrival_confirmed_at'],
+            'setup_completed_at': booking['setup_completed_at'],
+            'setup_confirmed_at': booking['setup_confirmed_at'],
+            'completed_at': booking['completed_at'],
           });
         }
       } catch (e) {
@@ -465,8 +531,31 @@ class BookingService {
         };
       }
 
+      // Get booking details to invalidate availability cache
+      final bookingDetails = await _supabase
+          .from('bookings')
+          .select('service_id, booking_date')
+          .eq('id', bookingId)
+          .maybeSingle();
+      
       // Invalidate related caches
       CacheManager.instance.invalidate('user:bookings');
+      CacheManager.instance.invalidate('user:booking-stats');
+      CacheManager.instance.invalidateByPrefix('user:bookings');
+      
+      // Invalidate availability cache so the slot becomes available again
+      if (bookingDetails != null) {
+        final serviceId = bookingDetails['service_id'] as String?;
+        final bookingDate = bookingDetails['booking_date'] as String?;
+        if (serviceId != null && bookingDate != null) {
+          final cacheKey = 'timeslots:$serviceId:$bookingDate';
+          CacheManager.instance.invalidate(cacheKey);
+          CacheManager.instance.invalidateByPrefix('availability:$serviceId');
+          CacheManager.instance.invalidateByPrefix('timeslots:$serviceId');
+          print('🗑️ Invalidated availability cache after cancellation: $cacheKey');
+          print('   Slot should now be available again for service $serviceId on date $bookingDate');
+        }
+      }
 
       return {
         'success': true,

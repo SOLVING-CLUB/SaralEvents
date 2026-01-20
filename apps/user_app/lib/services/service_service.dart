@@ -31,6 +31,7 @@ class ServiceService {
             final vendorProfile = row['vendor_profiles'];
             final vendorId = vendorProfile['id'] ?? '';
             final vendorName = vendorProfile['business_name'] ?? 'Unknown Vendor';
+            final vendorCategory = vendorProfile['category'] as String?;
             return ServiceItem(
               id: row['id'],
               categoryId: row['category_id'],
@@ -45,6 +46,7 @@ class ServiceService {
               enabled: row['is_active'] ?? true,
               vendorId: vendorId,
               vendorName: vendorName,
+              vendorCategory: vendorCategory,
               capacityMin: row['capacity_min'] as int?,
               capacityMax: row['capacity_max'] as int?,
               parkingSpaces: row['parking_spaces'] as int?,
@@ -111,6 +113,7 @@ class ServiceService {
           .order('created_at', ascending: false);
           return result.map((row) {
             final vendorProfile = row['vendor_profiles'];
+            final vendorCategory = vendorProfile['category'] as String?;
             return ServiceItem(
               id: row['id'],
               categoryId: row['category_id'],
@@ -125,6 +128,7 @@ class ServiceService {
               enabled: row['is_active'] ?? true,
               vendorId: vendorProfile['id'] ?? '',
               vendorName: vendorProfile['business_name'] ?? 'Unknown Vendor',
+              vendorCategory: vendorCategory,
               capacityMin: row['capacity_min'] as int?,
               capacityMax: row['capacity_max'] as int?,
               parkingSpaces: row['parking_spaces'] as int?,
@@ -167,6 +171,7 @@ class ServiceService {
           .order('created_at', ascending: false);
           return result.map((row) {
             final vendorProfile = row['vendor_profiles'];
+            final vendorCategory = vendorProfile['category'] as String?;
             return ServiceItem(
               id: row['id'],
               categoryId: row['category_id'],
@@ -181,6 +186,7 @@ class ServiceService {
               enabled: row['is_active'] ?? true,
               vendorId: vendorProfile['id'] ?? '',
               vendorName: vendorProfile['business_name'] ?? 'Unknown Vendor',
+              vendorCategory: vendorCategory,
               capacityMin: row['capacity_min'] as int?,
               capacityMax: row['capacity_max'] as int?,
               parkingSpaces: row['parking_spaces'] as int?,

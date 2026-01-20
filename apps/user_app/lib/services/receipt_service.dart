@@ -1,6 +1,5 @@
 // ignore_for_file: uri_does_not_exist, undefined_identifier
 import 'dart:convert';
-import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:pdf/widgets.dart' as pw;

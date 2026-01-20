@@ -110,7 +110,7 @@ class EventsSection extends StatelessWidget {
                           colors: _getEventGradientColors(eventType.id),
                         ),
                       ),
-                      child: _buildEventImage(eventType),
+                      child: _buildEventImage(context, eventType),
                     ),
                     
                     // Gradient overlay
@@ -134,7 +134,7 @@ class EventsSection extends StatelessWidget {
                       child: Container(
                         padding: const EdgeInsets.all(8),
                         decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.9),
+                          color: Theme.of(context).colorScheme.surface.withOpacity(0.9),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Icon(
@@ -152,15 +152,15 @@ class EventsSection extends StatelessWidget {
                       right: 12,
                       child: Text(
                         eventType.name,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.w700,
-                          color: Colors.white,
+                          color: Theme.of(context).colorScheme.onSurface,
                           shadows: [
                             Shadow(
-                              offset: Offset(0, 1),
+                              offset: const Offset(0, 1),
                               blurRadius: 3,
-                              color: Colors.black26,
+                              color: Theme.of(context).colorScheme.shadow.withOpacity(0.26),
                             ),
                           ],
                         ),
@@ -176,10 +176,9 @@ class EventsSection extends StatelessWidget {
               child: Text(
                 eventType.description,
                 textAlign: TextAlign.start,
-                style: TextStyle(
-                  fontSize: 14,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   fontWeight: FontWeight.w500,
-                  color: Colors.grey.shade600,
+                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
                 ),
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
@@ -191,14 +190,14 @@ class EventsSection extends StatelessWidget {
     );
   }
 
-  Widget _buildEventImage(EventType eventType) {
+  Widget _buildEventImage(BuildContext context, EventType eventType) {
     // For now, we'll use a placeholder with icon
     // In production, you would load actual images
     return Center(
       child: Icon(
         _getEventIcon(eventType.iconName),
         size: 60,
-        color: Colors.white.withValues(alpha: 0.8),
+        color: Theme.of(context).colorScheme.surface.withOpacity(0.8),
       ),
     );
   }

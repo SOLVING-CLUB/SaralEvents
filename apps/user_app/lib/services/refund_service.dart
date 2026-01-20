@@ -389,6 +389,8 @@ class RefundService {
       final milestones = milestonesResult as List<dynamic>;
 
       // Create refund record
+      // IMPORTANT: Refunds are created with status 'pending' and require admin approval
+      // Admin must release the refund in the admin portal for it to be completed
       final refundResult = await _supabase
           .from('refunds')
           .insert({
@@ -399,7 +401,7 @@ class RefundService {
             'refund_percentage': calculation.refundPercentage,
             'reason': calculation.reason,
             'breakdown': calculation.breakdown,
-            'status': 'pending',
+            'status': 'pending', // Always starts as pending - requires admin approval
             'admin_notes': adminNotes,
             'created_at': DateTime.now().toIso8601String(),
           })

@@ -13,6 +13,8 @@ import '../../features/shell/main_navigation_scaffold.dart';
 import '../../features/profile/business_details_screen.dart';
 import '../../features/profile/documents_screen.dart';
 import '../../features/wallet/wallet_screen.dart';
+import '../../features/orders/order_details_screen.dart';
+import '../../features/help/help_support_screen.dart';
 
 class AppRouter {
   static GoRouter create(AppSession session) {
@@ -107,11 +109,45 @@ class AppRouter {
         ),
         GoRoute(path: '/auth/forgot', builder: (_, __) => const ForgotPasswordScreen()),
         GoRoute(path: '/auth/reset', builder: (_, __) => const ResetPasswordScreen()),
-        GoRoute(path: '/vendor/setup', builder: (_, __) => const VendorSetupFlow()),
-        GoRoute(path: '/app', builder: (_, __) => const MainNavigationScaffold()),
+        GoRoute(
+          path: '/vendor/setup',
+          redirect: (ctx, state) {
+            final s = Provider.of<AppSession>(ctx, listen: false);
+            // If vendor setup is complete and user is authenticated, go to app
+            if (s.isAuthenticated && s.isVendorSetupComplete) {
+              return '/app';
+            }
+            return null;
+          },
+          builder: (_, __) => const VendorSetupFlow(),
+        ),
+        GoRoute(
+          path: '/app',
+          redirect: (ctx, state) {
+            final s = Provider.of<AppSession>(ctx, listen: false);
+            // Only redirect if not authenticated or vendor setup incomplete
+            // Don't redirect if already on /app route
+            if (!s.isAuthenticated) {
+              return '/auth/pre';
+            }
+            if (!s.isVendorSetupComplete) {
+              return '/vendor/setup';
+            }
+            return null; // Stay on /app
+          },
+          builder: (_, __) => const MainNavigationScaffold(),
+        ),
         GoRoute(path: '/app/business-details', builder: (_, __) => const BusinessDetailsScreen()),
         GoRoute(path: '/app/documents', builder: (_, __) => const DocumentsScreen()),
         GoRoute(path: '/app/wallet', builder: (_, __) => const WalletScreen()),
+        GoRoute(path: '/app/help', builder: (_, __) => const HelpSupportScreen()),
+        GoRoute(
+          path: '/app/orders/:bookingId',
+          builder: (context, state) {
+            final bookingId = state.pathParameters['bookingId'] ?? '';
+            return OrderDetailsScreen(bookingId: bookingId);
+          },
+        ),
       ],
     );
   }

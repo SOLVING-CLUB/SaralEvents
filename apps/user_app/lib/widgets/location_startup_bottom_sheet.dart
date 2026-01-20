@@ -177,7 +177,7 @@ class _LocationStartupBottomSheetState extends State<LocationStartupBottomSheet>
               height: 4,
               margin: const EdgeInsets.only(top: 12, bottom: 8),
               decoration: BoxDecoration(
-                color: Colors.grey[300],
+                color: Theme.of(context).colorScheme.surfaceContainerHighest,
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
@@ -192,9 +192,9 @@ class _LocationStartupBottomSheetState extends State<LocationStartupBottomSheet>
             ),
             child: Row(
               children: [
-                const Icon(
+                Icon(
                   Icons.location_on,
-                  color: Colors.black87,
+                  color: Theme.of(context).colorScheme.onSurface,
                   size: 24,
                 ),
                 const SizedBox(width: 12),
@@ -202,11 +202,10 @@ class _LocationStartupBottomSheetState extends State<LocationStartupBottomSheet>
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
+                      Text(
                         'Location Permission is Off',
-                        style: TextStyle(
-                          color: Colors.black87,
-                          fontSize: 16,
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurface,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
@@ -225,20 +224,22 @@ class _LocationStartupBottomSheetState extends State<LocationStartupBottomSheet>
                 ElevatedButton(
                   onPressed: _isLoading ? null : _enableLocation,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.white,
-                    foregroundColor: const Color(0xFFFDBB42),
+                    backgroundColor: Theme.of(context).colorScheme.surface,
+                    foregroundColor: Theme.of(context).colorScheme.primary,
                     padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8),
                     ),
                   ),
                   child: _isLoading
-                      ? const SizedBox(
+                      ? SizedBox(
                           width: 16,
                           height: 16,
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
-                            valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFFDBB42)),
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              Theme.of(context).colorScheme.primary,
+                            ),
                           ),
                         )
                       : const Text(
@@ -262,10 +263,9 @@ class _LocationStartupBottomSheetState extends State<LocationStartupBottomSheet>
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text(
+                    Text(
                       'Select Delivery Address',
-                      style: TextStyle(
-                        fontSize: 16,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.bold,
                       ),
                     ),
@@ -298,9 +298,8 @@ class _LocationStartupBottomSheetState extends State<LocationStartupBottomSheet>
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     child: Text(
                       'No saved addresses',
-                      style: TextStyle(
-                        color: Colors.grey[600],
-                        fontSize: 14,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
                       ),
                     ),
                   )
@@ -313,14 +312,16 @@ class _LocationStartupBottomSheetState extends State<LocationStartupBottomSheet>
                       child: Container(
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          border: Border.all(color: Colors.grey[300]!),
+                          border: Border.all(
+                            color: Theme.of(context).colorScheme.outline.withOpacity(0.3),
+                          ),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Row(
                           children: [
                             Icon(
                               _getAddressIcon(address.label),
-                              color: const Color(0xFFFDBB42),
+                              color: Theme.of(context).colorScheme.primary,
                               size: 24,
                             ),
                             const SizedBox(width: 12),
@@ -330,17 +331,15 @@ class _LocationStartupBottomSheetState extends State<LocationStartupBottomSheet>
                                 children: [
                                   Text(
                                     address.label,
-                                    style: const TextStyle(
+                                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                                       fontWeight: FontWeight.w600,
-                                      fontSize: 14,
                                     ),
                                   ),
                                   const SizedBox(height: 4),
                                   Text(
                                     address.address,
-                                    style: TextStyle(
-                                      color: Colors.grey[600],
-                                      fontSize: 12,
+                                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                      color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
                                     ),
                                     maxLines: 2,
                                     overflow: TextOverflow.ellipsis,
@@ -348,9 +347,9 @@ class _LocationStartupBottomSheetState extends State<LocationStartupBottomSheet>
                                 ],
                               ),
                             ),
-                            const Icon(
+                            Icon(
                               Icons.chevron_right,
-                              color: Colors.grey,
+                              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
                             ),
                           ],
                         ),
@@ -367,22 +366,23 @@ class _LocationStartupBottomSheetState extends State<LocationStartupBottomSheet>
                   child: Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      border: Border.all(color: Colors.grey[300]!),
+                      border: Border.all(
+                        color: Theme.of(context).colorScheme.outline.withOpacity(0.3),
+                      ),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Row(
                       children: [
                         Icon(
                           Icons.search,
-                          color: Colors.grey[600],
+                          color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
                         ),
                         const SizedBox(width: 12),
                         Text(
                           'Enter Location Manually',
-                          style: TextStyle(
-                            color: Colors.grey[700],
-                            fontSize: 14,
+                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                             fontWeight: FontWeight.w500,
+                            color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
                           ),
                         ),
                       ],

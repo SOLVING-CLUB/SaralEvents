@@ -68,13 +68,28 @@ class BookingService {
         final service = booking['services'] as Map<String, dynamic>;
         final String userId = booking['user_id'];
         userIds.add(userId);
+        
+        // Debug logging for each booking
+        print('📦 BookingService: Processing booking ${booking['id']}');
+        print('   Raw status: ${booking['status']} (type: ${booking['status'].runtimeType})');
+        print('   Raw milestone_status: ${booking['milestone_status']} (type: ${booking['milestone_status']?.runtimeType})');
+        print('   Location link: ${booking['location_link']}');
+        
         bookings.add({
           'id': booking['id'],
           'status': booking['status'],
+          'milestone_status': booking['milestone_status'],
+          'vendor_accepted_at': booking['vendor_accepted_at'],
+          'vendor_traveling_at': booking['vendor_traveling_at'],
+          'vendor_arrived_at': booking['vendor_arrived_at'],
+          'arrival_confirmed_at': booking['arrival_confirmed_at'],
+          'setup_completed_at': booking['setup_completed_at'],
+          'setup_confirmed_at': booking['setup_confirmed_at'],
           'amount': booking['amount'],
           'booking_date': booking['booking_date'],
           'booking_time': booking['booking_time'],
           'notes': booking['notes'],
+          'location_link': booking['location_link'], // Include location link
           'created_at': booking['created_at'],
           'service_name': service['name'],
           'service_price': service['price'],
@@ -84,6 +99,9 @@ class BookingService {
           'customer_phone': 'No phone available',
           'user_id': userId,
         });
+        
+        print('   Added to bookings list with status: ${bookings.last['status']}');
+        print('   Added to bookings list with milestone_status: ${bookings.last['milestone_status']}');
       }
 
       // Try to enrich with customer details from user_profiles in one batched call
@@ -192,6 +210,145 @@ class BookingService {
     }
   }
 
+  // Mark booking as accepted by vendor and update milestone status
+  Future<bool> acceptBooking(String bookingId) async {
+    try {
+      final vendorId = await _getVendorId();
+      if (vendorId == null) {
+        print('No vendor ID found for current user');
+        return false;
+      }
+
+      final booking = await _supabase
+          .from('bookings')
+          .select('id, vendor_id, user_id')
+          .eq('id', bookingId)
+          .eq('vendor_id', vendorId)
+          .maybeSingle();
+
+      if (booking == null) {
+        print('Booking not found or does not belong to vendor');
+        return false;
+      }
+
+      await _supabase
+          .from('bookings')
+          .update({
+            'status': 'confirmed', // Update status to confirmed when vendor accepts
+            'milestone_status': 'accepted',
+            'vendor_accepted_at': DateTime.now().toIso8601String(),
+            'updated_at': DateTime.now().toIso8601String(),
+          })
+          .eq('id', bookingId);
+
+      // Create simple order notification for customer
+      try {
+        await _supabase.from('order_notifications').insert({
+          'booking_id': bookingId,
+          'user_id': booking['user_id'],
+          'notification_type': 'vendor_accepted',
+          'title': 'Order Confirmed',
+          'message': 'Your vendor has accepted the booking.',
+        });
+      } catch (e) {
+        print('Warning: failed to create order notification for acceptBooking: $e');
+      }
+
+      return true;
+    } catch (e) {
+      print('Error accepting booking: $e');
+      return false;
+    }
+  }
+
+  // Mark that vendor has arrived at the event location
+  Future<bool> markArrived(String bookingId) async {
+    try {
+      final vendorId = await _getVendorId();
+      if (vendorId == null) return false;
+
+      final booking = await _supabase
+          .from('bookings')
+          .select('id, vendor_id, user_id')
+          .eq('id', bookingId)
+          .eq('vendor_id', vendorId)
+          .maybeSingle();
+
+      if (booking == null) return false;
+
+      await _supabase
+          .from('bookings')
+          .update({
+            'milestone_status': 'vendor_arrived',
+            'vendor_arrived_at': DateTime.now().toIso8601String(),
+            'updated_at': DateTime.now().toIso8601String(),
+          })
+          .eq('id', bookingId);
+
+      // Notify customer that vendor has arrived
+      try {
+        await _supabase.from('order_notifications').insert({
+          'booking_id': bookingId,
+          'user_id': booking['user_id'],
+          'notification_type': 'vendor_arrived',
+          'title': 'Vendor Arrived',
+          'message': 'Your vendor has marked arrival at the event location. Please confirm arrival in the app.',
+        });
+      } catch (e) {
+        print('Warning: failed to create order notification for markArrived: $e');
+      }
+
+      return true;
+    } catch (e) {
+      print('Error marking vendor arrived: $e');
+      return false;
+    }
+  }
+
+  // Mark that vendor has completed the setup
+  Future<bool> markSetupCompleted(String bookingId) async {
+    try {
+      final vendorId = await _getVendorId();
+      if (vendorId == null) return false;
+
+      final booking = await _supabase
+          .from('bookings')
+          .select('id, vendor_id, user_id')
+          .eq('id', bookingId)
+          .eq('vendor_id', vendorId)
+          .maybeSingle();
+
+      if (booking == null) return false;
+
+      await _supabase
+          .from('bookings')
+          .update({
+            'milestone_status': 'setup_completed',
+            'setup_completed_at': DateTime.now().toIso8601String(),
+            'updated_at': DateTime.now().toIso8601String(),
+          })
+          .eq('id', bookingId);
+
+      // Notify customer that setup is completed
+      try {
+        await _supabase.from('order_notifications').insert({
+          'booking_id': bookingId,
+          'user_id': booking['user_id'],
+          'notification_type': 'setup_completed',
+          'title': 'Setup Completed',
+          'message': 'Your vendor has marked setup as completed. Please review and confirm in the app.',
+        });
+      } catch (e) {
+        print('Warning: failed to create order notification for markSetupCompleted: $e');
+      }
+
+      return true;
+    } catch (e) {
+      print('Error marking setup completed: $e');
+      return false;
+    }
+  }
+
   // Cancel booking as vendor (triggers 100% refund to customer)
   Future<Map<String, dynamic>> cancelBookingAsVendor({
     required String bookingId,
@@ -242,11 +399,12 @@ class BookingService {
         };
       }
 
-      // Update booking status
+      // Update booking status and milestone status
       await _supabase
           .from('bookings')
           .update({
             'status': 'cancelled',
+            'milestone_status': 'cancelled',
             'updated_at': DateTime.now().toIso8601String(),
           })
           .eq('id', bookingId);

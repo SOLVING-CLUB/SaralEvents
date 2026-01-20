@@ -381,6 +381,7 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware, WidgetsBinding
   }
 
   Future<void> _loadData() async {
+    if (!mounted) return;
     setState(() { _isLoading = true; _error = null; });
     try {
       print('Starting to load data...');
@@ -408,11 +409,15 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware, WidgetsBinding
         vendorName: '',
       )).toList();
 
-      setState(() { _featuredServices = services.take(6).toList(); });
-      print('Loaded featured services: ${_featuredServices.length}');
+      if (mounted) {
+        setState(() { _featuredServices = services.take(6).toList(); });
+        print('Loaded featured services: ${_featuredServices.length}');
+      }
     } catch (e) {
       print('Error loading data: $e');
-      setState(() { _error = e.toString(); });
+      if (mounted) {
+        setState(() { _error = e.toString(); });
+      }
     } finally {
       if (mounted) setState(() { _isLoading = false; });
     }
@@ -464,16 +469,25 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware, WidgetsBinding
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Row(
-                      children: const [
-                        Icon(Icons.card_giftcard, color: Color(0xFFFDBB42)),
-                        SizedBox(width: 12),
+                      children: [
+                        Icon(
+                          Icons.card_giftcard, 
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                        const SizedBox(width: 12),
                         Expanded(
                           child: Text(
                             'Create an E-Invitation for your event',
-                            style: TextStyle(fontWeight: FontWeight.w600),
+                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                         ),
-                        Icon(Icons.arrow_forward_ios, size: 14),
+                        Icon(
+                          Icons.arrow_forward_ios, 
+                          size: 14,
+                          color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                        ),
                       ],
                     ),
                   ),
@@ -526,7 +540,7 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware, WidgetsBinding
               const SizedBox(height: 16),
               ElevatedButton(
                 onPressed: () {
-                  setState(() {});
+                  if (mounted) setState(() {});
                 },
                 child: const Text('Retry'),
               ),
@@ -574,10 +588,8 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware, WidgetsBinding
                   children: [
                     Text(
                       'Hello, ${_displayName ?? user?.email?.split('@').first ?? 'User'}',
-                      style: const TextStyle(
-                        fontSize: 18,
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
                         fontWeight: FontWeight.w600,
-                        color: Colors.black87,
                       ),
                     ),
                     const SizedBox(height: 2),
@@ -589,22 +601,25 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware, WidgetsBinding
                           Icon(
                             Icons.location_on,
                             size: 16,
-                            color: Colors.grey[600],
+                            color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
                           ),
                           const SizedBox(width: 4),
                           Expanded(
                             child: Text(
                               _activeAddress ?? 'Select location',
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: Colors.grey[600],
+                              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
                               ),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
                           const SizedBox(width: 4),
-                          Icon(Icons.keyboard_arrow_down, size: 16, color: Colors.grey[600]),
+                          Icon(
+                            Icons.keyboard_arrow_down, 
+                            size: 16, 
+                            color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                          ),
                         ],
                       ),
                     ),
@@ -644,12 +659,12 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware, WidgetsBinding
                 width: 40,
                 height: 40,
                 decoration: BoxDecoration(
-                  color: Colors.grey[100],
+                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(
                   Icons.notifications_outlined,
-                  color: Colors.grey[700],
+                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
                   size: 20,
                 ),
               ),
@@ -661,20 +676,30 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware, WidgetsBinding
   }
 
   Widget _buildSearchBar() {
+    final theme = Theme.of(context);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
       child: Container(
         height: 50,
         decoration: BoxDecoration(
-          color: Colors.grey[100],
+          color: theme.colorScheme.surfaceContainerHighest,
           borderRadius: BorderRadius.circular(12),
         ),
         child: TextField(
+          style: theme.textTheme.bodyLarge,
           decoration: InputDecoration(
             hintText: 'Search',
-            hintStyle: TextStyle(color: Colors.grey[500]),
-            prefixIcon: Icon(Icons.search, color: Colors.grey[500]),
-            suffixIcon: Icon(Icons.tune, color: Colors.grey[500]),
+            hintStyle: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.colorScheme.onSurface.withOpacity(0.5),
+            ),
+            prefixIcon: Icon(
+              Icons.search, 
+              color: theme.colorScheme.onSurface.withOpacity(0.5),
+            ),
+            suffixIcon: Icon(
+              Icons.tune, 
+              color: theme.colorScheme.onSurface.withOpacity(0.5),
+            ),
             border: InputBorder.none,
             contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           ),
@@ -714,12 +739,10 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware, WidgetsBinding
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
+              Text(
                 'Categories',
-                style: TextStyle(
-                  fontSize: 28,
+                style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                   fontWeight: FontWeight.w800,
-                  color: Colors.black87,
                   letterSpacing: 0.2,
                 ),
               ),
@@ -728,26 +751,26 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware, WidgetsBinding
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: Theme.of(context).cardColor,
                     borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: Colors.black.withOpacity(0.1)),
+                    border: Border.all(
+                      color: Theme.of(context).colorScheme.outline.withOpacity(0.1),
+                    ),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Text(
+                      Text(
                         'See All',
-                        style: TextStyle(
-                          fontSize: 16,
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
                           fontWeight: FontWeight.w600,
-                          color: Colors.black87,
                         ),
                       ),
                       const SizedBox(width: 6),
-                      const Icon(
+                      Icon(
                         Icons.north_east,
                         size: 18,
-                        color: Colors.black87,
+                        color: Theme.of(context).colorScheme.onSurface,
                       ),
                     ],
                   ),
@@ -803,10 +826,8 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware, WidgetsBinding
               child: Text(
                 categoryName,
                 textAlign: TextAlign.start,
-                style: const TextStyle(
-                  fontSize: 18,
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
                   fontWeight: FontWeight.w600,
-                  color: Colors.black87,
                 ),
               ),
             ),
@@ -825,12 +846,10 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware, WidgetsBinding
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
+              Text(
                 'Featured Events',
-                style: TextStyle(
-                  fontSize: 20,
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
                   fontWeight: FontWeight.bold,
-                  color: Colors.black87,
                 ),
               ),
               GestureDetector(
@@ -838,25 +857,23 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware, WidgetsBinding
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   decoration: BoxDecoration(
-                    color: Colors.grey[100],
+                    color: Theme.of(context).colorScheme.surfaceContainerHighest,
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Text(
+                      Text(
                         'See All',
-                        style: TextStyle(
-                          fontSize: 14,
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                           fontWeight: FontWeight.w500,
-                          color: Colors.black87,
                         ),
                       ),
                       const SizedBox(width: 4),
                       Icon(
                         Icons.arrow_forward_ios,
                         size: 12,
-                        color: Colors.grey[600],
+                        color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
                       ),
                     ],
                   ),
@@ -875,20 +892,21 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware, WidgetsBinding
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(Icons.error_outline, color: Colors.grey[400], size: 32),
+                          Icon(
+                            Icons.error_outline, 
+                            color: Theme.of(context).colorScheme.onSurface.withOpacity(0.4), 
+                            size: 32,
+                          ),
                           const SizedBox(height: 8),
                           Text(
                             'Error loading services',
-                            style: TextStyle(color: Colors.grey[600]),
+                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                            ),
                           ),
                           const SizedBox(height: 8),
                           ElevatedButton(
                             onPressed: _loadData,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFFFDBB42),
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                            ),
                             child: const Text('Retry'),
                           ),
                         ],
@@ -899,11 +917,17 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware, WidgetsBinding
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Icon(Icons.event_busy, color: Colors.grey[400], size: 32),
+                              Icon(
+                                Icons.event_busy, 
+                                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.4), 
+                                size: 32,
+                              ),
                               const SizedBox(height: 8),
                               Text(
                                 'No services available',
-                                style: TextStyle(color: Colors.grey[600]),
+                                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                                ),
                               ),
                             ],
                           ),
@@ -935,14 +959,15 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware, WidgetsBinding
   }
 
   Widget _buildEventCard(ServiceItem service) {
+    final theme = Theme.of(context);
     return Container(
       width: 140,
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: theme.cardColor,
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: theme.colorScheme.shadow.withOpacity(0.05),
             blurRadius: 10,
             offset: const Offset(0, 2),
           ),
@@ -957,14 +982,14 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware, WidgetsBinding
             child: Container(
               height: 100,
               width: double.infinity,
-              color: const Color(0xFFFDBB42).withOpacity(0.1),
+              color: theme.colorScheme.primary.withOpacity(0.1),
               child: service.media.isNotEmpty
                   ? Image.network(service.media.first.url, fit: BoxFit.cover)
                   : Center(
                       child: Icon(
                         _getServiceIcon(service.name),
                         size: 32,
-                        color: const Color(0xFFFDBB42),
+                        color: theme.colorScheme.primary,
                       ),
                     ),
             ),
@@ -978,10 +1003,8 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware, WidgetsBinding
               children: [
                 Text(
                   service.name,
-                  style: const TextStyle(
-                    fontSize: 12,
+                  style: theme.textTheme.bodySmall?.copyWith(
                     fontWeight: FontWeight.w600,
-                    color: Colors.black87,
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -989,9 +1012,8 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware, WidgetsBinding
                 const SizedBox(height: 2),
                 Text(
                   '₹${service.price.toStringAsFixed(0)}',
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: Colors.grey[600],
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: theme.colorScheme.onSurface.withOpacity(0.6),
                     fontWeight: FontWeight.w500,
                   ),
                 ),

@@ -45,7 +45,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
   double? _maxPrice;
   double? _currentMinPrice;
   double? _currentMaxPrice;
-  double _minRating = 0; // visual only, because we don't have ratings in schema
+  final double _minRating = 0; // visual only, because we don't have ratings in schema
 
   @override
   void initState() {
@@ -258,9 +258,9 @@ class _CatalogScreenState extends State<CatalogScreen> {
       builder: (context) {
         return Container(
           height: MediaQuery.of(context).size.height * 0.7,
-          decoration: const BoxDecoration(
-            color: Color(0xFFF5F5DC), // Light beige/off-white background
-            borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+          decoration: BoxDecoration(
+            color: Theme.of(context).cardColor,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
           ),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
@@ -272,13 +272,18 @@ class _CatalogScreenState extends State<CatalogScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                      const Text(
+                      Text(
                         'Filters',
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Colors.black87),
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                       IconButton(
                         onPressed: () => Navigator.pop(context),
-                        icon: const Icon(Icons.close, color: Colors.black87),
+                        icon: Icon(
+                          Icons.close, 
+                          color: Theme.of(context).colorScheme.onSurface,
+                        ),
                       ),
                     ],
                   ),
@@ -322,17 +327,19 @@ class _CatalogScreenState extends State<CatalogScreen> {
                   const SizedBox(height: 20),
                   
                   // Category Section
-                  const Text(
+                  Text(
                     'Category',
-                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Colors.black87),
-                ),
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                 const SizedBox(height: 8),
                   GestureDetector(
                     onTap: () {
                       // Show category selection sheet with app categories
                       showModalBottomSheet(
                         context: context,
-                        backgroundColor: Colors.white,
+                        backgroundColor: Theme.of(context).cardColor,
                         shape: const RoundedRectangleBorder(
                           borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
                         ),
@@ -375,18 +382,25 @@ class _CatalogScreenState extends State<CatalogScreen> {
                       width: double.infinity,
                       padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
                       decoration: BoxDecoration(
-                        color: Colors.white,
+                        color: Theme.of(context).cardColor,
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.grey.shade300, width: 1),
+                        border: Border.all(
+                          color: Theme.of(context).colorScheme.outline.withOpacity(0.3), 
+                          width: 1,
+                        ),
                       ),
                       child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                           Text(
                             selectedCategory,
-                            style: const TextStyle(color: Colors.black87, fontSize: 14),
+                            style: Theme.of(context).textTheme.bodyMedium,
                           ),
-                          const Icon(Icons.keyboard_arrow_down, color: Colors.grey, size: 20),
+                          Icon(
+                            Icons.keyboard_arrow_down, 
+                            color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6), 
+                            size: 20,
+                          ),
                         ],
                       ),
                     ),
@@ -394,9 +408,11 @@ class _CatalogScreenState extends State<CatalogScreen> {
                   const SizedBox(height: 20),
                   
                   // Price Range Section
-                  const Text(
+                  Text(
                     'Price Range',
-                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Colors.black87),
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                   const SizedBox(height: 8),
                   Row(
@@ -405,31 +421,47 @@ class _CatalogScreenState extends State<CatalogScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text('Min', style: TextStyle(color: Colors.grey, fontSize: 13)),
+                            Text(
+                              'Min', 
+                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                              ),
+                            ),
                             const SizedBox(height: 6),
                             TextField(
                               controller: minController,
                               keyboardType: TextInputType.number,
-                              style: const TextStyle(fontSize: 14, color: Colors.black87),
+                              style: Theme.of(context).textTheme.bodyMedium,
                               inputFormatters: [
                                 CurrencyInputFormatter(maxValue: maxP),
                               ],
                               decoration: InputDecoration(
                                 hintText: '₹ 1',
-                                hintStyle: TextStyle(color: Colors.grey.shade500, fontSize: 14),
+                                hintStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
+                                ),
                                 filled: true,
-                                fillColor: Colors.white,
+                                fillColor: Theme.of(context).cardColor,
                                 border: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(12),
-                                  borderSide: BorderSide(color: Colors.grey.shade300, width: 1),
+                                  borderSide: BorderSide(
+                                    color: Theme.of(context).colorScheme.outline.withOpacity(0.3), 
+                                    width: 1,
+                                  ),
                                 ),
                                 enabledBorder: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(12),
-                                  borderSide: BorderSide(color: Colors.grey.shade300, width: 1),
+                                  borderSide: BorderSide(
+                                    color: Theme.of(context).colorScheme.outline.withOpacity(0.3), 
+                                    width: 1,
+                                  ),
                                 ),
                                 focusedBorder: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(12),
-                                  borderSide: BorderSide(color: Colors.grey.shade300, width: 1),
+                                  borderSide: BorderSide(
+                                    color: Theme.of(context).colorScheme.primary, 
+                                    width: 1,
+                                  ),
                                 ),
                                 contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
                                 isDense: true,
@@ -442,40 +474,59 @@ class _CatalogScreenState extends State<CatalogScreen> {
                         ),
                       ),
                       const SizedBox(width: 12),
-                      const Padding(
-                        padding: EdgeInsets.only(top: 28),
-                        child: Text('to', style: TextStyle(color: Colors.black87, fontSize: 14)),
+                      Padding(
+                        padding: const EdgeInsets.only(top: 28),
+                        child: Text(
+                          'to', 
+                          style: Theme.of(context).textTheme.bodyMedium,
+                        ),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text('Max', style: TextStyle(color: Colors.grey, fontSize: 13)),
+                            Text(
+                              'Max', 
+                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                              ),
+                            ),
                             const SizedBox(height: 6),
                             TextField(
                               controller: maxController,
                               keyboardType: TextInputType.number,
-                              style: const TextStyle(fontSize: 14, color: Colors.black87),
+                              style: Theme.of(context).textTheme.bodyMedium,
                               inputFormatters: [
                                 CurrencyInputFormatter(maxValue: maxP),
                               ],
                               decoration: InputDecoration(
                                 hintText: '₹ 693939',
-                                hintStyle: TextStyle(color: Colors.grey.shade500, fontSize: 14),
+                                hintStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
+                                ),
                                 filled: true,
-                                fillColor: Colors.white,
+                                fillColor: Theme.of(context).cardColor,
                                 border: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(12),
-                                  borderSide: BorderSide(color: Colors.grey.shade300, width: 1),
+                                  borderSide: BorderSide(
+                                    color: Theme.of(context).colorScheme.outline.withOpacity(0.3), 
+                                    width: 1,
+                                  ),
                                 ),
                                 enabledBorder: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(12),
-                                  borderSide: BorderSide(color: Colors.grey.shade300, width: 1),
+                                  borderSide: BorderSide(
+                                    color: Theme.of(context).colorScheme.outline.withOpacity(0.3), 
+                                    width: 1,
+                                  ),
                                 ),
                                 focusedBorder: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(12),
-                                  borderSide: BorderSide(color: Colors.grey.shade300, width: 1),
+                                  borderSide: BorderSide(
+                                    color: Theme.of(context).colorScheme.primary, 
+                                    width: 1,
+                                  ),
                                 ),
                                 contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
                                 isDense: true,
@@ -492,9 +543,11 @@ class _CatalogScreenState extends State<CatalogScreen> {
                   const SizedBox(height: 20),
                   
                   // Quick Select Section
-                  const Text(
+                  Text(
                     'Quick Select',
-                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Colors.black87),
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                   const SizedBox(height: 8),
                   Expanded(
@@ -561,8 +614,8 @@ class _CatalogScreenState extends State<CatalogScreen> {
                       Navigator.pop(context);
                     },
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFFFDBB42),
-                        foregroundColor: Colors.white,
+                        backgroundColor: Theme.of(context).colorScheme.primary,
+                        foregroundColor: Theme.of(context).colorScheme.onPrimary,
                         padding: const EdgeInsets.symmetric(vertical: 16),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
@@ -584,20 +637,19 @@ class _CatalogScreenState extends State<CatalogScreen> {
   }
 
   Widget _buildQuickSelectButton(String text, VoidCallback onTap) {
+    final theme = Theme.of(context);
     return GestureDetector(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 6),
         decoration: BoxDecoration(
-          color: Colors.grey.shade200,
+          color: theme.colorScheme.surfaceContainerHighest,
           borderRadius: BorderRadius.circular(8),
         ),
         child: Center(
           child: Text(
             text,
-            style: const TextStyle(
-              color: Colors.black87,
-              fontSize: 10,
+            style: theme.textTheme.labelSmall?.copyWith(
               fontWeight: FontWeight.w500,
             ),
             textAlign: TextAlign.center,
@@ -633,9 +685,14 @@ class _CatalogScreenState extends State<CatalogScreen> {
                   ],
                 ),
               ),
-              const Padding(
-                padding: EdgeInsets.fromLTRB(20, 0, 20, 8),
-                child: Text('Explore vendor\'s section', style: TextStyle(color: Colors.grey, fontSize: 12)),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+                child: Text(
+                  'Explore vendor\'s section', 
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                  ),
+                ),
               ),
             ],
             
@@ -643,30 +700,37 @@ class _CatalogScreenState extends State<CatalogScreen> {
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
               child: Container(
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: Theme.of(context).cardColor,
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
-                    color: const Color(0xFFFDBB42),
+                    color: Theme.of(context).colorScheme.primary,
                     width: 1,
                   ),
                 ),
                 child: Row(
                   children: [
                     const SizedBox(width: 12),
-                    const Icon(Icons.search, color: Colors.grey),
+                    Icon(
+                      Icons.search, 
+                      color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                    ),
                     const SizedBox(width: 8),
                     Expanded(
                       child: TextField(
                         focusNode: _searchFocusNode,
-                        decoration: const InputDecoration(
+                        style: Theme.of(context).textTheme.bodyLarge,
+                        decoration: InputDecoration(
                           hintText: 'Search',
+                          hintStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
+                          ),
                           isCollapsed: true,
                           border: InputBorder.none,
                           enabledBorder: InputBorder.none,
                           focusedBorder: InputBorder.none,
                           filled: true,
-                          fillColor: Colors.white,
-                          contentPadding: EdgeInsets.symmetric(vertical: 12),
+                          fillColor: Theme.of(context).cardColor,
+                          contentPadding: const EdgeInsets.symmetric(vertical: 12),
                         ),
                         onChanged: (value) {
                           _query = value.trim();
@@ -675,7 +739,10 @@ class _CatalogScreenState extends State<CatalogScreen> {
                       ),
                     ),
                     IconButton(
-                      icon: const Icon(Icons.tune, color: Colors.grey),
+                      icon: Icon(
+                        Icons.tune, 
+                        color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                      ),
                       onPressed: () {
                         _openFilterSheet();
                       },
@@ -694,7 +761,11 @@ class _CatalogScreenState extends State<CatalogScreen> {
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              const Icon(Icons.error_outline, size: 48, color: Colors.red),
+                              Icon(
+                                Icons.error_outline, 
+                                size: 48, 
+                                color: Theme.of(context).colorScheme.error,
+                              ),
                               const SizedBox(height: 12),
                               Text('Error: $_error'),
                               const SizedBox(height: 12),
@@ -709,11 +780,20 @@ class _CatalogScreenState extends State<CatalogScreen> {
                           onRefresh: _refresh,
                           child: _services.isEmpty
                               ? ListView(
-                                  children: const [
-                                    SizedBox(height: 80),
-                                    Icon(Icons.search_off, size: 48, color: Colors.grey),
-                                    SizedBox(height: 12),
-                                    Center(child: Text('No services found')),
+                                  children: [
+                                    const SizedBox(height: 80),
+                                    Icon(
+                                      Icons.search_off, 
+                                      size: 48, 
+                                      color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
+                                    ),
+                                    const SizedBox(height: 12),
+                                    Center(
+                                      child: Text(
+                                        'No services found',
+                                        style: Theme.of(context).textTheme.bodyLarge,
+                                      ),
+                                    ),
                                   ],
                                 )
                               : GridView.builder(

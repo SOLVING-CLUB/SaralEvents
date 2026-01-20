@@ -44,21 +44,23 @@ class TimeSlotPicker extends StatefulWidget {
 class _TimeSlotPickerState extends State<TimeSlotPicker> {
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
+        Text(
           'Available Time Slots',
-          style: TextStyle(
-            fontSize: 16,
+          style: theme.textTheme.titleMedium?.copyWith(
             fontWeight: FontWeight.bold,
           ),
         ),
         const SizedBox(height: 12),
         if (widget.availableSlots.isEmpty)
-          const Text(
+          Text(
             'No available time slots for this date.',
-            style: TextStyle(color: Colors.grey),
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.colorScheme.onSurface.withOpacity(0.6),
+            ),
           )
         else
           Wrap(
@@ -66,28 +68,35 @@ class _TimeSlotPickerState extends State<TimeSlotPicker> {
             runSpacing: 8,
             children: widget.availableSlots.map((slot) {
               final isSelected = widget.selectedSlot == slot;
+              final isAvailable = slot.isAvailable;
               return GestureDetector(
-                onTap: () => widget.onSlotSelected(slot),
+                onTap: isAvailable ? () => widget.onSlotSelected(slot) : null,
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   decoration: BoxDecoration(
                     color: isSelected
-                        ? const Color(0xFFFDBB42)
-                        : (slot.isAvailable ? Colors.green[50] : Colors.grey[100]),
+                        ? theme.colorScheme.primary
+                        : (isAvailable 
+                            ? theme.colorScheme.primaryContainer.withOpacity(0.3)
+                            : theme.colorScheme.surfaceContainerHighest),
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(
                       color: isSelected
-                          ? const Color(0xFFFDBB42)
-                          : (slot.isAvailable ? Colors.green : Colors.grey),
+                          ? theme.colorScheme.primary
+                          : (isAvailable 
+                              ? theme.colorScheme.primary.withOpacity(0.5)
+                              : theme.colorScheme.outline.withOpacity(0.3)),
                       width: 1,
                     ),
                   ),
                   child: Text(
                     slot.formattedTime,
-                    style: TextStyle(
+                    style: theme.textTheme.bodyMedium?.copyWith(
                       color: isSelected
-                          ? Colors.white
-                          : (slot.isAvailable ? Colors.green[700] : Colors.grey[600]),
+                          ? theme.colorScheme.onPrimary
+                          : (isAvailable 
+                              ? theme.colorScheme.onSurface
+                              : theme.colorScheme.onSurface.withOpacity(0.5)),
                       fontWeight: FontWeight.w500,
                     ),
                   ),

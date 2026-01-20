@@ -4,14 +4,12 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:provider/provider.dart';
 import '../models/service_models.dart';
 import '../services/service_service.dart';
 import '../widgets/location_aware_widget.dart';
 import '../widgets/wishlist_button.dart';
 import '../utils/deep_link_helper.dart';
-import '../checkout/checkout_state.dart';
-import '../checkout/flow.dart';
+import 'booking_screen.dart';
 
 
 class ServiceDetailsScreen extends StatefulWidget {
@@ -58,14 +56,15 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen>
     });
 
     try {
-      // Load similar services
-      final allServices = await _serviceService.getAllServices();
-      final similarServices = allServices
-          .where((s) => 
-            s.id != widget.service.id && 
-            s.categoryId == widget.service.categoryId)
-          .take(10)
-          .toList();
+      // Load similar services - only fetch services from the same category
+      List<ServiceItem> similarServices = [];
+      if (widget.service.categoryId != null) {
+        final categoryServices = await _serviceService.getServicesByCategory(widget.service.categoryId!);
+        similarServices = categoryServices
+            .where((s) => s.id != widget.service.id)
+            .take(10)
+            .toList();
+      }
 
       // Load vendor profile (if needed - for now using existing data)
       final vendorProfile = VendorProfile(
@@ -122,7 +121,11 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen>
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(Icons.error_outline, size: 64, color: Colors.red),
+              Icon(
+                Icons.error_outline, 
+                size: 64, 
+                color: Theme.of(context).colorScheme.error,
+              ),
               const SizedBox(height: 16),
               Text('Error loading service details: $_error'),
               const SizedBox(height: 16),
@@ -151,11 +154,14 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen>
             leading: Container(
               margin: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: Colors.black.withValues(alpha: 0.5),
+                color: Theme.of(context).colorScheme.shadow.withOpacity(0.5),
                 borderRadius: BorderRadius.circular(20),
               ),
               child: IconButton(
-                icon: const Icon(Icons.arrow_back, color: Colors.white),
+                icon: Icon(
+                  Icons.arrow_back, 
+                  color: Theme.of(context).colorScheme.onSurface,
+                ),
                 onPressed: () => Navigator.maybePop(context),
               ),
             ),
@@ -163,11 +169,14 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen>
               Container(
                 margin: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.5),
+                  color: Theme.of(context).colorScheme.shadow.withOpacity(0.5),
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: IconButton(
-                  icon: const Icon(Icons.share, color: Colors.white),
+                  icon: Icon(
+                    Icons.share, 
+                    color: Theme.of(context).colorScheme.onSurface,
+                  ),
                   onPressed: () => _shareService(service),
                 ),
               ),
@@ -209,16 +218,26 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen>
 
   // Build Image Gallery
   Widget _buildImageGallery(ServiceItem service) {
+    final theme = Theme.of(context);
     if (service.media.isEmpty) {
       return Container(
-        color: Colors.grey.shade200,
-        child: const Center(
+        color: theme.colorScheme.surfaceContainerHighest,
+        child: Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.image_not_supported, size: 64, color: Colors.grey),
-              SizedBox(height: 8),
-              Text('No images available', style: TextStyle(color: Colors.grey)),
+              Icon(
+                Icons.image_not_supported, 
+                size: 64, 
+                color: theme.colorScheme.onSurface.withOpacity(0.5),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'No images available', 
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.onSurface.withOpacity(0.5),
+                ),
+              ),
             ],
           ),
         ),
@@ -243,12 +262,15 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen>
                 imageUrl: Uri.encodeFull(media.url),
                 fit: BoxFit.cover,
                 placeholder: (context, url) => Container(
-                  color: Colors.grey.shade200,
+                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
                   child: const Center(child: CircularProgressIndicator()),
                 ),
                 errorWidget: (context, url, error) => Container(
-                  color: Colors.grey.shade200,
-                  child: const Icon(Icons.error, color: Colors.red),
+                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                  child: Icon(
+                    Icons.error, 
+                    color: Theme.of(context).colorScheme.error,
+                  ),
                 ),
               ),
             );
@@ -263,12 +285,15 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen>
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               decoration: BoxDecoration(
-                color: Colors.black.withValues(alpha: 0.7),
+                color: Theme.of(context).colorScheme.shadow.withOpacity(0.7),
                 borderRadius: BorderRadius.circular(20),
               ),
               child: Text(
                 '${_currentImageIndex + 1}/${service.media.length}',
-                style: const TextStyle(color: Colors.white, fontSize: 12),
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.onSurface,
+                  fontSize: 12,
+                ),
               ),
             ),
           ),
@@ -282,11 +307,14 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen>
             child: Center(
               child: Container(
                 decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.5),
+                  color: Theme.of(context).colorScheme.shadow.withOpacity(0.5),
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: IconButton(
-                  icon: const Icon(Icons.chevron_left, color: Colors.white),
+                  icon: Icon(
+                    Icons.chevron_left, 
+                    color: Theme.of(context).colorScheme.onSurface,
+                  ),
                   onPressed: () {
                     if (_currentImageIndex > 0) {
                       _imagePageController.previousPage(
@@ -306,11 +334,14 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen>
             child: Center(
               child: Container(
                 decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.5),
+                  color: Theme.of(context).colorScheme.shadow.withOpacity(0.5),
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: IconButton(
-                  icon: const Icon(Icons.chevron_right, color: Colors.white),
+                  icon: Icon(
+                    Icons.chevron_right, 
+                    color: Theme.of(context).colorScheme.onSurface,
+                  ),
                   onPressed: () {
                     if (_currentImageIndex < service.media.length - 1) {
                       _imagePageController.nextPage(
@@ -353,14 +384,17 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen>
                     const SizedBox(height: 8),
                     Row(
                       children: [
-                        const Icon(Icons.store, size: 16, color: Colors.grey),
+                        Icon(
+                          Icons.store, 
+                          size: 16, 
+                          color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                        ),
                         const SizedBox(width: 4),
                         Expanded(
                           child: Text(
                             service.vendorName,
-                            style: const TextStyle(
-                              color: Colors.grey,
-                              fontSize: 16,
+                            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
                             ),
                           ),
                         ),
@@ -373,19 +407,22 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen>
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: Colors.green.shade100,
+                  color: Theme.of(context).colorScheme.primaryContainer.withOpacity(0.3),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.verified, size: 16, color: Colors.green.shade700),
+                    Icon(
+                      Icons.verified, 
+                      size: 16, 
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
                     const SizedBox(width: 4),
                     Text(
                       'Verified',
-                      style: TextStyle(
-                        color: Colors.green.shade700,
-                        fontSize: 12,
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: Theme.of(context).colorScheme.primary,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -404,20 +441,26 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen>
             builder: (context, position, hasPermission) {
               return Row(
                 children: [
-                  const Icon(Icons.location_on, size: 16, color: Colors.grey),
+                  Icon(
+                    Icons.location_on, 
+                    size: 16, 
+                    color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                  ),
                   const SizedBox(width: 4),
                   Expanded(
                     child: Text(
                       _vendorProfile?.address ?? 'Hyderabad, Telangana',
-                      style: const TextStyle(color: Colors.grey),
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                      ),
                     ),
                   ),
                   if (hasPermission && position != null)
                     DistanceWidget(
                       latitude: 17.3850, // This should come from service data
                       longitude: 78.4867,
-                      textStyle: const TextStyle(
-                        color: Colors.blue,
+                      textStyle: TextStyle(
+                        color: Theme.of(context).colorScheme.primary,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -432,11 +475,17 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen>
           Row(
             children: [
               if (service.ratingAvg != null) ...[
-                Icon(Icons.star, size: 16, color: Colors.amber.shade600),
+                Icon(
+                  Icons.star, 
+                  size: 16, 
+                  color: Theme.of(context).colorScheme.primary,
+                ),
                 const SizedBox(width: 4),
                 Text(
                   service.ratingAvg!.toStringAsFixed(1),
-                  style: const TextStyle(fontWeight: FontWeight.w600),
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
                 const SizedBox(width: 8),
               ],
@@ -444,7 +493,9 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen>
                 service.ratingCount != null && service.ratingCount! > 0
                     ? '${service.ratingCount} reviews'
                     : 'No reviews yet',
-                style: const TextStyle(color: Colors.grey),
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                ),
               ),
               const Spacer(),
               TextButton(
@@ -515,49 +566,55 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen>
           ),
         ),
         const SizedBox(height: 12),
-        ...features.map((feature) => Padding(
-          padding: const EdgeInsets.only(bottom: 8),
-          child: Row(
-            children: [
-              Icon(feature['icon'], size: 20, color: Colors.blue),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      feature['label'],
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w600,
-                        fontSize: 14,
-                      ),
-                    ),
-                    Text(
-                      feature['value'],
-                      style: const TextStyle(
-                        color: Colors.grey,
-                        fontSize: 13,
-                      ),
-                    ),
-                  ],
+        ...features.map((feature) {
+          final theme = Theme.of(context);
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Row(
+              children: [
+                Icon(
+                  feature['icon'], 
+                  size: 20, 
+                  color: theme.colorScheme.primary,
                 ),
-              ),
-            ],
-          ),
-        )),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        feature['label'],
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      Text(
+                        feature['value'],
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurface.withOpacity(0.6),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          );
+        }),
       ],
     );
   }
 
   // Build Price and Actions
   Widget _buildPriceAndActions(ServiceItem service) {
+    final theme = Theme.of(context);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
       decoration: BoxDecoration(
-        color: Colors.grey.shade50,
+        color: theme.colorScheme.surfaceContainerHighest,
         border: Border(
-          top: BorderSide(color: Colors.grey.shade200),
-          bottom: BorderSide(color: Colors.grey.shade200),
+          top: BorderSide(color: theme.colorScheme.outline.withOpacity(0.2)),
+          bottom: BorderSide(color: theme.colorScheme.outline.withOpacity(0.2)),
         ),
       ),
       child: Row(
@@ -568,17 +625,15 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen>
               children: [
                 Text(
                   '₹${service.price.toStringAsFixed(0)}',
-                  style: const TextStyle(
-                    fontSize: 28,
+                  style: theme.textTheme.headlineMedium?.copyWith(
                     fontWeight: FontWeight.bold,
-                    color: Colors.green,
+                    color: theme.colorScheme.primary,
                   ),
                 ),
-                const Text(
+                Text(
                   'Starting price',
-                  style: TextStyle(
-                    color: Colors.grey,
-                    fontSize: 14,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurface.withOpacity(0.6),
                   ),
                 ),
               ],
@@ -589,8 +644,8 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen>
             icon: const Icon(Icons.shopping_cart_checkout),
             label: const Text('Book Now'),
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFF4B63E),
-              foregroundColor: Colors.black87,
+              backgroundColor: theme.colorScheme.primary,
+              foregroundColor: theme.colorScheme.onPrimary,
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
             ),
           ),
@@ -601,13 +656,14 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen>
 
   // Build Tab Navigation
   Widget _buildTabNavigation() {
+    final theme = Theme.of(context);
     return Container(
-      color: Colors.white,
+      color: theme.cardColor,
       child: TabBar(
         controller: _tabController,
-        labelColor: const Color(0xFFF4B63E),
-        unselectedLabelColor: Colors.grey,
-        indicatorColor: const Color(0xFFF4B63E),
+        labelColor: theme.colorScheme.primary,
+        unselectedLabelColor: theme.colorScheme.onSurface.withOpacity(0.6),
+        indicatorColor: theme.colorScheme.primary,
         tabs: const [
           Tab(text: 'Overview'),
           Tab(text: 'Reviews'),
@@ -687,7 +743,11 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen>
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Icon(Icons.check_circle, size: 16, color: Colors.green),
+                  Icon(
+                    Icons.check_circle, 
+                    size: 16, 
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
                   const SizedBox(width: 8),
                   Expanded(child: Text(policy)),
                 ],
@@ -711,12 +771,16 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen>
               child: Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Colors.blue.shade50,
+                  color: Theme.of(context).colorScheme.primaryContainer.withOpacity(0.3),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Row(
                   children: [
-                    Icon(Icons.star, color: Colors.blue.shade600, size: 20),
+                    Icon(
+                      Icons.star, 
+                      color: Theme.of(context).colorScheme.primary, 
+                      size: 20,
+                    ),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Column(
@@ -724,11 +788,15 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen>
                         children: [
                           Text(
                             entry.key,
-                            style: const TextStyle(fontWeight: FontWeight.w600),
+                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                           Text(
                             entry.value.toString(),
-                            style: const TextStyle(color: Colors.grey),
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                            ),
                           ),
                         ],
                       ),
@@ -770,8 +838,8 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen>
                 icon: const Icon(Icons.add, size: 18),
                 label: const Text('Add Review'),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFFDBB42),
-                  foregroundColor: Colors.black87,
+                  backgroundColor: Theme.of(context).colorScheme.primary,
+                  foregroundColor: Theme.of(context).colorScheme.onPrimary,
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   textStyle: const TextStyle(fontSize: 14),
                 ),
@@ -1369,22 +1437,10 @@ Tap the link above to view and book on Saral Events! 🎉''';
   void _addToCartAndCheckout(ServiceItem service) {
     HapticFeedback.mediumImpact();
 
-    final checkout = Provider.of<CheckoutState>(context, listen: false);
-    // Add this service as a cart item
-    checkout.addItem(CartItem(
-      id: service.id,
-      title: service.name,
-      category: 'Service',
-      price: service.price,
-      subtitle: service.vendorName,
-    ));
-
-    // Navigate to the cart/checkout flow
+    // Navigate to booking screen to select availability slot first
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => CheckoutFlow(
-          initialItem: checkout.items.first,
-        ),
+        builder: (_) => BookingScreen(service: service),
       ),
     );
   }
