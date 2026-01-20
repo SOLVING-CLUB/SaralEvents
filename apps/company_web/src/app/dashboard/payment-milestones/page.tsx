@@ -191,19 +191,28 @@ export default function PaymentMilestonesPage() {
       if (mUpdateErr) throw new Error(mUpdateErr.message)
 
       // Get or create vendor wallet
-      const { data: wallet } = await supabase
+      let wallet
+      const { data: newWallet, error: insertErr } = await supabase
         .from('vendor_wallets')
         .insert({ vendor_id: vendorId })
         .select()
         .maybeSingle()
-        .catch(async () => {
-          const { data: w } = await supabase
-            .from('vendor_wallets')
-            .select('*')
-            .eq('vendor_id', vendorId)
-            .maybeSingle()
-          return { data: w }
-        })
+
+      if (insertErr) {
+        // Wallet might already exist, try to fetch it
+        const { data: existingWallet, error: fetchErr } = await supabase
+          .from('vendor_wallets')
+          .select('*')
+          .eq('vendor_id', vendorId)
+          .maybeSingle()
+        
+        if (fetchErr || !existingWallet) {
+          throw new Error(fetchErr?.message || 'Failed to get or create wallet')
+        }
+        wallet = existingWallet
+      } else {
+        wallet = newWallet
+      }
 
       if (!wallet) throw new Error('Wallet not found/created')
 
