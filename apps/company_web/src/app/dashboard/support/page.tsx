@@ -872,9 +872,7 @@ export default function SupportPage() {
                 />
                 <Button
                   onClick={() => {
-                    if (selectedTicket.admin_notes !== undefined) {
-                      updateTicketNotes(selectedTicket.id, selectedTicket.admin_notes)
-                    }
+                    updateTicketNotes(selectedTicket.id, selectedTicket.admin_notes || '')
                   }}
                   className="mt-2"
                 >
