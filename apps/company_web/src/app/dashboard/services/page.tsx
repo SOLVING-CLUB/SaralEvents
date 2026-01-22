@@ -43,6 +43,36 @@ export default function ServicesPage() {
   const [selectedTags, setSelectedTags] = useState<string[]>([])
   const [showFilters, setShowFilters] = useState(false)
 
+  // Helper function to normalize service data to match ServiceRow type
+  const normalizeServiceData = useCallback((rows: any[] | null): ServiceRow[] => {
+    if (!rows) return []
+    
+    return rows.map((row: any) => {
+      // Normalize vendor_profiles: Supabase returns it as an array, but we need a single object
+      let vendorProfiles: { id: string; business_name: string } | null = null
+      if (Array.isArray(row.vendor_profiles)) {
+        vendorProfiles = row.vendor_profiles.length > 0 ? row.vendor_profiles[0] : null
+      } else if (row.vendor_profiles && typeof row.vendor_profiles === 'object') {
+        vendorProfiles = row.vendor_profiles
+      }
+
+      return {
+        id: row.id,
+        name: row.name,
+        price: row.price ?? null,
+        is_active: row.is_active ?? false,
+        is_visible_to_users: row.is_visible_to_users ?? null,
+        category: row.category ?? null,
+        category_id: row.category_id ?? null,
+        tags: Array.isArray(row.tags) ? row.tags : (row.tags ? [row.tags] : []),
+        media_urls: Array.isArray(row.media_urls) ? row.media_urls : (row.media_urls ? [row.media_urls] : null),
+        vendor_id: row.vendor_id ?? null,
+        is_featured: row.is_featured ?? null,
+        vendor_profiles: vendorProfiles
+      }
+    })
+  }, [])
+
   const load = useCallback(async () => {
     // Cancel previous request if still pending
     if (abortControllerRef.current) {
@@ -113,45 +143,21 @@ export default function ServicesPage() {
 
           if (fb2Result.error) {
             setErr(`${error.message} | Fallback: ${fbResult.error.message} | Fallback2: ${fb2Result.error.message}`)
+            data = null
           } else {
-            // Normalize fallback data to match ServiceRow type
-            data = fb2Result.data?.map((row: any) => ({
-              ...row,
-              category_id: row.category_id || null,
-              tags: row.tags || [],
-              is_featured: row.is_featured || null,
-              // Normalize vendor_profiles: if it's an array, take the first item, otherwise use as-is
-              vendor_profiles: Array.isArray(row.vendor_profiles) 
-                ? (row.vendor_profiles.length > 0 ? row.vendor_profiles[0] : null)
-                : row.vendor_profiles || null
-            })) || null
+            data = fb2Result.data
           }
         } else {
-          // Normalize fallback data to match ServiceRow type
-          data = fbResult.data?.map((row: any) => ({
-            ...row,
-            tags: row.tags || [],
-            // Normalize vendor_profiles: if it's an array, take the first item, otherwise use as-is
-            vendor_profiles: Array.isArray(row.vendor_profiles) 
-              ? (row.vendor_profiles.length > 0 ? row.vendor_profiles[0] : null)
-              : row.vendor_profiles || null
-          })) || null
+          data = fbResult.data
         }
       }
       
-      // Ensure all required fields exist with defaults
+      // Normalize all data paths using the helper function
       if (data) {
-        data = data.map((row: any) => ({
-          ...row,
-          category_id: row.category_id ?? null,
-          tags: row.tags || [],
-          is_featured: row.is_featured ?? null,
-          // Normalize vendor_profiles: if it's an array, take the first item, otherwise use as-is
-          vendor_profiles: Array.isArray(row.vendor_profiles) 
-            ? (row.vendor_profiles.length > 0 ? row.vendor_profiles[0] : null)
-            : row.vendor_profiles || null
-        }))
-        setRows(data as ServiceRow[])
+        const normalizedData = normalizeServiceData(data)
+        setRows(normalizedData)
+      } else {
+        setRows([])
       }
     } catch (e: any) {
       if (!controller.signal.aborted) {
@@ -162,7 +168,7 @@ export default function ServicesPage() {
         setLoading(false)
       }
     }
-  }, [isOnline])
+  }, [isOnline, normalizeServiceData])
 
   useEffect(() => {
     load()
