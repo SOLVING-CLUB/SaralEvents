@@ -15,6 +15,8 @@ class PushNotificationService {
   String? _currentToken;
   bool _isInitialized = false;
   GoRouter? _router;
+  // Track recent messages to avoid showing duplicates in quick succession
+  final Map<String, DateTime> _recentMessageKeys = {};
 
   PushNotificationService(this._supabase)
       : _firebaseMessaging = FirebaseMessaging.instance;
@@ -211,6 +213,12 @@ class PushNotificationService {
     debugPrint('   Body: ${message.notification?.body}');
     debugPrint('   Data: ${message.data}');
 
+    // Drop duplicates that arrive within a short window
+    if (_isDuplicateMessage(message)) {
+      debugPrint('⚠️ [Vendor] PushNotificationService: Dropping duplicate notification');
+      return;
+    }
+
     // Show local notification
     await _showLocalNotification(
       title: message.notification?.title ?? 'New Notification',
@@ -365,6 +373,22 @@ class PushNotificationService {
 
   /// Get current FCM token
   String? get currentToken => _currentToken;
+
+  /// Check for duplicate notifications within a 30s window
+  bool _isDuplicateMessage(RemoteMessage message) {
+    final now = DateTime.now();
+    // Build a stable key using messageId if present; otherwise title/body/data
+    final key = message.messageId ??
+        '${message.notification?.title ?? ''}|${message.notification?.body ?? ''}|${message.data}';
+
+    // Prune old entries (>30s) to keep the map small
+    _recentMessageKeys.removeWhere((_, ts) => now.difference(ts) > const Duration(seconds: 30));
+
+    final lastSeen = _recentMessageKeys[key];
+    final isDup = lastSeen != null && now.difference(lastSeen) < const Duration(seconds: 30);
+    _recentMessageKeys[key] = now;
+    return isDup;
+  }
 }
 
 /// Top-level function to handle background messages

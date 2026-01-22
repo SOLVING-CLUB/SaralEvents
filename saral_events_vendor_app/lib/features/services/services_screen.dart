@@ -94,6 +94,39 @@ class _ServicesScreenState extends State<ServicesScreen> with TickerProviderStat
     }
   }
 
+  // Recursively count all subcategories (including nested ones)
+  int _countAllSubcategories(CategoryNode node) {
+    int count = node.subcategories.length;
+    for (final subcat in node.subcategories) {
+      count += _countAllSubcategories(subcat);
+    }
+    return count;
+  }
+
+  // Recursively count all services (including those in subcategories)
+  int _countAllServices(CategoryNode node) {
+    int count = node.services.length;
+    for (final subcat in node.subcategories) {
+      count += _countAllServices(subcat);
+    }
+    return count;
+  }
+
+  // Fetch accurate counts from database (for when in-memory structure might be incomplete)
+  Future<Map<String, int>> _getCategoryCounts(String categoryId) async {
+    try {
+      final subcategoryCount = await _serviceService.countAllSubcategories(categoryId);
+      final serviceCount = await _serviceService.countAllServices(categoryId);
+      return {
+        'subcategories': subcategoryCount,
+        'services': serviceCount,
+      };
+    } catch (e) {
+      print('Error fetching category counts: $e');
+      return {'subcategories': 0, 'services': 0};
+    }
+  }
+
   // Get all services with category names for tabs
   Future<List<Map<String, dynamic>>> _getAllServicesWithCategories() async {
     try {
@@ -411,15 +444,29 @@ class _ServicesScreenState extends State<ServicesScreen> with TickerProviderStat
         itemBuilder: (context, index) {
           if (index < visibleCats.length) {
             final cat = visibleCats[index];
-            return _FolderLikeCard(
-              title: cat.name,
-              subtitle: '${cat.subcategories.length} sub • ${cat.services.length} items',
-              onTap: () => _selectCategoryChip(cat),
-              onDelete: () => _deleteCategory(cat),
-              selectionMode: _selectionMode,
-              isSelected: _selectedCategoryIds.contains(cat.id),
-              onSelectedChanged: (_) => _toggleSelectionCategory(cat),
-              onLongPressSelect: () => _startSelectionCategory(cat),
+            // Use FutureBuilder to fetch accurate counts from database
+            return FutureBuilder<Map<String, int>>(
+              future: _getCategoryCounts(cat.id),
+              builder: (context, snapshot) {
+                // Fallback to in-memory counts while loading or on error
+                final totalSubcategories = snapshot.hasData 
+                    ? snapshot.data!['subcategories'] ?? _countAllSubcategories(cat)
+                    : _countAllSubcategories(cat);
+                final totalServices = snapshot.hasData 
+                    ? snapshot.data!['services'] ?? _countAllServices(cat)
+                    : _countAllServices(cat);
+                
+                return _FolderLikeCard(
+                  title: cat.name,
+                  subtitle: '$totalSubcategories sub • $totalServices items',
+                  onTap: () => _selectCategoryChip(cat),
+                  onDelete: () => _deleteCategory(cat),
+                  selectionMode: _selectionMode,
+                  isSelected: _selectedCategoryIds.contains(cat.id),
+                  onSelectedChanged: (_) => _toggleSelectionCategory(cat),
+                  onLongPressSelect: () => _startSelectionCategory(cat),
+                );
+              },
             );
           }
           final item = visibleServices[index - visibleCats.length];

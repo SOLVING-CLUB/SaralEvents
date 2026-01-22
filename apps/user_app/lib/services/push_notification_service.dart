@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'dart:convert';
 import 'dart:io';
 
 /// Service to manage Firebase Cloud Messaging (FCM) push notifications
@@ -14,10 +15,16 @@ class PushNotificationService {
   final FlutterLocalNotificationsPlugin _localNotifications;
   String? _currentToken;
   bool _isInitialized = false;
+  Function(Map<String, dynamic>)? _navigationCallback;
 
   PushNotificationService(this._supabase)
       : _firebaseMessaging = FirebaseMessaging.instance,
         _localNotifications = FlutterLocalNotificationsPlugin();
+
+  /// Set navigation callback for handling notification taps
+  void setNavigationCallback(Function(Map<String, dynamic>) callback) {
+    _navigationCallback = callback;
+  }
 
   /// Initialize FCM and register token
   Future<void> initialize() async {
@@ -90,8 +97,37 @@ class PushNotificationService {
     await _localNotifications.initialize(
       initSettings,
       onDidReceiveNotificationResponse: (NotificationResponse response) {
-        debugPrint('📬 Local notification tapped: ${response.payload}');
-        // Handle notification tap if needed
+        debugPrint('📬 Local notification tapped');
+        debugPrint('   Payload: ${response.payload}');
+        debugPrint('   Payload type: ${response.payload.runtimeType}');
+        
+        // Handle notification tap
+        if (response.payload != null && response.payload!.isNotEmpty) {
+          try {
+            // Payload is JSON string, parse it
+            final payload = response.payload!;
+            debugPrint('   Parsing payload: $payload');
+            final data = _parseNotificationPayload(payload);
+            debugPrint('   Parsed data: $data');
+            debugPrint('   Navigation callback set: ${_navigationCallback != null}');
+            
+            if (_navigationCallback == null) {
+              debugPrint('⚠️ Navigation callback not set yet, delaying navigation...');
+              // Retry after a delay if callback isn't set
+              Future.delayed(const Duration(milliseconds: 1000), () {
+                debugPrint('   Retrying navigation after delay...');
+                _handleNotificationNavigation(data);
+              });
+            } else {
+              _handleNotificationNavigation(data);
+            }
+          } catch (e, stackTrace) {
+            debugPrint('❌ Error handling local notification tap: $e');
+            debugPrint('   Stack trace: $stackTrace');
+          }
+        } else {
+          debugPrint('⚠️ No payload in notification response');
+        }
       },
     );
 
@@ -164,6 +200,7 @@ class PushNotificationService {
           'device_type': deviceType,
           'device_id': deviceId,
           'app_version': appVersion,
+          'app_type': 'user_app', // CRITICAL: Set app_type for filtering
           'is_active': true,
           'updated_at': DateTime.now().toIso8601String(),
         },
@@ -225,7 +262,7 @@ class PushNotificationService {
       title,
       body,
       notificationDetails,
-      payload: data?.toString(),
+      payload: data != null ? jsonEncode(data) : null,
     );
 
     debugPrint('✅ Local notification displayed: $title');
@@ -237,26 +274,56 @@ class PushNotificationService {
     debugPrint('   Title: ${message.notification?.title}');
     debugPrint('   Body: ${message.notification?.body}');
     debugPrint('   Data: ${message.data}');
+    debugPrint('   Navigation callback set: ${_navigationCallback != null}');
 
     // Handle navigation based on notification data
-    final data = message.data;
-    final type = data['type'] as String?;
+    if (_navigationCallback == null) {
+      debugPrint('⚠️ Navigation callback not set yet, delaying navigation...');
+      // Retry after a delay if callback isn't set
+      Future.delayed(const Duration(milliseconds: 1000), () {
+        debugPrint('   Retrying navigation after delay...');
+        _handleNotificationNavigation(message.data);
+      });
+    } else {
+      _handleNotificationNavigation(message.data);
+    }
+  }
 
-    switch (type) {
-      case 'order_update':
-        // Navigate to order details
-        debugPrint('   → Navigate to order: ${data['order_id']}');
-        break;
-      case 'payment':
-        // Navigate to payment/order
-        debugPrint('   → Navigate to payment: ${data['order_id']}');
-        break;
-      case 'support':
-        // Navigate to support/chat
-        debugPrint('   → Navigate to support');
-        break;
-      default:
-        debugPrint('   → Unknown notification type: $type');
+  /// Parse notification payload string to Map
+  Map<String, dynamic> _parseNotificationPayload(String payload) {
+    try {
+      // Try JSON decode first
+      return jsonDecode(payload) as Map<String, dynamic>;
+    } catch (e) {
+      // Fallback: try to parse as string representation
+      try {
+        final cleaned = payload.replaceAll('{', '').replaceAll('}', '');
+        final parts = cleaned.split(', ');
+        final Map<String, dynamic> data = {};
+        
+        for (final part in parts) {
+          final keyValue = part.split(': ');
+          if (keyValue.length == 2) {
+            final key = keyValue[0].trim();
+            final value = keyValue[1].trim();
+            data[key] = value;
+          }
+        }
+        
+        return data;
+      } catch (e2) {
+        debugPrint('❌ Error parsing payload: $e2');
+        return {};
+      }
+    }
+  }
+
+  /// Handle navigation based on notification data
+  void _handleNotificationNavigation(Map<String, dynamic> data) {
+    if (_navigationCallback != null) {
+      _navigationCallback!(data);
+    } else {
+      debugPrint('⚠️ Cannot navigate: Navigation callback not set');
     }
   }
 

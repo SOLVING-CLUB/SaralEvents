@@ -74,18 +74,11 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
         debugPrint('Current authenticated User ID: $currentUserId');
         
         if (bookings.isEmpty) {
-          debugPrint('⚠️ WARNING: No bookings found!');
-          debugPrint('Possible causes:');
-          debugPrint('  1. User ID mismatch - Current: $currentUserId');
-          debugPrint('  2. RLS policy blocking access');
-          debugPrint('  3. No bookings exist for this user');
-          
-          // Show diagnostic dialog in debug mode
-          if (mounted) {
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              _showDiagnosticDialog(currentUserId);
-            });
-          }
+          // debugPrint('⚠️ WARNING: No bookings found!');
+          // debugPrint('Possible causes:');
+          // debugPrint('  1. User ID mismatch - Current: $currentUserId');
+          // debugPrint('  2. RLS policy blocking access');
+          // debugPrint('  3. No bookings exist for this user');
         } else {
           debugPrint('✅ Bookings found:');
           for (int i = 0; i < bookings.length; i++) {
@@ -794,75 +787,7 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
     }
   }
 
-  void _showDiagnosticDialog(String? currentUserId) {
-    if (!mounted) return;
-    
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('🔍 Booking Diagnostic'),
-        content: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text('No bookings found. Diagnostic info:', style: TextStyle(fontWeight: FontWeight.bold)),
-              const SizedBox(height: 16),
-              Text('Current User ID:\n${currentUserId ?? "NULL"}', style: const TextStyle(fontFamily: 'monospace', fontSize: 12)),
-              const SizedBox(height: 8),
-              const Text('Expected User ID (from DB):\n62a201d9-ec45-4532-ace0-825152934451', style: TextStyle(fontFamily: 'monospace', fontSize: 12)),
-              const SizedBox(height: 16),
-              if (currentUserId != '62a201d9-ec45-4532-ace0-825152934451')
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.primaryContainer.withOpacity(0.3),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: const Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('⚠️ USER ID MISMATCH!', style: TextStyle(fontWeight: FontWeight.bold)),
-                      SizedBox(height: 8),
-                      Text('Your app is logged in with a different user ID than the bookings in the database.'),
-                      SizedBox(height: 8),
-                      Text('Solution: Run fix_user_id_mismatch.sql to update bookings to match your current user ID.'),
-                    ],
-                  ),
-                )
-              else
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.primaryContainer.withOpacity(0.3),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: const Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('ℹ️ User IDs match, but no bookings found.'),
-                      SizedBox(height: 8),
-                      Text('Possible causes:'),
-                      Text('• RLS policy blocking access'),
-                      Text('• Bookings exist but with different status'),
-                      Text('• Database connection issue'),
-                    ],
-                  ),
-                ),
-              const SizedBox(height: 16),
-              const Text('Check the debug console for detailed logs.', style: TextStyle(fontSize: 12, fontStyle: FontStyle.italic)),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('OK'),
-          ),
-        ],
-      ),
-    );
-  }
+
 
   Widget _emptyState(BuildContext context, String title, String subtitle) {
     return Center(

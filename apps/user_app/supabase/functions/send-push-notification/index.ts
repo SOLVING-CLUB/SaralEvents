@@ -11,6 +11,7 @@ interface FCMRequest {
   body: string
   data?: Record<string, any>
   imageUrl?: string
+  appTypes?: string[] // Filter tokens by app_type: ['user_app'], ['vendor_app'], or both
 }
 
 interface ServiceAccount {
@@ -230,17 +231,28 @@ serve(async (req) => {
         Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
       )
 
-      const { data: tokenData, error } = await supabase
+      // Build query with app_type filtering if appTypes is provided
+      let query = supabase
         .from('fcm_tokens')
         .select('token')
         .eq('user_id', body.userId)
         .eq('is_active', true)
+
+      // Filter by app_type if appTypes is specified
+      if (body.appTypes && body.appTypes.length > 0) {
+        query = query.in('app_type', body.appTypes)
+      }
+
+      const { data: tokenData, error } = await query
 
       if (error) {
         throw new Error(`Failed to fetch tokens: ${error.message}`)
       }
 
       targetTokens = tokenData?.map(t => t.token) || []
+      
+      // Log for debugging
+      console.log(`Fetched ${targetTokens.length} tokens for user ${body.userId}${body.appTypes ? ` with appTypes: ${body.appTypes.join(', ')}` : ' (no app_type filter)'}`)
     }
 
     if (targetTokens.length === 0) {

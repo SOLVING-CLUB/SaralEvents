@@ -69,13 +69,32 @@ class _SupportScreenState extends State<SupportScreen> {
     super.dispose();
   }
 
+  // Check if order ID is required based on category
+  bool _isOrderIdRequired() {
+    // Order ID is required for order-related categories
+    return _selectedCategory == 'Booking Issue' ||
+           _selectedCategory == 'Payment/Refund' ||
+           _selectedCategory == 'Cancellation' ||
+           _selectedCategory == 'Complaint';
+  }
+
   // Validate UUID format (8-4-4-4-12 hexadecimal characters)
   String? _validateOrderId(String? value) {
-    if (value == null || value.trim().isEmpty) {
-      return null; // Order ID is optional
+    final trimmed = value?.trim() ?? '';
+    
+    // Check if order ID is required for this category
+    if (_isOrderIdRequired()) {
+      if (trimmed.isEmpty) {
+        return 'Order ID is required for ${_selectedCategory ?? "this category"}';
+      }
+    } else {
+      // If not required, allow empty
+      if (trimmed.isEmpty) {
+        return null;
+      }
     }
-    final trimmed = value.trim();
-    // UUID format: 8-4-4-4-12 hexadecimal characters
+    
+    // Validate UUID format if provided
     final uuidPattern = RegExp(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$');
     if (!uuidPattern.hasMatch(trimmed)) {
       return 'Please enter a valid Order ID format (e.g., 550e8400-e29b-41d4-a716-446655440000)';
@@ -296,6 +315,8 @@ class _SupportScreenState extends State<SupportScreen> {
                             _selectedCategory = value;
                             _categoryController.text = value ?? '';
                           });
+                          // Re-validate order ID field when category changes
+                          _formKey.currentState?.validate();
                         },
                         validator: (value) {
                           if (value == null || value.isEmpty) {
@@ -333,11 +354,13 @@ class _SupportScreenState extends State<SupportScreen> {
                       // Order ID
                       TextFormField(
                         controller: _orderIdController,
-                        decoration: const InputDecoration(
-                          labelText: 'Order ID (Optional)',
-                          hintText: 'Enter Order ID if related to an order',
-                          border: OutlineInputBorder(),
-                          prefixIcon: Icon(Icons.receipt_long),
+                        decoration: InputDecoration(
+                          labelText: _isOrderIdRequired() ? 'Order ID *' : 'Order ID (Optional)',
+                          hintText: _isOrderIdRequired()
+                              ? 'Enter Order ID (required for ${_selectedCategory ?? "this category"})'
+                              : 'Enter Order ID if related to an order',
+                          border: const OutlineInputBorder(),
+                          prefixIcon: const Icon(Icons.receipt_long),
                         ),
                         validator: _validateOrderId,
                       ),

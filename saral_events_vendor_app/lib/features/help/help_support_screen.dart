@@ -59,13 +59,29 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
     super.dispose();
   }
 
+  // Check if order ID is required based on issue type
+  bool _isOrderIdRequired() {
+    // Order ID is required for order-related issues: payment, booking
+    return _issueType == 'payment' || _issueType == 'booking';
+  }
+
   // Validate UUID format (8-4-4-4-12 hexadecimal characters)
   String? _validateOrderId(String? value) {
-    if (value == null || value.trim().isEmpty) {
-      return null; // Order ID is optional
+    final trimmed = value?.trim() ?? '';
+    
+    // Check if order ID is required for this issue type
+    if (_isOrderIdRequired()) {
+      if (trimmed.isEmpty) {
+        return 'Order ID is required for ${_issueType == 'payment' ? 'payment' : 'booking'} related issues';
+      }
+    } else {
+      // If not required, allow empty
+      if (trimmed.isEmpty) {
+        return null;
+      }
     }
-    final trimmed = value.trim();
-    // UUID format: 8-4-4-4-12 hexadecimal characters
+    
+    // Validate UUID format if provided
     final uuidPattern = RegExp(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$');
     if (!uuidPattern.hasMatch(trimmed)) {
       return 'Please enter a valid Order ID format (e.g., 550e8400-e29b-41d4-a716-446655440000)';
@@ -360,7 +376,11 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
                   DropdownMenuItem(value: 'technical', child: Text('Technical issue')),
                   DropdownMenuItem(value: 'other', child: Text('Other')),
                 ],
-                onChanged: (value) => setState(() => _issueType = value ?? 'general'),
+                onChanged: (value) {
+                  setState(() => _issueType = value ?? 'general');
+                  // Re-validate order ID field when issue type changes
+                  _issueFormKey.currentState?.validate();
+                },
               ),
               const SizedBox(height: 12),
               // Contact Number
@@ -386,10 +406,12 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
               // Order ID
               TextFormField(
                 controller: _orderIdController,
-                decoration: const InputDecoration(
-                  labelText: 'Order ID (Optional)',
-                  hintText: 'Enter Order ID if related to an order',
-                  prefixIcon: Icon(Icons.receipt_long),
+                decoration: InputDecoration(
+                  labelText: _isOrderIdRequired() ? 'Order ID *' : 'Order ID (Optional)',
+                  hintText: _isOrderIdRequired()
+                      ? 'Enter Order ID (required for ${_issueType == 'payment' ? 'payment' : 'booking'} issues)'
+                      : 'Enter Order ID if related to an order',
+                  prefixIcon: const Icon(Icons.receipt_long),
                 ),
                 validator: _validateOrderId,
               ),

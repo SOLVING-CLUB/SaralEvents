@@ -477,7 +477,8 @@ class PaymentService {
     }
 
     // Store cart details before clearing (needed for success screen)
-    final paidAmount = checkoutState.totalPrice;
+    // IMPORTANT: at this stage we only charge the advance (20%), not the full total.
+    final paidAmount = checkoutState.totalPrice * 0.20;
     final paidItemsCount = checkoutState.items.length;
     
     // Get service details for notifications (before clearing cart)
@@ -542,43 +543,25 @@ class PaymentService {
       }
     }
     
-    // Send user notification about payment success
+    // Send user notifications about payment success and order placement
+    // Note: Database trigger also sends payment notification, but we send more specific messages here
+    // The database trigger will be disabled to avoid duplicates (see disable_duplicate_notification_triggers.sql)
     if (userId != null && _currentOrderId != null) {
       try {
         if (kDebugMode) {
-          debugPrint('📬 Sending user notification for payment success...');
+          debugPrint('📬 Sending user notifications for payment success...');
           debugPrint('   User ID: $userId');
           debugPrint('   Order ID: $_currentOrderId');
           debugPrint('   Amount: ₹$paidAmount');
         }
         
-        await notificationService.sendPaymentNotification(
-          userId: userId,
-          orderId: _currentOrderId!,
-          amount: paidAmount,
-          isSuccess: true,
-        );
-        
+        // NOTE: Payment and order placement notifications are handled by database triggers
+        // to avoid duplicates. Database triggers will send:
+        // - Payment success notification (user_app) when payment_milestones status changes
+        // - Order placement notification (user_app) when booking is created
+        // - New order notification (vendor_app) when booking is created
         if (kDebugMode) {
-          debugPrint('✅ Payment notification sent successfully');
-        }
-        
-        // Also send order placement notification
-        await notificationService.sendNotification(
-          userId: userId,
-          title: 'Order Placed Successfully',
-          body: 'Your order for $paidItemsCount item(s) has been placed successfully. Order ID: ${_currentOrderId!.substring(0, 8)}...',
-          data: {
-            'type': 'order_placed',
-            'order_id': _currentOrderId!,
-            'items_count': paidItemsCount.toString(),
-            'amount': paidAmount.toString(),
-          },
-        );
-        
-        if (kDebugMode) {
-          debugPrint('✅ Order placement notification sent successfully');
-          debugPrint('✅ All user notifications sent for payment success');
+          debugPrint('✅ Payment notifications will be sent by database triggers');
         }
       } catch (e, stackTrace) {
         if (kDebugMode) {
@@ -593,53 +576,11 @@ class PaymentService {
       }
     }
     
-    // Send vendor notification about new order
-    if (vendorId != null) {
-      try {
-        final dateStr = bookingDate != null
-            ? '${bookingDate.day}/${bookingDate.month}/${bookingDate.year}'
-            : 'TBD';
-        final timeStr = bookingTime ?? 'TBD';
-        final serviceNameStr = serviceName ?? 'Service';
-        
-        if (kDebugMode) {
-          debugPrint('📬 Sending vendor notification for new order...');
-          debugPrint('   Vendor ID: $vendorId');
-          debugPrint('   Service: $serviceNameStr');
-          debugPrint('   Date: $dateStr');
-          debugPrint('   Time: $timeStr');
-          debugPrint('   Order ID: $_currentOrderId');
-        }
-        
-        await notificationService.sendNotification(
-          userId: vendorId,
-          title: 'New Order Received',
-          body: 'New order for $serviceNameStr on $dateStr at $timeStr. Order ID: ${_currentOrderId?.substring(0, 8) ?? "N/A"}...',
-          data: {
-            'type': 'new_order',
-            'order_id': _currentOrderId ?? '',
-            'service_name': serviceNameStr,
-            'booking_date': bookingDate?.toIso8601String() ?? '',
-            'booking_time': bookingTime ?? '',
-            'amount': paidAmount.toString(),
-            'items_count': paidItemsCount.toString(),
-          },
-        );
-        
-        if (kDebugMode) {
-          debugPrint('✅ Vendor notification sent successfully');
-        }
-      } catch (e, stackTrace) {
-        if (kDebugMode) {
-          debugPrint('❌ Error sending vendor notification: $e');
-          debugPrint('❌ Stack trace: $stackTrace');
-        }
-        // Don't fail payment flow if notification fails
-      }
-    } else {
-      if (kDebugMode) {
-        debugPrint('⚠️ Cannot send vendor notification: vendorId is null');
-      }
+    // NOTE: Vendor notification for new order is handled by database trigger
+    // when booking status changes to 'confirmed' (or when booking is created)
+    // This avoids duplicates and ensures consistent notification delivery
+    if (kDebugMode && vendorId != null) {
+      debugPrint('✅ Vendor notification will be sent by database trigger');
     }
     
     // Clear the cart after successful payment
@@ -813,6 +754,7 @@ class PaymentService {
           userId: userId,
           title: 'Payment Failed',
           body: 'Your payment of ₹${amount.toStringAsFixed(2)} failed. Order was not placed. Please try again.',
+          appTypes: ['user_app'], // CRITICAL: Only send to user app
           data: {
             'type': 'payment_failed',
             'order_id': _currentOrderId ?? 'unknown',
@@ -925,6 +867,265 @@ class PaymentService {
       }
     }
     return false;
+  }
+
+  /// Process milestone payment (arrival or completion)
+  Future<void> processMilestonePayment({
+    required BuildContext context,
+    required String bookingId,
+    required String milestoneType, // 'arrival' or 'completion'
+    required VoidCallback onSuccess,
+    required VoidCallback onFailure,
+  }) async {
+    try {
+      if (kDebugMode) {
+        debugPrint('=== MILESTONE PAYMENT PROCESSING START ===');
+        debugPrint('Booking ID: $bookingId');
+        debugPrint('Milestone Type: $milestoneType');
+      }
+
+      // Get milestone details
+      final milestoneService = PaymentMilestoneService(Supabase.instance.client);
+      final milestones = await milestoneService.getMilestonesForBooking(bookingId);
+      
+      PaymentMilestone? targetMilestone;
+      if (milestoneType == 'arrival') {
+        targetMilestone = milestones.firstWhere(
+          (m) => m.type == MilestoneType.arrival && m.status == MilestoneStatus.pending,
+          orElse: () => milestones.firstWhere(
+            (m) => m.type == MilestoneType.arrival,
+            orElse: () => throw Exception('Arrival milestone not found'),
+          ),
+        );
+      } else if (milestoneType == 'completion') {
+        targetMilestone = milestones.firstWhere(
+          (m) => m.type == MilestoneType.completion && m.status == MilestoneStatus.pending,
+          orElse: () => milestones.firstWhere(
+            (m) => m.type == MilestoneType.completion,
+            orElse: () => throw Exception('Completion milestone not found'),
+          ),
+        );
+      } else {
+        throw Exception('Invalid milestone type: $milestoneType');
+      }
+
+      // Check if already paid
+      if (targetMilestone.status != MilestoneStatus.pending) {
+        _showInfo(context, 'This milestone has already been paid');
+        onSuccess();
+        return;
+      }
+
+      // Get user details
+      final user = Supabase.instance.client.auth.currentUser;
+      if (user == null) {
+        _showError(context, 'Please sign in to make payment');
+        onFailure();
+        return;
+      }
+
+      // Get user profile for billing details
+      final userProfile = await Supabase.instance.client
+          .from('user_profiles')
+          .select('first_name, last_name, email, phone_number')
+          .eq('user_id', user.id)
+          .maybeSingle();
+
+      // Combine first_name and last_name, or fallback to email username
+      final firstName = userProfile?['first_name'] as String? ?? '';
+      final lastName = userProfile?['last_name'] as String? ?? '';
+      final userName = firstName.isNotEmpty || lastName.isNotEmpty
+          ? '$firstName $lastName'.trim()
+          : (user.email?.split('@')[0] ?? 'User');
+      final userEmail = userProfile?['email'] as String? ?? user.email ?? '';
+      final userPhone = userProfile?['phone_number'] as String? ?? '';
+
+      // Get booking details for description
+      final bookingResult = await Supabase.instance.client
+          .from('bookings')
+          .select('services(name)')
+          .eq('id', bookingId)
+          .maybeSingle();
+
+      final serviceName = bookingResult?['services']?['name'] as String? ?? 'Service';
+
+      // Calculate amount in paise
+      final amountPaise = (targetMilestone.amount * 100).toInt();
+      // Generate short receipt (Razorpay limit: 40 chars)
+      // Format: ms_<first8chars_of_milestone_id>_<timestamp>
+      final milestoneIdShort = targetMilestone.id.replaceAll('-', '').substring(0, 8);
+      final receipt = 'ms_${milestoneIdShort}_${DateTime.now().millisecondsSinceEpoch}';
+
+      if (kDebugMode) {
+        debugPrint('Milestone Amount: ₹${targetMilestone.amount} ($amountPaise paise)');
+        debugPrint('Milestone Percentage: ${targetMilestone.percentage}%');
+        debugPrint('Receipt: $receipt');
+      }
+
+      // Create Razorpay order
+      final order = await _razorpayService.createOrderOnServer(
+        amountInPaise: amountPaise,
+        currency: 'INR',
+        receipt: receipt,
+        notes: {
+          'app': 'saral_user',
+          'user_id': user.id,
+          'booking_id': bookingId,
+          'milestone_id': targetMilestone.id,
+          'milestone_type': milestoneType,
+          'milestone_percentage': targetMilestone.percentage.toString(),
+          'amount': targetMilestone.amount.toString(),
+        },
+      );
+
+      if (kDebugMode) {
+        debugPrint('✅ Razorpay order created: ${order['id']}');
+      }
+
+      // Store milestone details for success callback
+      final milestoneId = targetMilestone.id;
+      final milestonePercentage = targetMilestone.percentage;
+      final milestoneAmount = targetMilestone.amount;
+
+      // Initialize Razorpay with callbacks
+      _razorpayService.init(
+        onSuccess: (paymentId, responseData) async {
+          if (kDebugMode) {
+            debugPrint('✅ Milestone payment successful: $paymentId');
+          }
+
+          // Mark milestone as paid
+          final success = await milestoneService.markMilestonePaid(
+            milestoneId: milestoneId,
+            paymentId: paymentId,
+            gatewayOrderId: order['id'] as String?,
+            gatewayPaymentId: paymentId,
+          );
+
+          if (!success) {
+            if (kDebugMode) {
+              debugPrint('❌ Failed to mark milestone as paid');
+            }
+            _showError(context, 'Payment successful but failed to update milestone. Please contact support.');
+            onFailure();
+            return;
+          }
+
+          // Invalidate cache
+          CacheManager.instance.invalidate('user:bookings');
+          CacheManager.instance.invalidate('user:booking-stats');
+          CacheManager.instance.invalidateByPrefix('user:bookings');
+
+          // Wait a moment for database to commit
+          await Future.delayed(const Duration(milliseconds: 500));
+
+          // NOTE: Milestone payment success notifications are handled by database trigger
+          // (notify_payment_success) which sends to both user_app and vendor_app
+          // This avoids duplicates and ensures consistent notification delivery
+          if (kDebugMode) {
+            debugPrint('✅ Milestone payment notifications will be sent by database trigger');
+          }
+
+          // Show success message
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Payment successful! $milestonePercentage% milestone (₹${milestoneAmount.toStringAsFixed(2)}) has been paid.',
+              ),
+              backgroundColor: Colors.green,
+              duration: const Duration(seconds: 3),
+            ),
+          );
+
+          // Call success callback (which will reload order details)
+          onSuccess();
+        },
+        onError: (code, message, responseData) async {
+          if (kDebugMode) {
+            debugPrint('❌ Milestone payment failed: $code - $message');
+          }
+
+          // Send push notification for milestone payment failure (only for failures, not success)
+          // Success notifications are handled by database trigger to avoid duplicates
+          final notificationService = NotificationSenderService(Supabase.instance.client);
+          try {
+            final milestoneLabel = milestoneType == 'arrival' ? 'Arrival Payment (50%)' : 'Completion Payment (30%)';
+            
+            if (kDebugMode) {
+              debugPrint('📬 Sending milestone payment failure notification...');
+              debugPrint('   Milestone Type: $milestoneType');
+              debugPrint('   Amount: ₹$milestoneAmount');
+              debugPrint('   Error: $code - $message');
+            }
+
+            await notificationService.sendNotification(
+              userId: user.id,
+              title: 'Payment Failed',
+              body: '$milestoneLabel of ₹${milestoneAmount.toStringAsFixed(2)} failed. Please try again.',
+              appTypes: ['user_app'], // CRITICAL: Only send to user app
+              data: {
+                'type': 'milestone_payment_failed',
+                'booking_id': bookingId,
+                'milestone_id': milestoneId,
+                'milestone_type': milestoneType,
+                'milestone_percentage': milestonePercentage.toString(),
+                'amount': milestoneAmount.toString(),
+                'error_code': code,
+                'error_message': message,
+              },
+            );
+
+            if (kDebugMode) {
+              debugPrint('✅ Milestone payment failure notification sent');
+            }
+          } catch (e) {
+            if (kDebugMode) {
+              debugPrint('❌ Error sending milestone payment failure notification: $e');
+            }
+            // Don't fail payment flow if notification fails
+          }
+
+          _showError(context, 'Payment failed: $message');
+          onFailure();
+        },
+        onExternalWallet: (walletName) {
+          if (kDebugMode) {
+            debugPrint('⚠️ External wallet selected: $walletName');
+          }
+          // External wallet handling - payment will be processed normally
+        },
+      );
+
+      // Open Razorpay checkout
+      final milestoneLabel = milestoneType == 'arrival' ? 'Arrival Payment (50%)' : 'Completion Payment (30%)';
+      _razorpayService.openCheckout(
+        amountInPaise: amountPaise,
+        name: 'Saral Events',
+        description: '$milestoneLabel for $serviceName',
+        orderId: order['id'] as String,
+        prefillName: userName,
+        prefillEmail: userEmail,
+        prefillContact: userPhone,
+        notes: {
+          'app': 'saral_user',
+          'user_id': user.id,
+          'booking_id': bookingId,
+          'milestone_id': milestoneId,
+          'milestone_type': milestoneType,
+        },
+      );
+
+      if (kDebugMode) {
+        debugPrint('✅ Razorpay checkout opened for milestone payment');
+      }
+    } catch (e, stackTrace) {
+      if (kDebugMode) {
+        debugPrint('❌ Error processing milestone payment: $e');
+        debugPrint('❌ Stack trace: $stackTrace');
+      }
+      _showError(context, 'Failed to process payment: ${e.toString()}');
+      onFailure();
+    }
   }
 
   /// Dispose resources

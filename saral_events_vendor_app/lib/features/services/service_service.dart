@@ -238,6 +238,99 @@ class ServiceService {
     }
   }
 
+  // Recursively count all subcategories for a given category
+  Future<int> countAllSubcategories(String categoryId) async {
+    try {
+      final vendorId = await _getVendorId();
+      if (vendorId == null) return 0;
+
+      // Get all category IDs recursively (including the category itself and all descendants)
+      final categoryIds = await _getAllCategoryIdsRecursive(categoryId);
+      
+      // Count subcategories (exclude the category itself)
+      return categoryIds.length - 1;
+    } catch (e) {
+      print('Error counting subcategories: $e');
+      // Fallback: count direct subcategories
+      try {
+        final result = await _supabase
+            .from('categories')
+            .select('id')
+            .eq('parent_id', categoryId);
+        return result.length;
+      } catch (e2) {
+        print('Error in fallback subcategory count: $e2');
+        return 0;
+      }
+    }
+  }
+
+  // Recursively count all services for a given category (including services in subcategories)
+  Future<int> countAllServices(String categoryId) async {
+    try {
+      final vendorId = await _getVendorId();
+      if (vendorId == null) return 0;
+
+      // Get all category IDs including subcategories recursively
+      final categoryIds = await _getAllCategoryIdsRecursive(categoryId);
+      
+      // Count services in all these categories
+      final result = await _supabase
+          .from('services')
+          .select('id')
+          .eq('vendor_id', vendorId)
+          .inFilter('category_id', categoryIds);
+
+      return result.length;
+    } catch (e) {
+      print('Error counting services: $e');
+      // Fallback: count direct services
+      try {
+        final result = await _supabase
+            .from('services')
+            .select('id')
+            .eq('category_id', categoryId);
+        return result.length;
+      } catch (e2) {
+        print('Error in fallback service count: $e2');
+        return 0;
+      }
+    }
+  }
+
+  // Helper: Get all category IDs recursively (including the category itself and all its descendants)
+  Future<List<String>> _getAllCategoryIdsRecursive(String categoryId) async {
+    try {
+      final vendorId = await _getVendorId();
+      if (vendorId == null) return [categoryId];
+
+      final allIds = <String>[categoryId];
+      final toProcess = <String>[categoryId];
+
+      while (toProcess.isNotEmpty) {
+        final currentId = toProcess.removeAt(0);
+        final subcategories = await _supabase
+            .from('categories')
+            .select('id')
+            .eq('parent_id', currentId)
+            .eq('vendor_id', vendorId);
+
+        for (final subcat in subcategories) {
+          final subcatId = subcat['id'] as String;
+          if (!allIds.contains(subcatId)) {
+            allIds.add(subcatId);
+            toProcess.add(subcatId);
+          }
+        }
+      }
+
+      return allIds;
+    } catch (e) {
+      print('Error getting recursive category IDs: $e');
+      return [categoryId];
+    }
+  }
+
   // Create new service
   Future<ServiceItem?> createService({
     required String name,

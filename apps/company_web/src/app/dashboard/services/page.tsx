@@ -1,7 +1,9 @@
 "use client"
-import { useEffect, useMemo, useState, useCallback } from 'react'
+import { useEffect, useMemo, useState, useCallback, useRef } from 'react'
 import Image from 'next/image'
-import { createClient } from '@/lib/supabase'
+import { useStableSupabase } from '@/hooks/useStableSupabase'
+import { useNetworkStatus } from '@/hooks/useNetworkStatus'
+import { safeQuery } from '@/lib/api-client'
 import { Input } from '@/components/ui/Input'
 import { Button } from '@/components/ui/Button'
 import { ChevronRight, Search as SearchIcon, X as XIcon, ArrowUpDown, Filter, X } from 'lucide-react'
@@ -22,7 +24,9 @@ type ServiceRow = {
 }
 
 export default function ServicesPage() {
-  const supabase = createClient()
+  const supabase = useStableSupabase()
+  const { isOnline } = useNetworkStatus()
+  const abortControllerRef = useRef<AbortController | null>(null)
   const [rows, setRows] = useState<ServiceRow[]>([])
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState<string | null>(null)
@@ -39,38 +43,81 @@ export default function ServicesPage() {
   const [selectedTags, setSelectedTags] = useState<string[]>([])
   const [showFilters, setShowFilters] = useState(false)
 
-  const load = async () => {
+  const load = useCallback(async () => {
+    // Cancel previous request if still pending
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort()
+    }
+
+    const controller = new AbortController()
+    abortControllerRef.current = controller
+
+    if (!isOnline) {
+      setErr('No internet connection. Please check your network.')
+      setLoading(false)
+      return
+    }
+
     setLoading(true)
     setErr(null)
+    
     try {
       // Try to load with all fields including tags
-      let { data, error } = await supabase
-        .from('services')
-        .select('id, name, price, is_active, is_visible_to_users, category, category_id, tags, media_urls, vendor_id, is_featured, vendor_profiles(id,business_name)')
-        .order('created_at', { ascending: false })
-        .limit(500)
+      const result = await safeQuery(
+        async (sb) => {
+          return await sb
+            .from('services')
+            .select('id, name, price, is_active, is_visible_to_users, category, category_id, tags, media_urls, vendor_id, is_featured, vendor_profiles(id,business_name)')
+            .order('created_at', { ascending: false })
+            .limit(500)
+        },
+        { signal: controller.signal, timeout: 30000, maxRetries: 3 }
+      )
+
+      // Check if request was cancelled
+      if (controller.signal.aborted) {
+        return
+      }
+
+      let { data, error } = result
       
       if (error) {
         // Fallback if tags column doesn't exist yet
-        const fb = await supabase
-          .from('services')
-          .select('id, name, price, is_active, is_visible_to_users, category, category_id, media_urls, vendor_id, is_featured, vendor_profiles(id,business_name)')
-          .order('created_at', { ascending: false })
-          .limit(500)
-        if (fb.error) {
+        const fbResult = await safeQuery(
+          async (sb) => {
+            return await sb
+              .from('services')
+              .select('id, name, price, is_active, is_visible_to_users, category, category_id, media_urls, vendor_id, is_featured, vendor_profiles(id,business_name)')
+              .order('created_at', { ascending: false })
+              .limit(500)
+          },
+          { signal: controller.signal, timeout: 30000, maxRetries: 2 }
+        )
+
+        if (controller.signal.aborted) return
+
+        if (fbResult.error) {
           // Final fallback without category_id
-          const fb2 = await supabase
-            .from('services')
-            .select('id, name, price, is_active, is_visible_to_users, category, media_urls, vendor_id, vendor_profiles(id,business_name)')
-            .order('created_at', { ascending: false })
-            .limit(500)
-          if (fb2.error) {
-            setErr(`${error.message} | Fallback: ${fb.error.message} | Fallback2: ${fb2.error.message}`)
+          const fb2Result = await safeQuery(
+            async (sb) => {
+              return await sb
+                .from('services')
+                .select('id, name, price, is_active, is_visible_to_users, category, media_urls, vendor_id, vendor_profiles(id,business_name)')
+                .order('created_at', { ascending: false })
+                .limit(500)
+            },
+            { signal: controller.signal, timeout: 30000, maxRetries: 2 }
+          )
+
+          if (controller.signal.aborted) return
+
+          if (fb2Result.error) {
+            setErr(`${error.message} | Fallback: ${fbResult.error.message} | Fallback2: ${fb2Result.error.message}`)
           } else {
-            data = fb2.data as any
+            data = fb2Result.data
           }
         } else {
-          data = fb.data as any
+          data = fbResult.data
         }
       }
       
@@ -83,11 +130,24 @@ export default function ServicesPage() {
         setRows(data as any)
       }
     } catch (e: any) {
-      setErr(e.message || 'Failed to load services')
+      if (!controller.signal.aborted) {
+        setErr(e.message || 'Failed to load services')
+      }
+    } finally {
+      if (!controller.signal.aborted) {
+        setLoading(false)
+      }
     }
-    setLoading(false)
-  }
-  useEffect(() => { load() }, [])
+  }, [isOnline])
+
+  useEffect(() => {
+    load()
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort()
+      }
+    }
+  }, [load])
   
   // Extract unique categories and tags from services (performance optimized)
   const availableCategories = useMemo(() => {

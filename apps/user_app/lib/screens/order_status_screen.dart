@@ -3,6 +3,8 @@ import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../services/booking_service.dart';
 import '../services/order_repository.dart';
+import '../services/payment_service.dart';
+import '../services/refund_service.dart';
 import '../core/utils/time_utils.dart';
 import 'cancellation_flow_screen.dart';
 
@@ -24,6 +26,7 @@ class OrderStatusScreen extends StatefulWidget {
 class _OrderStatusScreenState extends State<OrderStatusScreen> {
   Map<String, dynamic>? _booking;
   Map<String, dynamic>? _order;
+  Map<String, dynamic>? _refund;
   bool _isLoading = true;
   String? _error;
   RealtimeChannel? _bookingChannel;
@@ -80,7 +83,8 @@ class _OrderStatusScreenState extends State<OrderStatusScreen> {
       // Load booking details if bookingId is provided
       if (widget.bookingId != null) {
         final bookingService = BookingService(Supabase.instance.client);
-        final bookings = await bookingService.getUserBookings();
+        // Force refresh so we don't read stale cached bookings after status changes
+        final bookings = await bookingService.getUserBookings(forceRefresh: true);
         _booking = bookings.firstWhere(
           (b) => b['booking_id'] == widget.bookingId,
           orElse: () => <String, dynamic>{},
@@ -94,6 +98,11 @@ class _OrderStatusScreenState extends State<OrderStatusScreen> {
         final orderId = _booking!['order_id'] as String?;
         if (orderId != null && widget.orderId == null) {
           await _loadOrder(orderId);
+        }
+
+        // Load refund details if booking is cancelled
+        if (_booking!['status'] == 'cancelled') {
+          await _loadRefundDetails(widget.bookingId!);
         }
       }
 
@@ -124,6 +133,20 @@ class _OrderStatusScreenState extends State<OrderStatusScreen> {
       }
     } catch (e) {
       debugPrint('Error loading order: $e');
+    }
+  }
+
+  Future<void> _loadRefundDetails(String bookingId) async {
+    try {
+      final refundService = RefundService(Supabase.instance.client);
+      final refund = await refundService.getRefundDetails(bookingId);
+      if (refund != null) {
+        setState(() {
+          _refund = refund;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading refund details: $e');
     }
   }
 
@@ -213,6 +236,41 @@ class _OrderStatusScreenState extends State<OrderStatusScreen> {
                 ? 'pending'
                 : status.toLowerCase();
     
+    // Derive a more user-friendly header label/message based on milestoneStatus
+    String headerLabel;
+    String headerMessage;
+
+    if (milestoneStatus == 'completed' || status.toLowerCase() == 'completed') {
+      headerLabel = 'COMPLETED';
+      headerMessage = 'Order completed successfully.';
+    } else if (milestoneStatus == 'vendor_arrived') {
+      headerLabel = 'VENDOR ARRIVED';
+      headerMessage = 'Vendor has arrived at your location. Please confirm their arrival.';
+    } else if (milestoneStatus == 'arrival_confirmed') {
+      headerLabel = 'ARRIVAL CONFIRMED';
+      headerMessage = 'You confirmed the vendor\'s arrival. Setup will start soon.';
+    } else if (milestoneStatus == 'setup_completed') {
+      headerLabel = 'SETUP COMPLETED';
+      headerMessage = 'Vendor has completed the setup. Please review and confirm.';
+    } else if (milestoneStatus == 'setup_confirmed') {
+      headerLabel = 'SETUP CONFIRMED';
+      headerMessage = 'You confirmed setup completion. Order is nearing completion.';
+    } else if (status.toLowerCase() == 'cancelled') {
+      headerLabel = 'CANCELLED';
+      // Show who cancelled the booking
+      final cancelledBy = _refund?['cancelled_by'] as String?;
+      if (cancelledBy == 'customer') {
+        headerMessage = 'This booking was cancelled by you.';
+      } else if (cancelledBy == 'vendor') {
+        headerMessage = 'This booking was cancelled by the vendor.';
+      } else {
+        headerMessage = 'This booking has been cancelled.';
+      }
+    } else {
+      headerLabel = displayStatus.toUpperCase();
+      headerMessage = _getStatusMessage(displayStatus, milestoneStatus);
+    }
+
     final statusColor = _getStatusColor(displayStatus);
 
     return Card(
@@ -236,7 +294,7 @@ class _OrderStatusScreenState extends State<OrderStatusScreen> {
             ),
             const SizedBox(height: 16),
             Text(
-              displayStatus.toUpperCase(),
+              headerLabel,
               style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                     fontWeight: FontWeight.bold,
                     color: statusColor,
@@ -244,7 +302,7 @@ class _OrderStatusScreenState extends State<OrderStatusScreen> {
             ),
             const SizedBox(height: 8),
             Text(
-              _getStatusMessage(displayStatus, milestoneStatus),
+              headerMessage,
               style: Theme.of(context).textTheme.bodyMedium,
               textAlign: TextAlign.center,
             ),
@@ -644,11 +702,173 @@ class _OrderStatusScreenState extends State<OrderStatusScreen> {
   }
 
   Widget _buildActionButtons() {
-    final status = _booking!['status'] as String? ?? 'unknown';
-    final bookingId = _booking!['booking_id'] as String?;
+    final status = _booking?['status'] as String? ?? 'unknown';
+    // bookingId here is the actual primary key id used in the bookings table
+    final bookingId = widget.bookingId ?? _booking?['id'] as String?;
+    final vendorArrivedAt = _booking?['vendor_arrived_at'] as String?;
+    final arrivalConfirmedAt = _booking?['arrival_confirmed_at'] as String?;
+    final setupCompletedAt = _booking?['setup_completed_at'] as String?;
+    final setupConfirmedAt = _booking?['setup_confirmed_at'] as String?;
+    final arrivalMilestonePaid = _booking?['arrival_milestone_paid'] as bool? ?? false;
+    final completionMilestonePaid = _booking?['completion_milestone_paid'] as bool? ?? false;
+
+    final shouldShowArrivalConfirm =
+        vendorArrivedAt != null && arrivalConfirmedAt == null;
+    final shouldShowSetupConfirm =
+        setupCompletedAt != null && setupConfirmedAt == null;
 
     return Column(
       children: [
+        // 1) Require 50% payment after arrival confirmation
+        if (!arrivalMilestonePaid && arrivalConfirmedAt != null && bookingId != null)
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: () async {
+                final paymentService = PaymentService();
+                await paymentService.processMilestonePayment(
+                  context: context,
+                  bookingId: bookingId,
+                  milestoneType: 'arrival',
+                  onSuccess: () async {
+                    // Reload order details after successful payment
+                    await _loadOrderDetails();
+                  },
+                  onFailure: () {
+                    // Payment failed, no need to reload
+                  },
+                );
+              },
+              icon: const Icon(Icons.payments_outlined),
+              label: const Text('Pay 50% (On Arrival)'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFFDBB42),
+                foregroundColor: Colors.black87,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+              ),
+            ),
+          ),
+        if (!arrivalMilestonePaid && arrivalConfirmedAt != null)
+          const SizedBox(height: 12),
+
+        if (shouldShowArrivalConfirm && bookingId != null)
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: () async {
+                try {
+                  await Supabase.instance.client
+                      .from('bookings')
+                      .update({
+                        'milestone_status': 'arrival_confirmed',
+                        'arrival_confirmed_at':
+                            DateTime.now().toIso8601String(),
+                        'updated_at': DateTime.now().toIso8601String(),
+                      })
+                      .eq('id', bookingId);
+
+                  if (!mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Vendor arrival confirmed successfully'),
+                    ),
+                  );
+                  await _loadOrderDetails();
+                } catch (e) {
+                  if (!mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Error confirming arrival: $e'),
+                    ),
+                  );
+                }
+              },
+              icon: const Icon(Icons.check_circle_outline),
+              label: const Text('Confirm Vendor Arrival'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.green,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+              ),
+            ),
+          ),
+        if (shouldShowArrivalConfirm || shouldShowSetupConfirm)
+          const SizedBox(height: 12),
+
+        if (shouldShowSetupConfirm && bookingId != null)
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: () async {
+                try {
+                  await Supabase.instance.client
+                      .from('bookings')
+                      .update({
+                        'milestone_status': 'setup_confirmed',
+                        'setup_confirmed_at':
+                            DateTime.now().toIso8601String(),
+                        'updated_at': DateTime.now().toIso8601String(),
+                      })
+                      .eq('id', bookingId);
+
+                  if (!mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Setup confirmed successfully'),
+                    ),
+                  );
+                  await _loadOrderDetails();
+                } catch (e) {
+                  if (!mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Error confirming setup: $e'),
+                    ),
+                  );
+                }
+              },
+              icon: const Icon(Icons.check_circle_outline),
+              label: const Text('Confirm Setup Completion'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.green,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+              ),
+            ),
+          ),
+        if (shouldShowSetupConfirm) const SizedBox(height: 12),
+
+        // 2) Require final 30% payment after setup confirmed
+        if (!completionMilestonePaid && setupConfirmedAt != null && bookingId != null)
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: () async {
+                final paymentService = PaymentService();
+                await paymentService.processMilestonePayment(
+                  context: context,
+                  bookingId: bookingId,
+                  milestoneType: 'completion',
+                  onSuccess: () async {
+                    // Reload order details after successful payment
+                    await _loadOrderDetails();
+                  },
+                  onFailure: () {
+                    // Payment failed, no need to reload
+                  },
+                );
+              },
+              icon: const Icon(Icons.payments_outlined),
+              label: const Text('Pay Final 30%'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFFDBB42),
+                foregroundColor: Colors.black87,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+              ),
+            ),
+          ),
+        if (!completionMilestonePaid && setupConfirmedAt != null)
+          const SizedBox(height: 12),
         if (status.toLowerCase() == 'pending' || status.toLowerCase() == 'confirmed' && bookingId != null)
           SizedBox(
             width: double.infinity,
@@ -721,6 +941,13 @@ class _OrderStatusScreenState extends State<OrderStatusScreen> {
       case 'pending':
         return 'Your booking is pending confirmation.';
       case 'cancelled':
+        // Show who cancelled (if refund info is loaded)
+        final cancelledBy = _refund?['cancelled_by'] as String?;
+        if (cancelledBy == 'customer') {
+          return 'This booking was cancelled by you.';
+        } else if (cancelledBy == 'vendor') {
+          return 'This booking was cancelled by the vendor.';
+        }
         return 'This booking has been cancelled.';
       case 'completed':
         return 'This service has been completed.';

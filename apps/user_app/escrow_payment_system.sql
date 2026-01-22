@@ -184,6 +184,7 @@ BEGIN
   RETURNING * INTO v_wallet;
 
   -- Create escrow transaction record (simple release, no commission)
+  -- Start with 'processing' status, will be marked 'completed' after wallet is credited
   INSERT INTO escrow_transactions (
     booking_id,
     milestone_id,
@@ -200,12 +201,12 @@ BEGIN
     v_milestone.amount,
     0,
     v_milestone.amount,
-    'completed',
+    'processing',
     'Auto-release of ' || v_milestone.milestone_type || ' milestone to vendor wallet'
   )
   RETURNING id INTO v_escrow_txn_id;
 
-  -- Update milestone status to released
+  -- Update milestone status to released (but escrow transaction still processing)
   UPDATE payment_milestones
   SET status = 'released',
       escrow_released_at = NOW(),
@@ -246,6 +247,15 @@ BEGIN
     v_escrow_txn_id,
     'Auto-credited ' || v_milestone.milestone_type || ' milestone to vendor wallet'
   );
+
+  -- Mark escrow transaction as completed and wallet credited
+  -- This happens immediately after wallet is credited, so amount is now in vendor wallet
+  UPDATE escrow_transactions
+  SET status = 'completed',
+      vendor_wallet_credited = TRUE,
+      vendor_wallet_transaction_id = (SELECT id FROM wallet_transactions WHERE escrow_transaction_id = v_escrow_txn_id ORDER BY created_at DESC LIMIT 1),
+      updated_at = NOW()
+  WHERE id = v_escrow_txn_id;
 END;
 $$ LANGUAGE plpgsql;
 

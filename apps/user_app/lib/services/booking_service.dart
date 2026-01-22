@@ -3,12 +3,16 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:convert';
 import '../core/cache/simple_cache.dart';
 import 'refund_service.dart';
+import 'availability_service.dart';
 
 class BookingService {
   final SupabaseClient _supabase;
   final RefundService _refundService;
+  final AvailabilityService _availabilityService;
 
-  BookingService(this._supabase) : _refundService = RefundService(_supabase);
+  BookingService(this._supabase) 
+    : _refundService = RefundService(_supabase),
+      _availabilityService = AvailabilityService(_supabase);
 
   // Create a new booking
   Future<bool> createBooking({
@@ -98,7 +102,47 @@ class BookingService {
       print('   service_id: $serviceId');
       print('   vendor_id: $vendorId');
       print('   amount: $amount');
+      print('   location_link: ${locationLink ?? 'null'}');
       print('📋 Full booking data: $bookingData');
+      
+      // CRITICAL: Final availability check right before inserting to prevent race conditions
+      if (bookingTime != null) {
+        print('🔒 Performing final slot availability check...');
+        final availableSlots = await _availabilityService.getAvailableTimeSlots(
+          serviceId,
+          bookingDate,
+        );
+        
+        // Convert bookingTime to time string format (HH:mm)
+        final timeStr = '${bookingTime.hour.toString().padLeft(2, '0')}:${bookingTime.minute.toString().padLeft(2, '0')}';
+        
+        // Check if the selected time slot is still available
+        bool slotAvailable = false;
+        for (final slot in availableSlots) {
+          final startTime = slot['start_time'] as String?;
+          final endTime = slot['end_time'] as String?;
+          if (startTime != null && endTime != null) {
+            // Check if booking time falls within this slot range
+            if (_isTimeInRange(timeStr, startTime, endTime)) {
+              slotAvailable = true;
+              print('   ✅ Slot is available: $timeStr falls within $startTime-$endTime');
+              break;
+            }
+          }
+        }
+        
+        if (!slotAvailable) {
+          print('❌ ERROR: Slot is no longer available!');
+          print('   Service: $serviceId');
+          print('   Date: ${bookingDate.toIso8601String().split('T')[0]}');
+          print('   Time: $timeStr');
+          print('   Available slots: $availableSlots');
+          return false;
+        }
+        
+        print('✅ Slot availability confirmed - proceeding with booking creation');
+      }
+      
       print('📋 Attempting to insert booking into database...');
 
       List<Map<String, dynamic>> result;
@@ -133,6 +177,7 @@ class BookingService {
         print('   booking_date: ${bookingData['booking_date']}');
         print('   booking_time: ${bookingData['booking_time']}');
         print('   amount: ${bookingData['amount']}');
+        print('   location_link: ${bookingData['location_link'] ?? 'null'}');
         
         // Check for specific error types
         if (errorStr.contains('violates check constraint')) {
@@ -171,12 +216,14 @@ class BookingService {
       final createdUserId = createdBooking['user_id'] as String;
       final createdStatus = createdBooking['status'] as String?;
       final createdMilestoneStatus = createdBooking['milestone_status'] as String?;
+      final createdLocationLink = createdBooking['location_link'] as String?;
       
       print('✅ Created booking ID: $createdBookingId');
       print('✅ Created booking user_id: $createdUserId');
       print('✅ Current auth user_id: $userId');
       print('✅ Created booking status: $createdStatus');
       print('✅ Created booking milestone_status: $createdMilestoneStatus');
+      print('✅ Created booking location_link: ${createdLocationLink ?? 'null'}');
       
       // Verify the booking was created with correct status
       if (createdStatus != 'pending') {
@@ -238,7 +285,7 @@ class BookingService {
       // Get completed drafts (include event_date as fallback for booking_date)
       final completedDrafts = await _supabase
           .from('booking_drafts')
-          .select('id, service_id, vendor_id, booking_date, event_date, booking_time, amount, notes')
+          .select('id, service_id, vendor_id, booking_date, event_date, booking_time, amount, notes, location_link')
           .eq('user_id', userId)
           .eq('status', 'completed');
       
@@ -286,6 +333,7 @@ class BookingService {
                   : null,
               amount: (amount as num).toDouble(),
               notes: draft['notes']?.toString(),
+              locationLink: draft['location_link']?.toString(),
             );
             
             if (success) {
@@ -384,6 +432,31 @@ class BookingService {
             print('Error fetching vendor name: $e');
           }
           
+          // Fetch payment milestones for this booking to determine payment status
+          bool arrivalMilestonePaid = false;
+          bool completionMilestonePaid = false;
+          try {
+            final milestonesResult = await _supabase
+                .from('payment_milestones')
+                .select('milestone_type, status')
+                .eq('booking_id', booking['id']);
+            
+            for (final milestone in milestonesResult) {
+              final milestoneType = milestone['milestone_type'] as String?;
+              final status = milestone['status'] as String?;
+              
+              if (milestoneType == 'arrival' && 
+                  (status == 'held_in_escrow' || status == 'paid' || status == 'released')) {
+                arrivalMilestonePaid = true;
+              } else if (milestoneType == 'completion' && 
+                         (status == 'held_in_escrow' || status == 'paid' || status == 'released')) {
+                completionMilestonePaid = true;
+              }
+            }
+          } catch (e) {
+            print('Error fetching payment milestones: $e');
+          }
+          
           allBookings.add({
             'booking_id': booking['id'],
             'service_name': serviceName,
@@ -401,6 +474,8 @@ class BookingService {
             'setup_completed_at': booking['setup_completed_at'],
             'setup_confirmed_at': booking['setup_confirmed_at'],
             'completed_at': booking['completed_at'],
+            'arrival_milestone_paid': arrivalMilestonePaid,
+            'completion_milestone_paid': completionMilestonePaid,
           });
         }
       } catch (e) {
@@ -429,7 +504,6 @@ class BookingService {
               if (items.isNotEmpty) {
                 final firstItem = items.first;
                 final serviceName = firstItem['title'] as String? ?? 'Service';
-                final category = firstItem['category'] as String? ?? '';
                 
                 // Extract booking date from event_date or created_at
                 String? bookingDate;
@@ -602,6 +676,35 @@ class BookingService {
     } catch (e) {
       print('Error getting refund preview: $e');
       return null;
+    }
+  }
+
+  // Helper: Check if a time falls within a time range
+  bool _isTimeInRange(String timeStr, String startTime, String endTime) {
+    try {
+      final timeParts = timeStr.split(':');
+      final startParts = startTime.split(':');
+      final endParts = endTime.split(':');
+      
+      if (timeParts.length != 2 || startParts.length != 2 || endParts.length != 2) {
+        return false;
+      }
+      
+      final timeMinutes = int.parse(timeParts[0]) * 60 + int.parse(timeParts[1]);
+      final startMinutes = int.parse(startParts[0]) * 60 + int.parse(startParts[1]);
+      final endMinutes = int.parse(endParts[0]) * 60 + int.parse(endParts[1]);
+      
+      // Handle time ranges that span midnight (e.g., 22:00 to 02:00)
+      if (endMinutes < startMinutes) {
+        // Range spans midnight
+        return timeMinutes >= startMinutes || timeMinutes <= endMinutes;
+      } else {
+        // Normal range
+        return timeMinutes >= startMinutes && timeMinutes <= endMinutes;
+      }
+    } catch (e) {
+      print('Error checking time range: $e');
+      return false;
     }
   }
 

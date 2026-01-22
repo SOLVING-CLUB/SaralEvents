@@ -1,7 +1,9 @@
 "use client"
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase'
+import { useStableSupabase } from '@/hooks/useStableSupabase'
+import { useNetworkStatus } from '@/hooks/useNetworkStatus'
+import { safeQuery } from '@/lib/api-client'
 import { Input } from '@/components/ui/Input'
 import { Button } from '@/components/ui/Button'
 
@@ -18,7 +20,9 @@ type Booking = {
 
 export default function OrdersPage() {
   const router = useRouter()
-  const supabase = createClient()
+  const supabase = useStableSupabase()
+  const { isOnline } = useNetworkStatus()
+  const abortControllerRef = useRef<AbortController | null>(null)
   const [rows, setRows] = useState<Booking[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -32,23 +36,58 @@ export default function OrdersPage() {
   const [pageSize, setPageSize] = useState(20)
 
   useEffect(() => {
+    // Cancel previous request if still pending
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort()
+    }
+
+    const controller = new AbortController()
+    abortControllerRef.current = controller
+
     const load = async () => {
+      if (!isOnline) {
+        setError('No internet connection. Please check your network.')
+        setLoading(false)
+        return
+      }
+
       setLoading(true)
       setError(null)
-      const { data, error } = await supabase
-        .from('bookings')
-        .select('id, booking_date, booking_time, status, amount, created_at, services(name), vendor_profiles(business_name)')
-        .order('created_at', { ascending: false })
-        .limit(200)
+      
+      const { data, error } = await safeQuery(
+        async (sb) => {
+          return await sb
+            .from('bookings')
+            .select('id, booking_date, booking_time, status, amount, created_at, services(name), vendor_profiles(business_name)')
+            .order('created_at', { ascending: false })
+            .limit(200)
+        },
+        { 
+          signal: controller.signal,
+          timeout: 30000,
+          maxRetries: 3 
+        }
+      )
+      
+      // Check if request was cancelled
+      if (controller.signal.aborted) {
+        return
+      }
+
       if (error) {
-        setError(error.message)
+        setError(error.message || 'Failed to load orders')
       } else if (data) {
         setRows(data as any)
       }
       setLoading(false)
     }
+    
     load()
-  }, [supabase])
+
+    return () => {
+      controller.abort()
+    }
+  }, [isOnline])
 
   // Derived, filtered, and sorted data
   const filtered = useMemo(() => {
@@ -101,15 +140,30 @@ export default function OrdersPage() {
   }
 
   const refresh = async () => {
+    if (!isOnline) {
+      setError('No internet connection. Please check your network.')
+      return
+    }
+
     setLoading(true)
     setError(null)
-    const { data, error } = await supabase
-      .from('bookings')
-      .select('id, booking_date, booking_time, status, amount, created_at, services(name), vendor_profiles(business_name)')
-      .order('created_at', { ascending: false })
-      .limit(200)
-    if (error) setError(error.message)
-    else setRows((data || []) as any)
+    
+    const { data, error } = await safeQuery(
+      async (sb) => {
+        return await sb
+          .from('bookings')
+          .select('id, booking_date, booking_time, status, amount, created_at, services(name), vendor_profiles(business_name)')
+          .order('created_at', { ascending: false })
+          .limit(200)
+      },
+      { timeout: 30000, maxRetries: 3 }
+    )
+    
+    if (error) {
+      setError(error.message || 'Failed to refresh orders')
+    } else {
+      setRows((data || []) as any)
+    }
     setLoading(false)
   }
 

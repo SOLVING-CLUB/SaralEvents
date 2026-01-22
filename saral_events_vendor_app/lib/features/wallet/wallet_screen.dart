@@ -68,6 +68,7 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
   Future<List<Map<String, dynamic>>> _loadPendingPayments(String vendorId) async {
     try {
       // Get bookings with payment milestones that are held in escrow but not yet released
+      // Include all milestones that are paid/held_in_escrow OR released but wallet not credited
       final result = await Supabase.instance.client
           .from('bookings')
           .select('''
@@ -88,6 +89,7 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
               amount,
               status,
               escrow_held_at,
+              escrow_released_at,
               escrow_transactions(
                 id,
                 transaction_type,
@@ -95,12 +97,13 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
                 commission_amount,
                 vendor_amount,
                 status,
+                vendor_wallet_credited,
                 admin_verified_at
               )
             )
           ''')
           .eq('vendor_id', vendorId)
-          .inFilter('status', ['confirmed', 'vendor_arrived', 'arrival_confirmed', 'setup_completed', 'setup_confirmed'])
+          .inFilter('status', ['confirmed', 'vendor_arrived', 'arrival_confirmed', 'setup_completed', 'setup_confirmed', 'completed'])
           .order('booking_date', ascending: false);
 
       final List<Map<String, dynamic>> pending = [];
@@ -108,25 +111,23 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
         final milestones = booking['payment_milestones'] as List<dynamic>? ?? [];
         for (final milestone in milestones) {
           final milestoneStatus = milestone['status'] as String? ?? '';
-          final escrowTransactions = milestone['escrow_transactions'] as List<dynamic>? ?? [];
           
-          // Check if milestone is paid but not yet released to wallet
-          if (milestoneStatus == 'held_in_escrow' || milestoneStatus == 'paid') {
-            final hasRelease = escrowTransactions.any((et) => 
-              (et['transaction_type'] == 'release' || et['transaction_type'] == 'commission_deduct') &&
-              et['status'] == 'completed'
-            );
-            
-            if (!hasRelease) {
-              pending.add({
-                'booking_id': booking['id'],
-                'booking_amount': booking['amount'],
-                'booking_date': booking['booking_date'],
-                'service_name': booking['services']?['name'] ?? 'Service',
-                'category_name': booking['services']?['categories']?['name'] ?? 'Unknown',
-                'milestone': milestone,
-              });
-            }
+          // Show milestone as "awaiting release" ONLY if:
+          // 1. Status is 'held_in_escrow' or 'paid' (still in escrow, not yet released)
+          // 2. Status is NOT 'released' (once released, it's in wallet balance)
+          final isHeldInEscrow = milestoneStatus == 'held_in_escrow' || milestoneStatus == 'paid';
+          
+          // Once status is 'released', the amount is already in wallet balance
+          // So we only show milestones that are still in escrow
+          if (isHeldInEscrow && milestoneStatus != 'released') {
+            pending.add({
+              'booking_id': booking['id'],
+              'booking_amount': booking['amount'],
+              'booking_date': booking['booking_date'],
+              'service_name': booking['services']?['name'] ?? 'Service',
+              'category_name': booking['services']?['categories']?['name'] ?? 'Unknown',
+              'milestone': milestone,
+            });
           }
         }
       }
@@ -146,8 +147,16 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
     double total = 0;
     for (final payment in _pendingPayments) {
       final milestone = payment['milestone'] as Map<String, dynamic>;
-      final amount = (milestone['amount'] as num?)?.toDouble() ?? 0.0;
-      total += amount;
+      final milestoneType = milestone['milestone_type'] as String? ?? '';
+      final bookingAmount = (payment['booking_amount'] as num?)?.toDouble() ?? 0.0;
+      
+      if (milestoneType == 'completion') {
+        // For completion milestone, vendor gets 20% of booking amount
+        total += bookingAmount * 0.20;
+      } else {
+        // For advance (20%) and arrival (50%), vendor gets full milestone amount
+        total += (milestone['amount'] as num?)?.toDouble() ?? 0.0;
+      }
     }
     return total;
   }
@@ -659,8 +668,34 @@ class _PendingPaymentCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final milestone = payment['milestone'] as Map<String, dynamic>;
     final milestoneType = milestone['milestone_type'] as String? ?? '';
-    final amount = (milestone['amount'] as num?)?.toDouble() ?? 0.0;
-    final percentage = milestone['percentage'] as int? ?? 0;
+    final escrowTransactions = milestone['escrow_transactions'] as List<dynamic>? ?? [];
+    final bookingAmount = (payment['booking_amount'] as num?)?.toDouble() ?? 0.0;
+    
+    // Calculate display amount
+    double amount = 0.0;
+    int percentage = 0;
+    
+    if (milestoneType == 'completion') {
+      // For completion, show vendor amount (20% of total), not gross (30%)
+      final et = escrowTransactions.firstWhere(
+        (et) => (et['transaction_type'] == 'release' || et['transaction_type'] == 'commission_deduct') &&
+                et['status'] == 'completed',
+        orElse: () => null,
+      );
+      if (et != null && et['vendor_amount'] != null) {
+        amount = (et['vendor_amount'] as num).toDouble();
+        percentage = 20; // Vendor gets 20%
+      } else {
+        // If not yet released, calculate 20% of booking amount
+        amount = bookingAmount * 0.20;
+        percentage = 20;
+      }
+    } else {
+      // For advance (20%) and arrival (50%), show full amount
+      amount = (milestone['amount'] as num?)?.toDouble() ?? 0.0;
+      percentage = milestone['percentage'] as int? ?? 0;
+    }
+    
     final serviceName = payment['service_name'] as String? ?? 'Service';
     final bookingDate = payment['booking_date'] as String?;
 
@@ -749,6 +784,24 @@ class _PendingPaymentCard extends StatelessWidget {
                       color: Colors.grey[600],
                     ),
                   ),
+                  if (milestoneType == 'completion') ...[
+                    const SizedBox(height: 4),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.orange.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        '10% commission',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Colors.orange[700],
+                          fontSize: 10,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ],
@@ -807,6 +860,40 @@ class _PaymentStructureCard extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
+                color: Colors.orange.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.orange.withOpacity(0.3)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.info_outline, size: 20, color: Colors.orange[700]),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Important: Completion Payment Commission',
+                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.orange[900],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'For the 30% completion payment, 10% goes to Saral Events as commission and 20% is credited to your wallet. The 10% commission is not shown in your "awaiting release" amount.',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Colors.orange[900],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
                 color: Colors.blue.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(8),
               ),
@@ -816,7 +903,7 @@ class _PaymentStructureCard extends StatelessWidget {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      'All payments are held in escrow until admin verification. Commission and payment gateway charges are deducted before crediting your wallet.',
+                      'All payments are held in escrow until admin verification. Payment gateway charges are deducted before crediting your wallet.',
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: Colors.blue[900],
                       ),

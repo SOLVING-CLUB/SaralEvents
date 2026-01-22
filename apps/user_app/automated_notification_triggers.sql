@@ -39,23 +39,42 @@ DECLARE
   v_service_role_key TEXT;
   v_request_id BIGINT;
 BEGIN
-  -- Get Supabase URL and Service Role Key from environment
+  -- IMPORTANT: Since ALTER DATABASE requires superuser (not available in Supabase),
+  -- we use hardcoded values. Update these with your actual Supabase project details.
+  -- Get these from: Supabase Dashboard > Settings > API
+  
+  -- Try to get from settings first (if admin has set them)
   v_supabase_url := current_setting('app.supabase_url', true);
   v_service_role_key := current_setting('app.supabase_service_role_key', true);
-
+  
+  -- If not set, use hardcoded values (already set with your project values)
+  -- Your Supabase Project URL (from Dashboard > Settings > API > Project URL)
   IF v_supabase_url IS NULL THEN
-    v_supabase_url := current_setting('app.supabase_url');
+    v_supabase_url := 'https://hucsihwqsuvqvbnyapdn.supabase.co';
+  END IF;
+  
+  -- Your Service Role Key (from Dashboard > Settings > API > Secret keys > default)
+  IF v_service_role_key IS NULL THEN
+    v_service_role_key := 'sb_secret_QhWTQOnAO-SCeCWmWEQF6A_AAdf38pq';
   END IF;
 
-  IF v_service_role_key IS NULL THEN
-    v_service_role_key := current_setting('app.supabase_service_role_key');
+  -- Validate we have both values
+  IF v_supabase_url IS NULL OR v_service_role_key IS NULL OR 
+     v_supabase_url = '' OR v_service_role_key = '' THEN
+    RAISE WARNING 'Push notifications skipped: Supabase URL or Service Role Key not configured';
+    RAISE NOTICE '⚠️ NOTIFICATION ERROR: Please update send_push_notification function in automated_notification_triggers.sql with your Supabase URL and service role key.';
+    RETURN jsonb_build_object(
+      'success', false,
+      'skipped', true,
+      'reason', 'missing_config',
+      'error', 'Please update the function with your Supabase URL and service role key. See UPDATE_NOTIFICATION_CONFIG.sql for instructions.'
+    );
   END IF;
 
   -- Use pg_net extension (Supabase's native and recommended method)
-  -- pg_net.http_post returns a request ID (async operation)
+  -- pg_net.http_post returns a request ID (async operation) directly as BIGINT
   BEGIN
-    SELECT id INTO v_request_id
-    FROM net.http_post(
+    v_request_id := net.http_post(
       url := v_supabase_url || '/functions/v1/send-push-notification',
       headers := jsonb_build_object(
         'Authorization', 'Bearer ' || v_service_role_key,
@@ -219,21 +238,16 @@ BEGIN
       ARRAY['user_app']::TEXT[]
     );
 
-    -- Notify vendor about status change (if vendor user_id exists)
-    IF v_vendor_user_id IS NOT NULL THEN
+    -- Notify vendor about status change (ONLY if vendor didn't perform the action)
+    -- Skip notifications for 'confirmed' and 'completed' as vendor performed these actions
+    IF v_vendor_user_id IS NOT NULL AND NEW.status NOT IN ('confirmed', 'completed') THEN
       PERFORM send_push_notification(
         v_vendor_user_id,
         CASE NEW.status
-          WHEN 'confirmed' THEN 'New Booking Confirmed'
-          WHEN 'completed' THEN 'Booking Completed'
           WHEN 'cancelled' THEN 'Booking Cancelled'
           ELSE 'Booking Status Update'
         END,
         CASE NEW.status
-          WHEN 'confirmed' THEN 
-            COALESCE('New booking confirmed for ' || v_service_name, 'New booking confirmed')
-          WHEN 'completed' THEN 
-            COALESCE('Booking for ' || v_service_name || ' has been completed', 'Booking completed')
           WHEN 'cancelled' THEN 
             'A booking has been cancelled'
           ELSE 
@@ -261,6 +275,7 @@ DROP TRIGGER IF EXISTS booking_status_notification_user ON bookings;
 DROP TRIGGER IF EXISTS booking_status_notification_vendor ON bookings;
 DROP TRIGGER IF EXISTS order_status_notification_user ON bookings;
 DROP TRIGGER IF EXISTS order_status_notification ON bookings;
+DROP TRIGGER IF EXISTS booking_status_change_notification ON bookings; -- Drop the trigger we're about to create
 
 -- Create single consolidated trigger
 CREATE TRIGGER booking_status_change_notification
@@ -272,7 +287,7 @@ CREATE TRIGGER booking_status_change_notification
 -- ============================================================================
 -- TRIGGER 3: Payment Success Notification
 -- ============================================================================
--- Sends notification when payment milestone status changes to 'paid' or 'held_in_escrow'
+-- Sends notification when payment milestone status changes to 'paid', 'held_in_escrow', or 'released'
 
 CREATE OR REPLACE FUNCTION notify_payment_success()
 RETURNS TRIGGER AS $$
@@ -281,11 +296,11 @@ DECLARE
   v_service_name TEXT;
   v_vendor_user_id UUID;
 BEGIN
-  -- Only notify on successful payment (paid or held_in_escrow)
-  -- For INSERT: always notify if status is paid/held_in_escrow
-  -- For UPDATE: only notify if status changed from non-paid to paid/held_in_escrow
-  IF NEW.status IN ('paid', 'held_in_escrow') THEN
-    IF TG_OP = 'INSERT' OR (TG_OP = 'UPDATE' AND (OLD.status IS NULL OR OLD.status NOT IN ('paid', 'held_in_escrow'))) THEN
+  -- Only notify on successful payment (paid / held_in_escrow / released)
+  -- For INSERT: always notify if status is in the success set
+  -- For UPDATE: only notify if status changed from outside the success set into it
+  IF NEW.status IN ('paid', 'held_in_escrow', 'released') THEN
+    IF TG_OP = 'INSERT' OR (TG_OP = 'UPDATE' AND (OLD.status IS NULL OR OLD.status NOT IN ('paid', 'held_in_escrow', 'released'))) THEN
     
     -- Get booking details
     SELECT * INTO v_booking
@@ -357,11 +372,94 @@ DROP TRIGGER IF EXISTS payment_success_notification ON payment_milestones;
 
 -- Create trigger
 -- Note: OLD check is handled inside the function to support both INSERT and UPDATE
+-- Include 'released' status to notify vendor when final payment is released from escrow
 CREATE TRIGGER payment_success_notification
   AFTER INSERT OR UPDATE ON payment_milestones
   FOR EACH ROW
-  WHEN (NEW.status IN ('paid', 'held_in_escrow'))
+  WHEN (NEW.status IN ('paid', 'held_in_escrow', 'released'))
   EXECUTE FUNCTION notify_payment_success();
+
+-- ============================================================================
+-- TRIGGER 3b: Milestone Status Change (Customer confirmations → notify vendor)
+-- ============================================================================
+-- Sends notification to vendor when the customer confirms arrival or setup
+-- (milestone_status moves to 'arrival_confirmed' or 'setup_confirmed').
+
+CREATE OR REPLACE FUNCTION notify_vendor_milestone_confirmations()
+RETURNS TRIGGER AS $$
+DECLARE
+  v_service_name TEXT;
+  v_vendor_user_id UUID;
+  v_title TEXT;
+  v_body TEXT;
+BEGIN
+  -- Only act when milestone_status actually changes
+  IF OLD.milestone_status IS DISTINCT FROM NEW.milestone_status THEN
+
+    -- Only handle customer confirmations that vendors must be notified about
+    IF NEW.milestone_status IN ('arrival_confirmed', 'setup_confirmed') THEN
+
+      -- Get service name for contextual messaging
+      SELECT name INTO v_service_name
+      FROM services
+      WHERE id = NEW.service_id;
+
+      -- Get vendor auth user_id (NOT vendor_profiles.id)
+      SELECT user_id INTO v_vendor_user_id
+      FROM vendor_profiles
+      WHERE id = NEW.vendor_id;
+
+      IF v_vendor_user_id IS NULL THEN
+        RETURN NEW; -- Nothing to do if vendor user_id missing
+      END IF;
+
+      -- Build message based on milestone_status
+      IF NEW.milestone_status = 'arrival_confirmed' THEN
+        v_title := 'Arrival Confirmed';
+        v_body := COALESCE(
+          'Customer confirmed your arrival for ' || v_service_name,
+          'Customer confirmed your arrival'
+        );
+      ELSIF NEW.milestone_status = 'setup_confirmed' THEN
+        v_title := 'Setup Confirmed';
+        v_body := COALESCE(
+          'Customer confirmed setup completion for ' || v_service_name,
+          'Customer confirmed setup completion'
+        );
+      END IF;
+
+      -- Notify vendor (vendor_app only)
+      PERFORM send_push_notification(
+        v_vendor_user_id,
+        v_title,
+        v_body,
+        jsonb_build_object(
+          'type', 'booking_update',
+          'booking_id', NEW.id::TEXT,
+          'milestone_status', NEW.milestone_status
+        ),
+        NULL,
+        ARRAY['vendor_app']::TEXT[]
+      );
+    END IF;
+  END IF;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Drop existing trigger if any to avoid duplicates
+DROP TRIGGER IF EXISTS milestone_confirmation_notification_vendor ON bookings;
+
+-- Create trigger on bookings.milestone_status change for vendor notifications
+CREATE TRIGGER milestone_confirmation_notification_vendor
+  AFTER UPDATE ON bookings
+  FOR EACH ROW
+  WHEN (
+    OLD.milestone_status IS DISTINCT FROM NEW.milestone_status
+    AND NEW.milestone_status IN ('arrival_confirmed', 'setup_confirmed')
+  )
+  EXECUTE FUNCTION notify_vendor_milestone_confirmations();
 
 -- ============================================================================
 -- TRIGGER 4: Refund Initiated Notification
@@ -657,6 +755,7 @@ DROP TRIGGER IF EXISTS booking_confirmation_notification ON bookings;
 DROP TRIGGER IF EXISTS new_order_notification_vendor ON orders;
 DROP TRIGGER IF EXISTS booking_status_notification_user ON bookings;
 DROP TRIGGER IF EXISTS booking_status_notification_vendor ON bookings;
+DROP TRIGGER IF EXISTS booking_status_change_notification ON bookings;
 
 -- ============================================================================
 -- SUMMARY

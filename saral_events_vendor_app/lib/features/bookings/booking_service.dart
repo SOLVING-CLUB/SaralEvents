@@ -1,7 +1,9 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../services/notification_sender_service.dart';
 
 class BookingService {
   final SupabaseClient _supabase;
+  late final NotificationSenderService _notificationSender;
 
   BookingService(this._supabase);
 
@@ -153,10 +155,10 @@ class BookingService {
         return false;
       }
 
-      // First verify the booking belongs to this vendor
+      // First verify the booking belongs to this vendor and get user_id
       final bookingCheck = await _supabase
           .from('bookings')
-          .select('vendor_id, status')
+          .select('vendor_id, status, user_id')
           .eq('id', bookingId)
           .eq('vendor_id', vendorId)
           .maybeSingle();
@@ -173,6 +175,7 @@ class BookingService {
           .from('bookings')
           .update({
             'status': status,
+            'milestone_status': status == 'completed' ? 'completed' : null,
             'updated_at': DateTime.now().toIso8601String(),
           })
           .eq('id', bookingId)
@@ -185,6 +188,30 @@ class BookingService {
       }
 
       print('Booking updated successfully: ${updateResult.first}');
+
+      // NOTE: Order completion notification is handled by database trigger
+      // (notify_booking_status_change) when status changes to 'completed'
+      // This avoids duplicates and ensures consistent notification delivery
+      if (status == 'completed') {
+        print('✅ Order completion notification will be sent by database trigger');
+        
+        // Create order notification record
+        try {
+          final userId = bookingCheck['user_id'] as String?;
+          if (userId != null) {
+            await _supabase.from('order_notifications').insert({
+              'booking_id': bookingId,
+              'user_id': userId,
+              'notification_type': 'order_completed',
+              'title': 'Order Completed',
+              'message': 'Your order has been marked as completed by the vendor.',
+            });
+            print('✅ Order notification record created for completion');
+          }
+        } catch (e) {
+          print('Warning: Failed to create order notification record: $e');
+        }
+      }
 
       // Create status update record
       try {
@@ -241,6 +268,10 @@ class BookingService {
           })
           .eq('id', bookingId);
 
+      // NOTE: Booking acceptance notification is handled by database trigger
+      // (notify_booking_status_change) when status changes to 'confirmed'
+      // This avoids duplicates and ensures consistent notification delivery
+
       // Create simple order notification for customer
       try {
         await _supabase.from('order_notifications').insert({
@@ -285,6 +316,24 @@ class BookingService {
           })
           .eq('id', bookingId);
 
+      // Push notify customer (user_app only)
+      try {
+        _notificationSender = NotificationSenderService(_supabase);
+        await _notificationSender.sendNotification(
+          userId: (booking['user_id'] as String),
+          title: 'Vendor Arrived',
+          body: 'Vendor marked arrival. Please confirm arrival and complete the 50% payment.',
+          appTypes: ['user_app'], // CRITICAL: Only send to user app, not vendor app
+          data: {
+            'type': 'booking_update',
+            'booking_id': bookingId,
+            'milestone_status': 'vendor_arrived',
+          },
+        );
+      } catch (e) {
+        print('Warning: failed to send push notification for markArrived: $e');
+      }
+
       // Notify customer that vendor has arrived
       try {
         await _supabase.from('order_notifications').insert({
@@ -306,19 +355,57 @@ class BookingService {
   }
 
   // Mark that vendor has completed the setup
+  // IMPORTANT: Can only be done after arrival payment (50%) is confirmed
   Future<bool> markSetupCompleted(String bookingId) async {
     try {
       final vendorId = await _getVendorId();
       if (vendorId == null) return false;
 
+      // First, verify booking exists and belongs to vendor
       final booking = await _supabase
           .from('bookings')
-          .select('id, vendor_id, user_id')
+          .select('id, vendor_id, user_id, milestone_status')
           .eq('id', bookingId)
           .eq('vendor_id', vendorId)
           .maybeSingle();
 
-      if (booking == null) return false;
+      if (booking == null) {
+        print('❌ Booking not found or does not belong to vendor');
+        return false;
+      }
+
+      // Check milestone status - must be 'arrival_confirmed'
+      final currentMilestoneStatus = booking['milestone_status'] as String?;
+      if (currentMilestoneStatus != 'arrival_confirmed') {
+        print('❌ Cannot mark setup completed: milestone_status is "$currentMilestoneStatus", expected "arrival_confirmed"');
+        return false;
+      }
+
+      // CRITICAL: Check if arrival payment milestone is paid/held_in_escrow
+      final arrivalMilestone = await _supabase
+          .from('payment_milestones')
+          .select('status, milestone_type')
+          .eq('booking_id', bookingId)
+          .eq('milestone_type', 'arrival')
+          .maybeSingle();
+
+      if (arrivalMilestone == null) {
+        print('❌ Arrival payment milestone not found for booking $bookingId');
+        return false;
+      }
+
+      final arrivalPaymentStatus = arrivalMilestone['status'] as String?;
+      final isArrivalPaid = arrivalPaymentStatus == 'held_in_escrow' || 
+                           arrivalPaymentStatus == 'paid' ||
+                           arrivalPaymentStatus == 'released';
+
+      if (!isArrivalPaid) {
+        print('❌ Cannot mark setup completed: Arrival payment not completed. Status: $arrivalPaymentStatus');
+        print('   Arrival payment must be "held_in_escrow", "paid", or "released" before setup can be marked complete');
+        return false;
+      }
+
+      print('✅ Arrival payment confirmed ($arrivalPaymentStatus), allowing setup completion');
 
       await _supabase
           .from('bookings')
@@ -328,6 +415,24 @@ class BookingService {
             'updated_at': DateTime.now().toIso8601String(),
           })
           .eq('id', bookingId);
+
+      // Push notify customer (user_app only)
+      try {
+        _notificationSender = NotificationSenderService(_supabase);
+        await _notificationSender.sendNotification(
+          userId: (booking['user_id'] as String),
+          title: 'Setup Completed',
+          body: 'Vendor marked setup completed. Please confirm setup and complete the final 30% payment.',
+          appTypes: ['user_app'], // CRITICAL: Only send to user app, not vendor app
+          data: {
+            'type': 'booking_update',
+            'booking_id': bookingId,
+            'milestone_status': 'setup_completed',
+          },
+        );
+      } catch (e) {
+        print('Warning: failed to send push notification for markSetupCompleted: $e');
+      }
 
       // Notify customer that setup is completed
       try {
@@ -408,6 +513,33 @@ class BookingService {
             'updated_at': DateTime.now().toIso8601String(),
           })
           .eq('id', bookingId);
+
+      // Push notify customer (fetch booking user_id once)
+      try {
+        final bookingRow = await _supabase
+            .from('bookings')
+            .select('user_id')
+            .eq('id', bookingId)
+            .maybeSingle();
+        final userId = bookingRow?['user_id'] as String?;
+        if (userId != null) {
+          _notificationSender = NotificationSenderService(_supabase);
+          await _notificationSender.sendNotification(
+            userId: userId,
+            title: 'Booking Cancelled',
+            body: 'Vendor cancelled this booking. Refund will be processed. ${reason ?? ''}'.trim(),
+            appTypes: ['user_app'], // CRITICAL: Only send to user app, not vendor app
+            data: {
+              'type': 'booking_update',
+              'booking_id': bookingId,
+              'status': 'cancelled',
+              'cancelled_by': 'vendor',
+            },
+          );
+        }
+      } catch (e) {
+        print('Warning: failed to send push notification for cancelBookingAsVendor: $e');
+      }
 
       // Create status update record
       try {

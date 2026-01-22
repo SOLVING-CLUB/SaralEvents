@@ -28,19 +28,36 @@ class _BookingScreenState extends State<BookingScreen> {
   bool _isLoading = false;
   List<TimeSlot> _availableTimeSlots = [];
   TimeSlot? _selectedTimeSlot;
+  String? _actualVendorCategory;
+  bool _isLoadingCategory = false;
   
-  // Categories that require location link
+  // Categories that require location link (normalized to lowercase for robust matching)
   static const List<String> _locationRequiredCategories = [
-    'Photography',
-    'Decoration',
-    'Catering',
-    'Music/Dj',
-    'Essentials',
+    'photography',
+    'decoration',
+    'catering',
+    'music/dj',
+    'essentials',
   ];
   
   bool get _requiresLocationLink {
-    final category = widget.service.vendorCategory;
-    return category != null && _locationRequiredCategories.contains(category);
+    // Use fetched category if available, otherwise fall back to service's category
+    final category = _actualVendorCategory ?? widget.service.vendorCategory;
+    if (category == null) {
+      if (!_isLoadingCategory) {
+        print('⚠️ WARNING: vendorCategory is null for service ${widget.service.id}');
+        print('   Service Name: ${widget.service.name}');
+        print('   Vendor ID: ${widget.service.vendorId}');
+        print('   Vendor Name: ${widget.service.vendorName}');
+      }
+      return false;
+    }
+    final normalized = category.trim().toLowerCase();
+    final requires = _locationRequiredCategories.contains(normalized);
+    if (!_isLoadingCategory) {
+      print('📍 Location Link Check: category="$category" (normalized="$normalized") -> requires=$requires');
+    }
+    return requires;
   }
 
   @override
@@ -54,8 +71,57 @@ class _BookingScreenState extends State<BookingScreen> {
     print('Service Name: ${widget.service.name}');
     print('Service ID: ${widget.service.id}');
     print('Vendor ID: ${widget.service.vendorId}');
+    print('Vendor Name: ${widget.service.vendorName}');
+    print('Vendor Category: ${widget.service.vendorCategory}');
     print('Service Price: ${widget.service.price}');
+    print('Requires Location Link: $_requiresLocationLink');
     print('============================');
+    
+    // If vendorCategory is missing, fetch it from vendor_profiles
+    if (widget.service.vendorCategory == null) {
+      _fetchVendorCategory();
+    } else {
+      _actualVendorCategory = widget.service.vendorCategory;
+    }
+  }
+
+  Future<void> _fetchVendorCategory() async {
+    if (_isLoadingCategory) return;
+    
+    setState(() {
+      _isLoadingCategory = true;
+    });
+    
+    try {
+      final result = await Supabase.instance.client
+          .from('vendor_profiles')
+          .select('category')
+          .eq('id', widget.service.vendorId)
+          .maybeSingle();
+      
+      if (result != null) {
+        final category = result['category'] as String?;
+        setState(() {
+          _actualVendorCategory = category;
+          _isLoadingCategory = false;
+        });
+        print('✅ Fetched vendor category: $category');
+        print('📍 Normalized category: ${category?.trim().toLowerCase()}');
+        print('📍 Required categories: $_locationRequiredCategories');
+        print('📍 Now requires location link: $_requiresLocationLink');
+        print('📍 Will trigger UI rebuild to show/hide location field');
+      } else {
+        print('⚠️ Vendor profile not found for vendor ID: ${widget.service.vendorId}');
+        setState(() {
+          _isLoadingCategory = false;
+        });
+      }
+    } catch (e) {
+      print('❌ Error fetching vendor category: $e');
+      setState(() {
+        _isLoadingCategory = false;
+      });
+    }
   }
 
   @override

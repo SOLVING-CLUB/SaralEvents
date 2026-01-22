@@ -1,7 +1,9 @@
 "use client"
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import Link from 'next/link'
+import { useNetworkStatus } from '@/hooks/useNetworkStatus'
+import { safeQuery } from '@/lib/api-client'
 import { 
   ShoppingBag, 
   MessageSquare, 
@@ -31,38 +33,116 @@ import {
 } from '@/lib/dashboard-queries'
 
 export default function Dashboard() {
+  const { isOnline } = useNetworkStatus()
+  const abortControllerRef = useRef<AbortController | null>(null)
   const [stats, setStats] = useState<DashboardStats | null>(null)
   const [topVendors, setTopVendors] = useState<TopVendor[]>([])
   const [popularServices, setPopularServices] = useState<PopularService[]>([])
   const [vendorActivity, setVendorActivity] = useState<VendorActivity[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
+    // Cancel previous request if still pending
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort()
+    }
+
+    const controller = new AbortController()
+    abortControllerRef.current = controller
+
     async function loadData() {
+      if (!isOnline) {
+        setError('No internet connection. Please check your network.')
+        setLoading(false)
+        return
+      }
+
       try {
-        const [statsData, vendorsData, servicesData, activityData] = await Promise.all([
-          getDashboardStats(),
-          getTopVendors(5),
-          getPopularServices(5),
-          getVendorActivityStatus(),
+        setError(null)
+        
+        // Use Promise.allSettled to handle partial failures gracefully
+        const results = await Promise.allSettled([
+          safeQuery(
+            async () => ({ data: await getDashboardStats(), error: null }),
+            { signal: controller.signal, timeout: 30000, maxRetries: 3 }
+          ),
+          safeQuery(
+            async () => ({ data: await getTopVendors(5), error: null }),
+            { signal: controller.signal, timeout: 30000, maxRetries: 3 }
+          ),
+          safeQuery(
+            async () => ({ data: await getPopularServices(5), error: null }),
+            { signal: controller.signal, timeout: 30000, maxRetries: 3 }
+          ),
+          safeQuery(
+            async () => ({ data: await getVendorActivityStatus(), error: null }),
+            { signal: controller.signal, timeout: 30000, maxRetries: 3 }
+          ),
         ])
-        setStats(statsData)
-        setTopVendors(vendorsData)
-        setPopularServices(servicesData)
-        setVendorActivity(activityData)
+
+        // Check if request was cancelled
+        if (controller.signal.aborted) {
+          return
+        }
+
+        // Process results
+        if (results[0].status === 'fulfilled' && results[0].value.data) {
+          setStats(results[0].value.data as DashboardStats)
+        }
+        if (results[1].status === 'fulfilled' && results[1].value.data) {
+          setTopVendors(results[1].value.data as TopVendor[])
+        }
+        if (results[2].status === 'fulfilled' && results[2].value.data) {
+          setPopularServices(results[2].value.data as PopularService[])
+        }
+        if (results[3].status === 'fulfilled' && results[3].value.data) {
+          setVendorActivity(results[3].value.data as VendorActivity[])
+        }
+
+        // Check for errors
+        const errors = results
+          .map((r, i) => r.status === 'rejected' ? r.reason : (r.status === 'fulfilled' && r.value.error ? r.value.error : null))
+          .filter(Boolean)
+        
+        if (errors.length > 0) {
+          console.error('Error loading dashboard data:', errors)
+          setError('Some data failed to load. Please refresh.')
+        }
       } catch (error) {
         console.error('Error loading dashboard data:', error)
+        setError('Failed to load dashboard data. Please refresh.')
       } finally {
         setLoading(false)
       }
     }
+    
     loadData()
-  }, [])
+
+    return () => {
+      controller.abort()
+    }
+  }, [isOnline])
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
+      <div className="flex flex-col items-center justify-center h-64 gap-4">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+        <p className="text-sm text-gray-600">Loading dashboard data...</p>
+      </div>
+    )
+  }
+
+  if (error && !stats) {
+    return (
+      <div className="flex flex-col items-center justify-center h-64 gap-4">
+        <p className="text-red-600">{error}</p>
+        <button
+          onClick={() => window.location.reload()}
+          className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+        >
+          Retry
+        </button>
       </div>
     )
   }

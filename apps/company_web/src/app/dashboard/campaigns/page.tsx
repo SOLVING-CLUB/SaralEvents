@@ -1,7 +1,8 @@
 "use client"
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase'
+import { useAuth } from '@/contexts/AuthContext'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { 
@@ -20,7 +21,8 @@ import {
   Image as ImageIcon,
   ExternalLink,
   Search,
-  Filter
+  Filter,
+  RefreshCw
 } from 'lucide-react'
 
 interface Campaign {
@@ -58,12 +60,15 @@ interface Vendor {
 
 export default function CampaignsPage() {
   const supabase = createClient()
+  const { user, loading: authLoading } = useAuth()
   const [campaigns, setCampaigns] = useState<Campaign[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [sending, setSending] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
+  const abortControllerRef = useRef<AbortController | null>(null)
   
   // Form state
   const [formData, setFormData] = useState({
@@ -87,32 +92,92 @@ export default function CampaignsPage() {
   const [showUserSelector, setShowUserSelector] = useState(false)
 
   useEffect(() => {
+    // Wait for auth to finish loading before fetching data
+    if (authLoading) return
+    
+    // Check if user is authenticated
+    if (!user) {
+      setError('Please sign in to view campaigns')
+      setLoading(false)
+      return
+    }
+
     loadCampaigns()
-  }, [])
+
+    // Cleanup on unmount
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort()
+      }
+    }
+  }, [user, authLoading])
 
   async function loadCampaigns() {
+    // Cancel previous request if still pending
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort()
+    }
+
+    const controller = new AbortController()
+    abortControllerRef.current = controller
+
     setLoading(true)
+    setError(null)
+    
     try {
-      const { data, error } = await supabase
+      // Verify session is still valid
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+      if (sessionError || !session) {
+        throw new Error('Session expired. Please sign in again.')
+      }
+
+      const { data, error: queryError } = await supabase
         .from('notification_campaigns')
         .select('*')
         .order('created_at', { ascending: false })
         .limit(100)
 
-      if (error) throw error
+      // Check if request was cancelled
+      if (controller.signal.aborted) {
+        return
+      }
+
+      if (queryError) throw queryError
       setCampaigns(data || [])
+      setError(null)
     } catch (err: any) {
+      // Don't set error if request was cancelled
+      if (err.name === 'AbortError' || controller.signal.aborted) {
+        return
+      }
+      
       console.error('Error loading campaigns:', err)
+      setError(err.message || 'Failed to load campaigns. Please try again.')
+      // Keep existing campaigns if available, don't clear them on error
     } finally {
-      setLoading(false)
+      if (!controller.signal.aborted) {
+        setLoading(false)
+      }
     }
   }
 
   async function loadUsers() {
-    if (users.length > 0) return // Already loaded
+    if (users.length > 0 || loadingUsers) return // Already loaded or loading
     
+    // Check auth before loading
+    if (!user) {
+      console.warn('Cannot load users: not authenticated')
+      return
+    }
+
     setLoadingUsers(true)
     try {
+      // Verify session
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+      if (sessionError || !session) {
+        throw new Error('Session expired')
+      }
+
       const { data, error } = await supabase
         .from('user_profiles')
         .select('user_id, first_name, last_name, email')
@@ -122,16 +187,29 @@ export default function CampaignsPage() {
       setUsers(data || [])
     } catch (err: any) {
       console.error('Error loading users:', err)
+      // Don't show error to user for this, just log it
     } finally {
       setLoadingUsers(false)
     }
   }
 
   async function loadVendors() {
-    if (vendors.length > 0) return // Already loaded
+    if (vendors.length > 0 || loadingUsers) return // Already loaded or loading
     
+    // Check auth before loading
+    if (!user) {
+      console.warn('Cannot load vendors: not authenticated')
+      return
+    }
+
     setLoadingUsers(true)
     try {
+      // Verify session
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+      if (sessionError || !session) {
+        throw new Error('Session expired')
+      }
+
       const { data, error } = await supabase
         .from('vendor_profiles')
         .select('id, business_name, user_id')
@@ -141,6 +219,7 @@ export default function CampaignsPage() {
       setVendors(data || [])
     } catch (err: any) {
       console.error('Error loading vendors:', err)
+      // Don't show error to user for this, just log it
     } finally {
       setLoadingUsers(false)
     }
@@ -215,21 +294,57 @@ export default function CampaignsPage() {
 
   async function sendNotifications(campaign: Campaign) {
     try {
-      // Get target user IDs based on audience
+      // Prevent duplicate sends - check if campaign was already sent
+      if (campaign.status === 'sent' || campaign.status === 'sending') {
+        console.warn('Campaign already sent or sending, skipping duplicate send')
+        return
+      }
+
+      // Update status to 'sending' to prevent concurrent sends
+      await supabase
+        .from('notification_campaigns')
+        .update({ status: 'sending' })
+        .eq('id', campaign.id)
+
+      // Get target user IDs based on audience and determine app type
       let targetUserIds: string[] = []
+      let appTypes: string[] = [] // CRITICAL: Filter by app_type to prevent cross-app notifications
+      const userAppTypes = new Map<string, string[]>() // For specific_users: map userId to appTypes
 
       if (campaign.target_audience === 'all_users') {
         const { data } = await supabase
           .from('user_profiles')
           .select('user_id')
         targetUserIds = (data || []).map(u => u.user_id)
+        appTypes = ['user_app'] // CRITICAL: Only send to user app
       } else if (campaign.target_audience === 'all_vendors') {
         const { data } = await supabase
           .from('vendor_profiles')
           .select('user_id')
         targetUserIds = (data || []).map(v => v.user_id).filter(Boolean)
+        appTypes = ['vendor_app'] // CRITICAL: Only send to vendor app
       } else if (campaign.target_audience === 'specific_users') {
         targetUserIds = campaign.target_user_ids || []
+        // For specific users, determine app type per user
+        // Check which users are vendors
+        const { data: vendorData } = await supabase
+          .from('vendor_profiles')
+          .select('user_id')
+          .in('user_id', targetUserIds)
+        const vendorUserIds = new Set((vendorData || []).map(v => v.user_id))
+        
+        // Store user-to-app-type mapping
+        targetUserIds.forEach(userId => {
+          if (vendorUserIds.has(userId)) {
+            userAppTypes.set(userId, ['vendor_app'])
+          } else {
+            userAppTypes.set(userId, ['user_app'])
+          }
+        })
+        
+        // For specific_users, we'll send with per-user appTypes below
+        // Set default for the loop (will be overridden per user)
+        appTypes = ['user_app', 'vendor_app']
       }
 
       // Prepare notification data
@@ -243,9 +358,18 @@ export default function CampaignsPage() {
         notificationData.cta_action = campaign.cta_action || 'open_url'
       }
 
+      // Remove duplicate user IDs to prevent sending multiple notifications to the same user
+      const uniqueUserIds = [...new Set(targetUserIds)]
+      
       // Send notifications via edge function
+      // CRITICAL: Pass appTypes to filter tokens by app_type
       const results = await Promise.allSettled(
-        targetUserIds.map(async userId => {
+        uniqueUserIds.map(async userId => {
+          // For specific_users, use per-user appTypes; otherwise use the audience appTypes
+          const userSpecificAppTypes = campaign.target_audience === 'specific_users' 
+            ? (userAppTypes.get(userId) || ['user_app']) // Default to user_app if not found
+            : appTypes
+          
           const { data, error } = await supabase.functions.invoke('send-push-notification', {
             body: {
               userId,
@@ -253,6 +377,7 @@ export default function CampaignsPage() {
               body: campaign.message,
               data: notificationData,
               imageUrl: campaign.image_url || undefined,
+              appTypes: userSpecificAppTypes, // CRITICAL: Filter by app_type to prevent cross-app notifications
             },
           })
           if (error) throw error
@@ -346,10 +471,20 @@ export default function CampaignsPage() {
           </h1>
           <p className="text-gray-600">Create and manage push notification campaigns</p>
         </div>
-        <Button onClick={() => setShowCreateModal(true)}>
-          <Plus className="h-4 w-4 mr-2" />
-          New Campaign
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            onClick={loadCampaigns}
+            disabled={loading || authLoading}
+          >
+            <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+            Refresh
+          </Button>
+          <Button onClick={() => setShowCreateModal(true)} disabled={authLoading}>
+            <Plus className="h-4 w-4 mr-2" />
+            New Campaign
+          </Button>
+        </div>
       </div>
 
       {/* Stats Cards */}
@@ -433,7 +568,23 @@ export default function CampaignsPage() {
       {/* Campaigns List */}
       <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
         {loading ? (
-          <div className="p-8 text-center text-gray-500">Loading campaigns...</div>
+          <div className="p-8 text-center text-gray-500">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto mb-4"></div>
+            <p>Loading campaigns...</p>
+          </div>
+        ) : error ? (
+          <div className="p-8 text-center">
+            <AlertCircle className="h-12 w-12 mx-auto text-red-400 mb-4" />
+            <p className="text-red-600 mb-2">{error}</p>
+            <Button
+              variant="outline"
+              onClick={loadCampaigns}
+              disabled={loading}
+            >
+              <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+              Retry
+            </Button>
+          </div>
         ) : filteredCampaigns.length === 0 ? (
           <div className="p-8 text-center text-gray-500">
             <Bell className="h-12 w-12 mx-auto text-gray-300 mb-4" />

@@ -312,13 +312,18 @@ class RefundService {
       final advanceStatus = advanceMilestone['status'] as String;
 
       // Only calculate refund if advance is paid
-      if (advanceStatus != 'held_in_escrow' && advanceStatus != 'released') {
+      // If advance is still pending, allow cancellation with 0 refund
+      if (advanceStatus != 'held_in_escrow' && advanceStatus != 'released' && advanceStatus != 'paid') {
         return RefundCalculation(
           refundableAmount: 0.0,
           nonRefundableAmount: 0.0,
           refundPercentage: 0.0,
-          reason: 'Advance payment not yet made',
-          breakdown: {},
+          reason: 'No payments made yet - Booking cancelled without refund',
+          breakdown: {
+            'category': vendorCategory,
+            'advance_status': advanceStatus,
+            'note': 'Booking cancelled before any payment was processed',
+          },
         );
       }
 
@@ -379,81 +384,116 @@ class RefundService {
     String? adminNotes,
   }) async {
     try {
-      // Get booking milestones
+      // Get booking milestones that are paid (held_in_escrow or released)
       final milestonesResult = await _supabase
           .from('payment_milestones')
           .select('*')
           .eq('booking_id', bookingId)
-          .inFilter('status', ['held_in_escrow', 'released']);
+          .inFilter('status', ['held_in_escrow', 'released', 'paid']);
 
       final milestones = milestonesResult as List<dynamic>;
 
-      // Create refund record
-      // IMPORTANT: Refunds are created with status 'pending' and require admin approval
-      // Admin must release the refund in the admin portal for it to be completed
-      final refundResult = await _supabase
+      // Check if refund already exists for this booking
+      final existingRefund = await _supabase
           .from('refunds')
-          .insert({
-            'booking_id': bookingId,
-            'cancelled_by': cancelledBy,
-            'refund_amount': calculation.refundableAmount,
-            'non_refundable_amount': calculation.nonRefundableAmount,
-            'refund_percentage': calculation.refundPercentage,
-            'reason': calculation.reason,
-            'breakdown': calculation.breakdown,
-            'status': 'pending', // Always starts as pending - requires admin approval
-            'admin_notes': adminNotes,
-            'created_at': DateTime.now().toIso8601String(),
-          })
-          .select()
-          .single();
+          .select('id')
+          .eq('booking_id', bookingId)
+          .maybeSingle();
 
-      final refundId = refundResult['id'] as String;
-
-      // Update milestone statuses to refunded
-      for (final milestone in milestones) {
-        final milestoneId = milestone['id'] as String;
-        final milestoneAmount = (milestone['amount'] as num).toDouble();
-        
-        // Calculate refund for this milestone
-        double milestoneRefund = 0.0;
-        if (milestone['milestone_type'] == 'advance') {
-          // For advance, use the calculated refund
-          milestoneRefund = calculation.refundableAmount;
-        } else {
-          // For other milestones (arrival, completion), refund only if vendor cancelled
-          if (cancelledBy == 'vendor') {
-            milestoneRefund = milestoneAmount;
-          }
-        }
-
-        if (milestoneRefund > 0) {
-          // Update milestone status
-          await _supabase
-              .from('payment_milestones')
-              .update({
-                'status': 'refunded',
-                'updated_at': DateTime.now().toIso8601String(),
-              })
-              .eq('id', milestoneId);
-
-          // Create refund milestone record
-          await _supabase
-              .from('refund_milestones')
+      String refundId;
+      if (existingRefund != null) {
+        // Refund already exists, use existing refund ID
+        refundId = existingRefund['id'] as String;
+        print('Refund already exists for booking $bookingId, using existing refund: $refundId');
+      } else {
+        // Create refund record (even if refundableAmount is 0 - this allows cancellation without payment)
+        // IMPORTANT: Refunds are created with status 'pending' and require admin approval
+        // Admin must release the refund in the admin portal for it to be completed
+        try {
+          final refundResult = await _supabase
+              .from('refunds')
               .insert({
-                'refund_id': refundId,
-                'milestone_id': milestoneId,
-                'refund_amount': milestoneRefund,
-                'original_amount': milestoneAmount,
-              });
+                'booking_id': bookingId,
+                'cancelled_by': cancelledBy,
+                'refund_amount': calculation.refundableAmount,
+                'non_refundable_amount': calculation.nonRefundableAmount,
+                'refund_percentage': calculation.refundPercentage,
+                'reason': calculation.reason,
+                'breakdown': calculation.breakdown,
+                'status': calculation.refundableAmount > 0 ? 'pending' : 'completed', // If no refund, mark as completed immediately
+                'admin_notes': adminNotes,
+                'created_at': DateTime.now().toIso8601String(),
+              })
+              .select()
+              .single();
+
+          refundId = refundResult['id'] as String;
+          print('Created refund record: $refundId for booking $bookingId');
+        } catch (e) {
+          print('Error creating refund record: $e');
+          print('Booking ID: $bookingId');
+          print('Refund amount: ${calculation.refundableAmount}');
+          print('Cancelled by: $cancelledBy');
+          rethrow;
         }
       }
 
-      // Update booking status
+      // Update milestone statuses to refunded ONLY if refund amount > 0
+      // If refund amount is 0 (no refund due to policy), milestones stay in escrow
+      if (milestones.isNotEmpty && calculation.refundableAmount > 0) {
+        for (final milestone in milestones) {
+          final milestoneId = milestone['id'] as String;
+          final milestoneAmount = (milestone['amount'] as num).toDouble();
+          final milestoneType = milestone['milestone_type'] as String;
+          
+          // Calculate refund for this milestone
+          double milestoneRefund = 0.0;
+          if (milestoneType == 'advance') {
+            // For advance, use the calculated refund amount
+            milestoneRefund = calculation.refundableAmount;
+          } else {
+            // For other milestones (arrival, completion), refund only if vendor cancelled
+            if (cancelledBy == 'vendor') {
+              milestoneRefund = milestoneAmount;
+            }
+          }
+
+          // Only mark milestone as refunded if refund amount > 0
+          if (milestoneRefund > 0) {
+            try {
+              // Update milestone status to refunded
+              await _supabase
+                  .from('payment_milestones')
+                  .update({
+                    'status': 'refunded',
+                    'updated_at': DateTime.now().toIso8601String(),
+                  })
+                  .eq('id', milestoneId);
+
+              // Create refund milestone record
+              await _supabase
+                  .from('refund_milestones')
+                  .insert({
+                    'refund_id': refundId,
+                    'milestone_id': milestoneId,
+                    'refund_amount': milestoneRefund,
+                    'original_amount': milestoneAmount,
+                  });
+            } catch (e) {
+              print('Error updating milestone $milestoneId: $e');
+              // Continue with other milestones even if one fails
+              // Don't fail the entire refund process if one milestone update fails
+            }
+          }
+        }
+      }
+
+      // Update booking status to cancelled (always do this, even if no refund)
       await _supabase
           .from('bookings')
           .update({
             'status': 'cancelled',
+            'milestone_status': 'cancelled',
             'updated_at': DateTime.now().toIso8601String(),
           })
           .eq('id', bookingId);
@@ -461,6 +501,7 @@ class RefundService {
       return true;
     } catch (e) {
       print('Error processing refund: $e');
+      print('Stack trace: ${StackTrace.current}');
       return false;
     }
   }

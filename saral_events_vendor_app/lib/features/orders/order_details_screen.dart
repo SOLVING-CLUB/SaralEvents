@@ -17,6 +17,7 @@ class OrderDetailsScreen extends StatefulWidget {
 class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
   late final BookingService _bookingService;
   Map<String, dynamic>? _booking;
+  Map<String, dynamic>? _refund;
   bool _isLoading = true;
   String? _error;
 
@@ -61,6 +62,23 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
         print('Error loading payment milestones: $e');
       }
 
+      // Load refund details if booking is cancelled
+      if (booking['status'] == 'cancelled') {
+        try {
+          final refundResult = await Supabase.instance.client
+              .from('refunds')
+              .select('*')
+              .eq('booking_id', widget.bookingId)
+              .maybeSingle();
+          
+          if (refundResult != null) {
+            _refund = refundResult;
+          }
+        } catch (e) {
+          print('Error loading refund details: $e');
+        }
+      }
+
       if (mounted) {
         setState(() {
           _booking = booking;
@@ -96,6 +114,16 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
       return 'PENDING';
     }
     return status.toUpperCase();
+  }
+
+  String _getCancelledByMessage() {
+    final cancelledBy = _refund?['cancelled_by'] as String?;
+    if (cancelledBy == 'customer') {
+      return 'Cancelled by customer';
+    } else if (cancelledBy == 'vendor') {
+      return 'Cancelled by you';
+    }
+    return 'Booking cancelled';
   }
 
   Future<void> _openLocationLink(String url) async {
@@ -150,6 +178,41 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
 
   Future<void> _updateBookingStatus(String newStatus, [String? notes]) async {
     try {
+      // Enforce payment gating for completion:
+      // Vendor can only mark booking as completed after customer paid final 30% (completion milestone)
+      if (newStatus == 'completed') {
+        final paymentMilestones = _booking?['payment_milestones'] as List<dynamic>? ?? [];
+        Map<String, dynamic>? completionMilestone;
+        try {
+          completionMilestone = paymentMilestones.firstWhere(
+            (m) => m['milestone_type'] == 'completion',
+          ) as Map<String, dynamic>?;
+        } catch (_) {
+          completionMilestone = null;
+        }
+
+        final completionPaymentStatus =
+            completionMilestone != null ? completionMilestone['status'] as String? : null;
+        final isCompletionPaid = completionPaymentStatus == 'held_in_escrow' ||
+            completionPaymentStatus == 'paid' ||
+            completionPaymentStatus == 'released';
+
+        if (!isCompletionPaid) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  'Cannot mark as completed: waiting for customer to complete final payment (30%). '
+                  'Payment Status: ${completionPaymentStatus ?? 'Pending'}',
+                ),
+                backgroundColor: Colors.orange,
+              ),
+            );
+          }
+          return;
+        }
+      }
+
       final success = await _bookingService.updateBookingStatus(
         widget.bookingId,
         newStatus,
@@ -418,6 +481,17 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
                               color: _getStatusColor(status),
                             ),
                           ),
+                          // Show who cancelled if booking is cancelled
+                          if (status == 'cancelled' && _refund != null) ...[
+                            const SizedBox(height: 4),
+                            Text(
+                              _getCancelledByMessage(),
+                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                color: Colors.grey[700],
+                                fontStyle: FontStyle.italic,
+                              ),
+                            ),
+                          ],
                         ],
                       ),
                     ),
@@ -779,35 +853,150 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
                   ),
                 ),
               ] else if (milestoneStatus == 'arrival_confirmed') ...[
-                // User confirmed arrival - vendor can now mark setup completed
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    onPressed: () async {
-                      final ok = await _bookingService.markSetupCompleted(widget.bookingId);
-                      if (ok && mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Setup marked as completed. Customer will be asked to confirm.')),
-                        );
-                        _loadBookingDetails();
-                      }
-                    },
-                    icon: const Icon(Icons.build),
-                    label: const Text('Mark Setup Completed'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.green,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
+                // User confirmed arrival - check if arrival payment is completed before allowing setup
+                Builder(
+                  builder: (context) {
+                    // Check if arrival payment milestone is paid/held_in_escrow
+                    final paymentMilestones = booking['payment_milestones'] as List<dynamic>? ?? [];
+                    Map<String, dynamic>? arrivalMilestone;
+                    try {
+                      arrivalMilestone = paymentMilestones.firstWhere(
+                        (m) => m['milestone_type'] == 'arrival',
+                      ) as Map<String, dynamic>?;
+                    } catch (e) {
+                      arrivalMilestone = null;
+                    }
+                    
+                    final arrivalPaymentStatus = arrivalMilestone != null 
+                        ? arrivalMilestone['status'] as String? 
+                        : null;
+                    
+                    print('🔍 Payment Check: arrival milestone status = $arrivalPaymentStatus');
+                    print('   Total milestones: ${paymentMilestones.length}');
+                    print('   Milestone types: ${paymentMilestones.map((m) => m['milestone_type']).toList()}');
+                    
+                    final isArrivalPaid = arrivalPaymentStatus == 'held_in_escrow' || 
+                                         arrivalPaymentStatus == 'paid' ||
+                                         arrivalPaymentStatus == 'released';
+                    
+                    if (!isArrivalPaid) {
+                      // Arrival payment not completed yet
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        child: Column(
+                          children: [
+                            const Text(
+                              'Waiting for customer to complete arrival payment (50%).',
+                              style: TextStyle(color: Colors.orange),
+                              textAlign: TextAlign.center,
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Payment Status: ${arrivalPaymentStatus ?? 'Pending'}',
+                              style: const TextStyle(
+                                color: Colors.grey,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }
+                    
+                    // Arrival payment completed - vendor can mark setup completed
+                    return SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        onPressed: () async {
+                          final ok = await _bookingService.markSetupCompleted(widget.bookingId);
+                          if (ok && mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Setup marked as completed. Customer will be asked to confirm.')),
+                            );
+                            _loadBookingDetails();
+                          }
+                        },
+                        icon: const Icon(Icons.build),
+                        label: const Text('Mark Setup Completed'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.green,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
                       ),
-                    ),
-                  ),
+                    );
+                  },
                 ),
               ] else if (milestoneStatus == 'setup_completed') ...[
                 const Text(
                   'Waiting for customer to confirm setup and pay remaining amount.',
                   style: TextStyle(color: Colors.grey),
+                ),
+              ] else if (milestoneStatus == 'setup_confirmed') ...[
+                // Customer confirmed setup - wait for final 30% payment before vendor can complete
+                Builder(
+                  builder: (context) {
+                    final paymentMilestones = booking['payment_milestones'] as List<dynamic>? ?? [];
+                    Map<String, dynamic>? completionMilestone;
+                    try {
+                      completionMilestone = paymentMilestones.firstWhere(
+                        (m) => m['milestone_type'] == 'completion',
+                      ) as Map<String, dynamic>?;
+                    } catch (_) {
+                      completionMilestone = null;
+                    }
+
+                    final completionPaymentStatus = completionMilestone != null
+                        ? completionMilestone['status'] as String?
+                        : null;
+
+                    final isCompletionPaid = completionPaymentStatus == 'held_in_escrow' ||
+                        completionPaymentStatus == 'paid' ||
+                        completionPaymentStatus == 'released';
+
+                    if (!isCompletionPaid) {
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        child: Column(
+                          children: [
+                            const Text(
+                              'Waiting for customer to complete final payment (30%).',
+                              style: TextStyle(color: Colors.orange),
+                              textAlign: TextAlign.center,
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Payment Status: ${completionPaymentStatus ?? 'Pending'}',
+                              style: const TextStyle(
+                                color: Colors.grey,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }
+
+                    return SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        onPressed: _showStatusUpdateDialog,
+                        icon: const Icon(Icons.check_circle),
+                        label: const Text('Mark as Completed'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.green,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                      ),
+                    );
+                  },
                 ),
               ] else ...[
                 SizedBox(

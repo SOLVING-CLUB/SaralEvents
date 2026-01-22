@@ -3,7 +3,6 @@ import 'package:flutter/foundation.dart';
 import 'package:razorpay_flutter/razorpay_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../core/config/razorpay_config.dart';
-import 'razorpay_order_service.dart';
 
 /// Enhanced Razorpay service with production-ready features
 /// 
@@ -57,7 +56,7 @@ class RazorpayService {
     _razorpay = null;
   }
 
-  /// Create order using alternative service (works without Edge Functions)
+  /// Create order using Edge Function (server-side)
   Future<Map<String, dynamic>> createOrderOnServer({
     required int amountInPaise,
     required String currency,
@@ -65,45 +64,47 @@ class RazorpayService {
     Map<String, dynamic>? notes,
   }) async {
     try {
-      // Try Edge Function first, fallback to direct HTTP
-      try {
-        final client = Supabase.instance.client;
-        final res = await client.functions.invoke(
-          'create_razorpay_order',
-          body: jsonEncode({
-            'amount': amountInPaise,
-            'currency': currency,
-            'receipt': receipt,
-            'notes': notes ?? {},
-            'payment_capture': RazorpayConfig.autoCapture ? 1 : 0,
-          }),
-        );
-        
-        if (res.status == 200) {
-          final orderData = res.data as Map<String, dynamic>;
-          if (kDebugMode) {
-            debugPrint('✅ Order created via Edge Function: ${orderData['id']}');
-          }
-          return orderData;
-        }
-      } catch (edgeFunctionError) {
-        if (kDebugMode) {
-          debugPrint('⚠️ Edge Function failed, using direct HTTP: $edgeFunctionError');
-        }
-      }
-
-      // Fallback to direct HTTP request
-      return await RazorpayOrderService.createOrder(
-        amountInPaise: amountInPaise,
-        currency: currency,
-        receipt: receipt,
-        notes: notes,
+      final client = Supabase.instance.client;
+      final res = await client.functions.invoke(
+        'create_razorpay_order',
+        body: jsonEncode({
+          'amount': amountInPaise,
+          'currency': currency,
+          'receipt': receipt,
+          'notes': notes ?? {},
+          'payment_capture': RazorpayConfig.autoCapture ? 1 : 0,
+        }),
       );
+      
+      if (res.status == 200) {
+        final orderData = res.data as Map<String, dynamic>;
+        if (kDebugMode) {
+          debugPrint('✅ Order created via Edge Function: ${orderData['id']}');
+        }
+        return orderData;
+      } else {
+        // Edge Function returned an error status
+        final errorData = res.data;
+        final errorMessage = errorData is Map<String, dynamic>
+            ? (errorData['error'] as String? ?? errorData['details'] as String? ?? 'Unknown error')
+            : 'Edge Function returned status ${res.status}';
+        
+        if (kDebugMode) {
+          debugPrint('❌ Edge Function error (status ${res.status}): $errorMessage');
+          debugPrint('Response data: $errorData');
+        }
+        
+        throw Exception('Failed to create payment order: $errorMessage');
+      }
     } catch (e) {
       if (kDebugMode) {
-        debugPrint('❌ Error creating order: $e');
+        debugPrint('❌ Error creating order via Edge Function: $e');
       }
-      rethrow;
+      // Re-throw with a more helpful message
+      if (e.toString().contains('Edge Function')) {
+        rethrow;
+      }
+      throw Exception('Failed to create payment order. Please check your internet connection and try again. Error: ${e.toString()}');
     }
   }
 

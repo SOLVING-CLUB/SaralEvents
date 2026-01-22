@@ -46,8 +46,10 @@ ADD COLUMN IF NOT EXISTS account_holder_name TEXT,
 ADD COLUMN IF NOT EXISTS account_number TEXT,
 ADD COLUMN IF NOT EXISTS ifsc_code TEXT,
 ADD COLUMN IF NOT EXISTS bank_name TEXT,
+ADD COLUMN IF NOT EXISTS branch_name TEXT,
 ADD COLUMN IF NOT EXISTS pan_number TEXT,
-ADD COLUMN IF NOT EXISTS gst_number TEXT;
+ADD COLUMN IF NOT EXISTS gst_number TEXT,
+ADD COLUMN IF NOT EXISTS aadhaar_number TEXT;
 
 -- Policy: Users can only see their own vendor profile
 CREATE POLICY "Users can view own vendor profile" ON vendor_profiles
@@ -131,10 +133,20 @@ END;
 $$ language 'plpgsql';
 
 -- Create trigger to automatically update updated_at
-CREATE TRIGGER update_vendor_profiles_updated_at 
-    BEFORE UPDATE ON vendor_profiles 
-    FOR EACH ROW 
-    EXECUTE FUNCTION update_updated_at_column();
+DROP TRIGGER IF EXISTS update_vendor_profiles_updated_at ON vendor_profiles;
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_trigger 
+        WHERE tgname = 'update_vendor_profiles_updated_at'
+    ) THEN
+        CREATE TRIGGER update_vendor_profiles_updated_at 
+            BEFORE UPDATE ON vendor_profiles 
+            FOR EACH ROW 
+            EXECUTE FUNCTION update_updated_at_column();
+    END IF;
+END;
+$$;
 
 -- Insert some sample categories (optional)
 INSERT INTO vendor_profiles (user_id, business_name, address, category, services) 
