@@ -97,7 +97,7 @@ export default function ServicesPage() {
         if (controller.signal.aborted) return
 
         if (fbResult.error) {
-          // Final fallback without category_id
+          // Final fallback without category_id, tags, is_featured
           const fb2Result = await safeQuery(
             async (sb) => {
               return await sb
@@ -114,20 +114,32 @@ export default function ServicesPage() {
           if (fb2Result.error) {
             setErr(`${error.message} | Fallback: ${fbResult.error.message} | Fallback2: ${fb2Result.error.message}`)
           } else {
-            data = fb2Result.data
+            // Normalize fallback data to match ServiceRow type
+            data = fb2Result.data?.map((row: any) => ({
+              ...row,
+              category_id: row.category_id || null,
+              tags: row.tags || [],
+              is_featured: row.is_featured || null
+            })) || null
           }
         } else {
-          data = fbResult.data
+          // Normalize fallback data to match ServiceRow type
+          data = fbResult.data?.map((row: any) => ({
+            ...row,
+            tags: row.tags || []
+          })) || null
         }
       }
       
-      // Ensure tags field exists (default to empty array if missing)
+      // Ensure all required fields exist with defaults
       if (data) {
         data = data.map((row: any) => ({
           ...row,
-          tags: row.tags || []
+          category_id: row.category_id ?? null,
+          tags: row.tags || [],
+          is_featured: row.is_featured ?? null
         }))
-        setRows(data as any)
+        setRows(data as ServiceRow[])
       }
     } catch (e: any) {
       if (!controller.signal.aborted) {
