@@ -119,14 +119,22 @@ export default function ServicesPage() {
               ...row,
               category_id: row.category_id || null,
               tags: row.tags || [],
-              is_featured: row.is_featured || null
+              is_featured: row.is_featured || null,
+              // Normalize vendor_profiles: if it's an array, take the first item, otherwise use as-is
+              vendor_profiles: Array.isArray(row.vendor_profiles) 
+                ? (row.vendor_profiles.length > 0 ? row.vendor_profiles[0] : null)
+                : row.vendor_profiles || null
             })) || null
           }
         } else {
           // Normalize fallback data to match ServiceRow type
           data = fbResult.data?.map((row: any) => ({
             ...row,
-            tags: row.tags || []
+            tags: row.tags || [],
+            // Normalize vendor_profiles: if it's an array, take the first item, otherwise use as-is
+            vendor_profiles: Array.isArray(row.vendor_profiles) 
+              ? (row.vendor_profiles.length > 0 ? row.vendor_profiles[0] : null)
+              : row.vendor_profiles || null
           })) || null
         }
       }
@@ -137,7 +145,11 @@ export default function ServicesPage() {
           ...row,
           category_id: row.category_id ?? null,
           tags: row.tags || [],
-          is_featured: row.is_featured ?? null
+          is_featured: row.is_featured ?? null,
+          // Normalize vendor_profiles: if it's an array, take the first item, otherwise use as-is
+          vendor_profiles: Array.isArray(row.vendor_profiles) 
+            ? (row.vendor_profiles.length > 0 ? row.vendor_profiles[0] : null)
+            : row.vendor_profiles || null
         }))
         setRows(data as ServiceRow[])
       }
