@@ -183,12 +183,8 @@ class _SupportScreenState extends State<SupportScreen> {
   }
 
   Future<void> _launchEmail() async {
-    final email = 'support@saralevents.com';
-    final subject = Uri.encodeComponent('Support Request - Saral Events');
-    final body = Uri.encodeComponent('Hello,\n\nI need assistance with:\n\n');
-    
-    final uri = Uri.parse('mailto:$email?subject=$subject&body=$body');
-    
+    final email = 'eventssaral@gmail.com';
+    final uri = Uri.parse('mailto:$email');
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri);
     } else {
@@ -201,7 +197,7 @@ class _SupportScreenState extends State<SupportScreen> {
   }
 
   Future<void> _launchPhone() async {
-    final uri = Uri.parse('tel:+911234567890');
+    final uri = Uri.parse('tel:+917731842453');
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri);
     } else {
@@ -213,17 +209,14 @@ class _SupportScreenState extends State<SupportScreen> {
     }
   }
 
-  Future<void> _launchWhatsApp() async {
-    final phone = '911234567890';
-    final message = Uri.encodeComponent('Hello, I need support for Saral Events');
-    final uri = Uri.parse('https://wa.me/$phone?text=$message');
-    
+  Future<void> _launchWebsite() async {
+    final uri = Uri.parse('https://saralevents.com/');
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
     } else {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not open WhatsApp')),
+          const SnackBar(content: Text('Could not open website')),
         );
       }
     }
@@ -248,7 +241,7 @@ class _SupportScreenState extends State<SupportScreen> {
                   child: _buildContactCard(
                     icon: Icons.phone,
                     title: 'Call Us',
-                    subtitle: '+91 1234567890',
+                    subtitle: '+91 77318 42453',
                     color: Colors.green,
                     onTap: _launchPhone,
                   ),
@@ -258,7 +251,7 @@ class _SupportScreenState extends State<SupportScreen> {
                   child: _buildContactCard(
                     icon: Icons.email,
                     title: 'Email',
-                    subtitle: 'support@saralevents.com',
+                    subtitle: 'eventssaral@gmail.com',
                     color: Colors.blue,
                     onTap: _launchEmail,
                   ),
@@ -269,11 +262,11 @@ class _SupportScreenState extends State<SupportScreen> {
             SizedBox(
               width: double.infinity,
               child: _buildContactCard(
-                icon: Icons.chat,
-                title: 'WhatsApp',
-                subtitle: 'Chat with us',
-                color: Colors.green.shade700,
-                onTap: _launchWhatsApp,
+                icon: Icons.language,
+                title: 'Website',
+                subtitle: 'saralevents.com',
+                color: Colors.purple,
+                onTap: _launchWebsite,
               ),
             ),
 

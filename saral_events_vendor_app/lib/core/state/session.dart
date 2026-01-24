@@ -82,6 +82,10 @@ class AppSession extends ChangeNotifier {
   bool get isVendorSetupComplete => _isVendorSetupComplete;
   bool get isPasswordRecovery => _isPasswordRecovery;
   bool get isInitialized => _isInitialized;
+  bool get isVendorApproved =>
+      _vendorProfile?.approvalStatus == 'approved';
+  bool get isVendorPendingApproval =>
+      _vendorProfile?.approvalStatus == 'pending';
   
   // Add currentUser getter to access the authenticated user
   User? get currentUser => Supabase.instance.client.auth.currentUser;
@@ -161,8 +165,11 @@ class AppSession extends ChangeNotifier {
     try {
       final service = VendorService();
       final profile = await service.getVendorProfile(user.id);
-      _isVendorSetupComplete = profile != null;
       _vendorProfile = profile;
+
+      // Vendor setup is considered complete only when profile exists.
+      // Admin approval status (pending/approved/rejected) is tracked separately.
+      _isVendorSetupComplete = profile != null;
     } catch (e) {
       _isVendorSetupComplete = false;
       _vendorProfile = null;
@@ -170,8 +177,7 @@ class AppSession extends ChangeNotifier {
   }
 
   void completeVendorSetup() {
-    _isVendorSetupComplete = true;
-    // Proactively reload vendor profile after setup to refresh UI immediately
+    // After vendor submits setup, reload profile so UI can show latest status.
     _checkVendorSetup();
     notifyListeners();
   }

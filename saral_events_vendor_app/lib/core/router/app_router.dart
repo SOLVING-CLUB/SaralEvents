@@ -7,6 +7,7 @@ import '../../features/auth/login_screen.dart';
 import '../../features/auth/register_screen.dart';
 import '../../features/auth/pre_auth_screen.dart';
 import '../../features/vendor_setup/vendor_setup_flow.dart';
+import '../../features/vendor_setup/approval_pending_screen.dart';
 import '../../features/auth/forgot_password_screen.dart';
 import '../../features/auth/reset_password_screen.dart';
 import '../../features/shell/main_navigation_scaffold.dart';
@@ -37,6 +38,7 @@ class AppRouter {
             print('Router: isOnboardingComplete: ${s.isOnboardingComplete}');
             print('Router: isAuthenticated: ${s.isAuthenticated}');
             print('Router: isVendorSetupComplete: ${s.isVendorSetupComplete}');
+            print('Router: vendorApprovalStatus: ${s.vendorProfile?.approvalStatus}');
             
             if (s.isPasswordRecovery) {
               print('Router: Redirecting to password reset');
@@ -53,6 +55,11 @@ class AppRouter {
             if (!s.isVendorSetupComplete) {
               print('Router: Redirecting to vendor setup');
               return '/vendor/setup';
+            }
+            // Vendor setup done but awaiting approval
+            if (s.vendorProfile?.approvalStatus != 'approved') {
+              print('Router: Redirecting to approval pending');
+              return '/vendor/pending';
             }
             print('Router: Redirecting to app');
             return '/app';
@@ -113,13 +120,30 @@ class AppRouter {
           path: '/vendor/setup',
           redirect: (ctx, state) {
             final s = Provider.of<AppSession>(ctx, listen: false);
-            // If vendor setup is complete and user is authenticated, go to app
-            if (s.isAuthenticated && s.isVendorSetupComplete) {
-              return '/app';
+            if (!s.isAuthenticated) return '/auth/pre';
+            // If profile exists, go to pending/ app based on approval
+            if (s.isVendorSetupComplete) {
+              if (s.vendorProfile?.approvalStatus == 'approved') {
+                return '/app';
+              }
+              return '/vendor/pending';
             }
             return null;
           },
           builder: (_, __) => const VendorSetupFlow(),
+        ),
+        GoRoute(
+          path: '/vendor/pending',
+          redirect: (ctx, state) {
+            final s = Provider.of<AppSession>(ctx, listen: false);
+            if (!s.isAuthenticated) return '/auth/pre';
+            // If not setup yet, go to setup
+            if (!s.isVendorSetupComplete) return '/vendor/setup';
+            // If approved, go to app
+            if (s.vendorProfile?.approvalStatus == 'approved') return '/app';
+            return null;
+          },
+          builder: (_, __) => const ApprovalPendingScreen(),
         ),
         GoRoute(
           path: '/app',
@@ -132,6 +156,9 @@ class AppRouter {
             }
             if (!s.isVendorSetupComplete) {
               return '/vendor/setup';
+            }
+            if (s.vendorProfile?.approvalStatus != 'approved') {
+              return '/vendor/pending';
             }
             return null; // Stay on /app
           },

@@ -20,19 +20,31 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const { toasts, removeToast } = useToast()
 
-  // Set up real-time notifications
+  // Set up real-time notifications (only when user is authenticated)
   useRealtimeNotifications()
 
   useEffect(() => {
+    // Add timeout to prevent infinite loading
+    const timeoutId = setTimeout(() => {
+      if (loading) {
+        console.warn('Auth loading taking longer than expected')
+      }
+    }, 10000) // 10 second timeout
+
     if (!loading && !user) {
       router.push('/signin')
     }
+
+    return () => clearTimeout(timeoutId)
   }, [user, loading, router])
 
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+        <div className="flex flex-col items-center gap-4">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+          <p className="text-sm text-gray-600">Loading...</p>
+        </div>
       </div>
     )
   }

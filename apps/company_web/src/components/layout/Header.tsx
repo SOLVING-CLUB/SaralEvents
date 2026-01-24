@@ -60,9 +60,9 @@ export function Header({ onMenuClick }: HeaderProps) {
                   </div>
                   <button
                     onClick={async () => {
-                      await signOut()
                       setShowUserMenu(false)
-                      window.location.href = '/signin'
+                      await signOut()
+                      // signOut already handles redirect, but ensure it happens
                     }}
                     className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors"
                   >

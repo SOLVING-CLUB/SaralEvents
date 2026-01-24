@@ -1,6 +1,7 @@
 "use client"
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase'
+import { Search } from 'lucide-react'
 
 type UserRow = {
   id: string
@@ -17,6 +18,7 @@ export default function UsersPage() {
   const supabase = createClient()
   const [rows, setRows] = useState<UserRow[]>([])
   const [loading, setLoading] = useState(true)
+  const [searchQuery, setSearchQuery] = useState('')
 
   useEffect(() => {
     const load = async () => {
@@ -57,9 +59,51 @@ export default function UsersPage() {
     load()
   }, [supabase])
 
+  // Filter users based on search query
+  const filteredRows = useMemo(() => {
+    if (!searchQuery.trim()) return rows
+    
+    const query = searchQuery.toLowerCase().trim()
+    return rows.filter(u => {
+      const fullName = u.user_profiles 
+        ? `${u.user_profiles.first_name || ''} ${u.user_profiles.last_name || ''}`.trim().toLowerCase()
+        : ''
+      const email = (u.email || '').toLowerCase()
+      const phone = (u.user_profiles?.phone || '').toLowerCase()
+      const userId = (u.id || '').toLowerCase()
+      
+      return fullName.includes(query) ||
+             email.includes(query) ||
+             phone.includes(query) ||
+             userId.includes(query)
+    })
+  }, [rows, searchQuery])
+
   return (
     <main className="p-4 lg:p-6">
-      <h1 className="text-lg lg:text-xl font-semibold mb-4">Users</h1>
+      <div className="flex items-center justify-between mb-4">
+        <h1 className="text-lg lg:text-xl font-semibold">Users</h1>
+      </div>
+      
+      {/* Search Bar */}
+      <div className="mb-4">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
+          <input
+            type="text"
+            placeholder="Search by name, email, phone, or user ID..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          />
+        </div>
+        {searchQuery && (
+          <p className="mt-2 text-sm text-gray-600">
+            Found {filteredRows.length} user{filteredRows.length !== 1 ? 's' : ''} matching "{searchQuery}"
+          </p>
+        )}
+      </div>
+
       <div className="bg-white rounded-xl border overflow-x-auto">
         <table className="min-w-full text-sm">
           <thead className="bg-gray-50 text-left">
@@ -74,9 +118,11 @@ export default function UsersPage() {
           <tbody>
             {loading ? (
               <tr><td className="p-3" colSpan={5}>Loading...</td></tr>
-            ) : rows.length === 0 ? (
-              <tr><td className="p-3" colSpan={5}>No users found</td></tr>
-            ) : rows.map(u => {
+            ) : filteredRows.length === 0 ? (
+              <tr><td className="p-3" colSpan={5}>
+                {searchQuery ? `No users found matching "${searchQuery}"` : 'No users found'}
+              </td></tr>
+            ) : filteredRows.map(u => {
               const fullName = u.user_profiles 
                 ? `${u.user_profiles.first_name || ''} ${u.user_profiles.last_name || ''}`.trim() || 'N/A'
                 : 'N/A'

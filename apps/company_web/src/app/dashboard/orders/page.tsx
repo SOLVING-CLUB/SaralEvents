@@ -34,6 +34,7 @@ export default function OrdersPage() {
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(20)
+  const [totalCount, setTotalCount] = useState(0)
 
   useEffect(() => {
     // Cancel previous request if still pending
@@ -54,13 +55,37 @@ export default function OrdersPage() {
       setLoading(true)
       setError(null)
       
+      // Get total count for pagination (with status filter if applicable)
+      let countQuery = supabase.from('bookings').select('*', { count: 'exact', head: true })
+      if (statusFilter !== 'all') {
+        countQuery = countQuery.eq('status', statusFilter)
+      }
+      const { count } = await countQuery
+      setTotalCount(count || 0)
+      
+      // Use pagination instead of loading all 200 at once
+      const offset = (page - 1) * pageSize
       const { data, error } = await safeQuery(
         async (sb) => {
-          return await sb
+          let query = sb
             .from('bookings')
             .select('id, booking_date, booking_time, status, amount, created_at, services(name), vendor_profiles(business_name)')
             .order('created_at', { ascending: false })
-            .limit(200)
+          
+          // Apply filters at database level for better performance
+          if (statusFilter !== 'all') {
+            query = query.eq('status', statusFilter)
+          }
+          
+          if (search.trim().length > 0) {
+            // Note: Supabase doesn't support full-text search across relations easily
+            // So we still do some client-side filtering, but limit the data first
+            query = query.limit(500) // Reasonable limit for search
+          } else {
+            query = query.range(offset, offset + pageSize - 1)
+          }
+          
+          return await query
         },
         { 
           signal: controller.signal,
@@ -87,7 +112,7 @@ export default function OrdersPage() {
     return () => {
       controller.abort()
     }
-  }, [isOnline])
+  }, [isOnline, page, pageSize, statusFilter])
 
   // Derived, filtered, and sorted data
   const filtered = useMemo(() => {
@@ -123,12 +148,20 @@ export default function OrdersPage() {
     return list
   }, [rows, search, statusFilter, sortBy, sortDir])
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize))
+  // For search, use client-side pagination; otherwise use server-side
+  const useClientPagination = search.trim().length > 0
+  const totalPages = useClientPagination 
+    ? Math.max(1, Math.ceil(filtered.length / pageSize))
+    : Math.max(1, Math.ceil(totalCount / pageSize))
   const currentPage = Math.min(page, totalPages)
   const paged = useMemo(() => {
-    const start = (currentPage - 1) * pageSize
-    return filtered.slice(start, start + pageSize)
-  }, [filtered, currentPage, pageSize])
+    if (useClientPagination) {
+      const start = (currentPage - 1) * pageSize
+      return filtered.slice(start, start + pageSize)
+    }
+    // Server-side pagination - data is already paginated
+    return filtered
+  }, [filtered, currentPage, pageSize, useClientPagination])
 
   const toggleSort = (key: typeof sortBy) => {
     if (sortBy === key) {
@@ -148,13 +181,33 @@ export default function OrdersPage() {
     setLoading(true)
     setError(null)
     
+    // Get total count
+    let countQuery = supabase.from('bookings').select('*', { count: 'exact', head: true })
+    if (statusFilter !== 'all') {
+      countQuery = countQuery.eq('status', statusFilter)
+    }
+    const { count } = await countQuery
+    setTotalCount(count || 0)
+    
+    const offset = (page - 1) * pageSize
     const { data, error } = await safeQuery(
       async (sb) => {
-        return await sb
+        let query = sb
           .from('bookings')
           .select('id, booking_date, booking_time, status, amount, created_at, services(name), vendor_profiles(business_name)')
           .order('created_at', { ascending: false })
-          .limit(200)
+        
+        if (statusFilter !== 'all') {
+          query = query.eq('status', statusFilter)
+        }
+        
+        if (search.trim().length > 0) {
+          query = query.limit(500)
+        } else {
+          query = query.range(offset, offset + pageSize - 1)
+        }
+        
+        return await query
       },
       { timeout: 30000, maxRetries: 3 }
     )
@@ -313,8 +366,8 @@ export default function OrdersPage() {
       {/* Pagination */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mt-4">
         <div className="text-sm text-gray-600">
-          Showing {(currentPage - 1) * pageSize + Math.min(1, paged.length)}-
-          {(currentPage - 1) * pageSize + paged.length} of {filtered.length}
+          Showing {Math.min((currentPage - 1) * pageSize + 1, useClientPagination ? filtered.length : totalCount)}-
+          {Math.min(currentPage * pageSize, useClientPagination ? filtered.length : totalCount)} of {useClientPagination ? filtered.length : totalCount}
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <select

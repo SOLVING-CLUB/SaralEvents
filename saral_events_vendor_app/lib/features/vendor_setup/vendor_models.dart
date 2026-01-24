@@ -11,6 +11,7 @@ class VendorProfile {
   final String? gstNumber;
   final String? panNumber;
   final String? aadhaarNumber;
+  final String? vendorName;
   final String? accountHolderName;
   final String? accountNumber;
   final String? ifscCode;
@@ -20,6 +21,9 @@ class VendorProfile {
   final List<VendorDocument> documents;
   final DateTime createdAt;
   final DateTime updatedAt;
+  final String? approvalStatus;
+  final String? approvalNotes;
+  final String? profilePictureUrl;
 
   VendorProfile({
     this.id,
@@ -34,6 +38,7 @@ class VendorProfile {
     this.gstNumber,
     this.panNumber,
     this.aadhaarNumber,
+    this.vendorName,
     this.accountHolderName,
     this.accountNumber,
     this.ifscCode,
@@ -43,6 +48,9 @@ class VendorProfile {
     required this.documents,
     required this.createdAt,
     required this.updatedAt,
+    this.approvalStatus,
+    this.approvalNotes,
+    this.profilePictureUrl,
   });
 
   VendorProfile copyWith({
@@ -56,6 +64,7 @@ class VendorProfile {
     String? gstNumber,
     String? panNumber,
     String? aadhaarNumber,
+    String? vendorName,
     String? accountHolderName,
     String? accountNumber,
     String? ifscCode,
@@ -64,6 +73,9 @@ class VendorProfile {
     List<String>? services,
     List<VendorDocument>? documents,
     DateTime? updatedAt,
+    String? approvalStatus,
+    String? approvalNotes,
+    String? profilePictureUrl,
   }) {
     return VendorProfile(
       id: id,
@@ -78,6 +90,7 @@ class VendorProfile {
       gstNumber: gstNumber ?? this.gstNumber,
       panNumber: panNumber ?? this.panNumber,
       aadhaarNumber: aadhaarNumber ?? this.aadhaarNumber,
+      vendorName: vendorName ?? this.vendorName,
       accountHolderName: accountHolderName ?? this.accountHolderName,
       accountNumber: accountNumber ?? this.accountNumber,
       ifscCode: ifscCode ?? this.ifscCode,
@@ -87,6 +100,9 @@ class VendorProfile {
       documents: documents ?? this.documents,
       createdAt: createdAt,
       updatedAt: updatedAt ?? DateTime.now(),
+      approvalStatus: approvalStatus ?? this.approvalStatus,
+      approvalNotes: approvalNotes ?? this.approvalNotes,
+      profilePictureUrl: profilePictureUrl ?? this.profilePictureUrl,
     );
   }
 
@@ -104,6 +120,7 @@ class VendorProfile {
       'gst_number': gstNumber,
       'pan_number': panNumber,
       'aadhaar_number': aadhaarNumber,
+      'vendor_name': vendorName,
       'account_holder_name': accountHolderName,
       'account_number': accountNumber,
       'ifsc_code': ifscCode,
@@ -112,6 +129,9 @@ class VendorProfile {
       'services': services,
       'created_at': createdAt.toIso8601String(),
       'updated_at': updatedAt.toIso8601String(),
+      'approval_status': approvalStatus,
+      'approval_notes': approvalNotes,
+      'profile_picture_url': profilePictureUrl,
     };
   }
 
@@ -129,6 +149,7 @@ class VendorProfile {
       gstNumber: json['gst_number'],
       panNumber: json['pan_number'],
       aadhaarNumber: json['aadhaar_number'],
+      vendorName: json['vendor_name'],
       accountHolderName: json['account_holder_name'],
       accountNumber: json['account_number'],
       ifscCode: json['ifsc_code'],
@@ -138,6 +159,9 @@ class VendorProfile {
       documents: [], // Documents will be fetched separately
       createdAt: DateTime.parse(json['created_at']),
       updatedAt: DateTime.parse(json['updated_at']),
+      approvalStatus: json['approval_status'],
+      approvalNotes: json['approval_notes'],
+      profilePictureUrl: json['profile_picture_url'],
     );
   }
 }

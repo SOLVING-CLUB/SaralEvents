@@ -42,6 +42,11 @@ export default function ServicesPage() {
   const [selectedCategories, setSelectedCategories] = useState<string[]>([])
   const [selectedTags, setSelectedTags] = useState<string[]>([])
   const [showFilters, setShowFilters] = useState(false)
+  
+  // Pagination state
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(50) // Reduced from 500
+  const [totalCount, setTotalCount] = useState(0)
 
   // Helper function to normalize service data to match ServiceRow type
   const normalizeServiceData = useCallback((rows: any[] | null): ServiceRow[] => {
@@ -92,14 +97,22 @@ export default function ServicesPage() {
     setErr(null)
     
     try {
-      // Try to load with all fields including tags
+      // Get total count first for pagination
+      const { count } = await supabase
+        .from('services')
+        .select('*', { count: 'exact', head: true })
+      
+      setTotalCount(count || 0)
+
+      // Try to load with pagination
+      const offset = (page - 1) * pageSize
       const result = await safeQuery(
         async (sb) => {
           return await sb
             .from('services')
             .select('id, name, price, is_active, is_visible_to_users, category, category_id, tags, media_urls, vendor_id, is_featured, vendor_profiles(id,business_name)')
             .order('created_at', { ascending: false })
-            .limit(500)
+            .range(offset, offset + pageSize - 1)
         },
         { signal: controller.signal, timeout: 30000, maxRetries: 3 }
       )
@@ -111,6 +124,9 @@ export default function ServicesPage() {
 
       let { data, error } = result
       
+      // Explicitly type data as any[] | null to avoid TypeScript errors during fallback assignments
+      let rawData: any[] | null = data
+      
       if (error) {
         // Fallback if tags column doesn't exist yet
         const fbResult = await safeQuery(
@@ -119,7 +135,7 @@ export default function ServicesPage() {
               .from('services')
               .select('id, name, price, is_active, is_visible_to_users, category, category_id, media_urls, vendor_id, is_featured, vendor_profiles(id,business_name)')
               .order('created_at', { ascending: false })
-              .limit(500)
+              .range(offset, offset + pageSize - 1)
           },
           { signal: controller.signal, timeout: 30000, maxRetries: 2 }
         )
@@ -134,7 +150,7 @@ export default function ServicesPage() {
                 .from('services')
                 .select('id, name, price, is_active, is_visible_to_users, category, media_urls, vendor_id, vendor_profiles(id,business_name)')
                 .order('created_at', { ascending: false })
-                .limit(500)
+                .range(offset, offset + pageSize - 1)
             },
             { signal: controller.signal, timeout: 30000, maxRetries: 2 }
           )
@@ -143,18 +159,18 @@ export default function ServicesPage() {
 
           if (fb2Result.error) {
             setErr(`${error.message} | Fallback: ${fbResult.error.message} | Fallback2: ${fb2Result.error.message}`)
-            data = null
+            rawData = null
           } else {
-            data = fb2Result.data
+            rawData = fb2Result.data
           }
         } else {
-          data = fbResult.data
+          rawData = fbResult.data
         }
       }
       
       // Normalize all data paths using the helper function
-      if (data) {
-        const normalizedData = normalizeServiceData(data)
+      if (rawData) {
+        const normalizedData = normalizeServiceData(rawData)
         setRows(normalizedData)
       } else {
         setRows([])
@@ -168,7 +184,7 @@ export default function ServicesPage() {
         setLoading(false)
       }
     }
-  }, [isOnline, normalizeServiceData])
+  }, [isOnline, normalizeServiceData, page, pageSize])
 
   useEffect(() => {
     load()
@@ -473,12 +489,25 @@ export default function ServicesPage() {
         )}
       </div>
       
-      {/* Results Count */}
-      <div className="mb-3 text-sm text-gray-600">
-        Showing {filteredRows.length} of {rows.length} services
-        {(selectedCategories.length > 0 || selectedTags.length > 0) && (
-          <span className="text-blue-600"> (filtered)</span>
-        )}
+      {/* Results Count and Pagination Info */}
+      <div className="mb-3 flex items-center justify-between">
+        <div className="text-sm text-gray-600">
+          Showing {Math.min((page - 1) * pageSize + 1, totalCount)}-{Math.min(page * pageSize, totalCount)} of {totalCount} services
+          {(selectedCategories.length > 0 || selectedTags.length > 0) && (
+            <span className="text-blue-600"> (filtered)</span>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          <select
+            className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+            value={pageSize}
+            onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1) }}
+          >
+            <option value={25}>25 per page</option>
+            <option value={50}>50 per page</option>
+            <option value={100}>100 per page</option>
+          </select>
+        </div>
       </div>
 
       {groupByVendor ? (
@@ -499,6 +528,31 @@ export default function ServicesPage() {
           toggleFeatured={toggleFeatured}
           savingId={savingId}
         />
+      )}
+
+      {/* Pagination Controls */}
+      {totalCount > pageSize && (
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mt-6">
+          <div className="text-sm text-gray-600">
+            Page {page} of {Math.ceil(totalCount / pageSize)}
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              disabled={page === 1 || loading}
+              onClick={() => setPage(p => Math.max(1, p - 1))}
+            >
+              Previous
+            </Button>
+            <Button
+              variant="outline"
+              disabled={page >= Math.ceil(totalCount / pageSize) || loading}
+              onClick={() => setPage(p => Math.min(Math.ceil(totalCount / pageSize), p + 1))}
+            >
+              Next
+            </Button>
+          </div>
+        </div>
       )}
     </main>
   )

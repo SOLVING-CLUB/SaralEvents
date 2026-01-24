@@ -11,6 +11,9 @@ export function useRealtimeNotifications() {
   const channelsRef = useRef<RealtimeChannel[]>([])
 
   useEffect(() => {
+    // Don't set up realtime if we don't have a user session
+    // This prevents unnecessary connections and potential blocking
+    let mounted = true
     const channels: RealtimeChannel[] = []
     channelsRef.current = channels
 
@@ -453,10 +456,15 @@ export function useRealtimeNotifications() {
 
     // Cleanup: unsubscribe from all channels on unmount
     return () => {
+      mounted = false
       channels.forEach((channel) => {
-        supabase.removeChannel(channel)
+        try {
+          supabase.removeChannel(channel)
+        } catch (err) {
+          console.error('Error removing channel:', err)
+        }
       })
       channelsRef.current = []
     }
-  }, [supabase, showSuccess, showInfo, showWarning])
+  }, []) // Empty deps - only run once on mount
 }

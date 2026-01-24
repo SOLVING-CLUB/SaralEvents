@@ -24,6 +24,7 @@ class VendorService {
         // Update existing profile
         final updatedData = {
           'business_name': profile.businessName,
+          'vendor_name': profile.vendorName,
           'address': profile.address,
           'category': profile.category,
           'phone_number': profile.phoneNumber,
@@ -39,6 +40,7 @@ class VendorService {
           'bank_name': profile.bankName,
           'branch_name': profile.branchName,
           'services': profile.services,
+          'profile_picture_url': profile.profilePictureUrl,
           'updated_at': DateTime.now().toIso8601String(),
         };
         
@@ -57,6 +59,7 @@ class VendorService {
         final newData = {
           'user_id': userId,
           'business_name': profile.businessName,
+          'vendor_name': profile.vendorName,
           'address': profile.address,
           'category': profile.category,
           'phone_number': profile.phoneNumber,
@@ -72,6 +75,7 @@ class VendorService {
           'bank_name': profile.bankName,
           'branch_name': profile.branchName,
           'services': profile.services,
+          'profile_picture_url': profile.profilePictureUrl,
           'created_at': DateTime.now().toIso8601String(),
           'updated_at': DateTime.now().toIso8601String(),
         };
@@ -263,6 +267,40 @@ class VendorService {
       return result != null;
     } catch (e) {
       return false;
+    }
+  }
+
+  // Upload profile picture
+  Future<String> uploadProfilePicture(File imageFile, String vendorId) async {
+    try {
+      final userId = _supabase.auth.currentUser?.id;
+      if (userId == null) {
+        throw Exception('User not authenticated');
+      }
+
+      final fileName = 'profile_${DateTime.now().millisecondsSinceEpoch}.jpg';
+      final filePath = '$userId/profile/$fileName';
+      
+      // Upload file to storage
+      await _supabase.storage
+          .from('vendor_documents')
+          .upload(filePath, imageFile, fileOptions: const FileOptions(upsert: true));
+
+      // Get public URL
+      final fileUrl = _supabase.storage
+          .from('vendor_documents')
+          .getPublicUrl(filePath);
+
+      // Update vendor profile with profile picture URL
+      await _supabase
+          .from('vendor_profiles')
+          .update({'profile_picture_url': fileUrl})
+          .eq('id', vendorId);
+
+      return fileUrl;
+    } catch (e) {
+      print('Error uploading profile picture: $e');
+      throw Exception('Failed to upload profile picture: $e');
     }
   }
 }

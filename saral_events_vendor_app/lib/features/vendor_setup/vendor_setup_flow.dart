@@ -27,6 +27,7 @@ class _VendorSetupFlowState extends State<VendorSetupFlow> {
 
   // Business Details
   final _businessName = TextEditingController();
+  final _vendorName = TextEditingController();
   String _category = 'Venue';
   final _description = TextEditingController();
   final _address = TextEditingController();
@@ -45,6 +46,18 @@ class _VendorSetupFlowState extends State<VendorSetupFlow> {
   // Document uploads
   final Map<String, dynamic> _documents = {};
   final Map<String, bool> _documentUploaded = {};
+
+  // Required document types (always required)
+  static const List<String> _alwaysRequiredDocs = [
+    'PAN Card',
+    'Aadhaar Card',
+    'Address Proof',
+    'Business Registration',
+    'Trade License',
+    'Bank Details',
+    'Cancelled Cheque',
+    'Signed Agreement',
+  ];
 
   final List<String> _categories = [
     'Venue',
@@ -91,6 +104,7 @@ class _VendorSetupFlowState extends State<VendorSetupFlow> {
   @override
   void dispose() {
     _businessName.dispose();
+    _vendorName.dispose();
     _description.dispose();
     _address.dispose();
     _contact.dispose();
@@ -107,9 +121,67 @@ class _VendorSetupFlowState extends State<VendorSetupFlow> {
   }
 
   bool get _canProceed {
+    // Step 0: Basic business details
     if (_step == 0) {
-      return _businessName.text.isNotEmpty && _address.text.isNotEmpty;
+      return _businessName.text.trim().isNotEmpty &&
+          _vendorName.text.trim().isNotEmpty &&
+          _address.text.trim().isNotEmpty &&
+          _contact.text.trim().isNotEmpty;
     }
+
+    // Step 1: Documents - enforce required documents
+    if (_step == 1) {
+      // Start with always-required docs
+      final requiredDocs = <String>{..._alwaysRequiredDocs};
+
+      // GST Certificate is required only if GST number is provided
+      if (_gstNumber.text.trim().isNotEmpty) {
+        requiredDocs.add('GST Certificate');
+      }
+
+      // FSSAI License is required for food-related vendors (e.g., Catering)
+      final lowerCategory = _category.toLowerCase();
+      if (lowerCategory.contains('cater') || lowerCategory.contains('food')) {
+        requiredDocs.add('FSSAI License');
+      }
+
+      // Udyam Registration is optional (if applicable)
+      // Professional Insurance, Work Portfolio, Photos/Videos are optional (if applicable)
+      // Authorization Letter is conditional (only if signer is not proprietor/director)
+
+      // Ensure all required documents are uploaded
+      for (final doc in requiredDocs) {
+        if (!(_documentUploaded[doc] ?? false)) {
+          return false;
+        }
+      }
+      return true;
+    }
+
+    // Step 2: Bank details - require core fields with validation
+    if (_step == 2) {
+      final accountHolderName = _accountHolderName.text.trim();
+      final accountNumber = _accountNumber.text.trim();
+      final ifscCode = _ifscCode.text.trim().toUpperCase();
+      final bankName = _bankName.text.trim();
+      
+      final accountHolderNameValid = accountHolderName.isNotEmpty &&
+          accountHolderName.length >= 2;
+      final accountNumberValid = accountNumber.isNotEmpty &&
+          accountNumber.length >= 9 &&
+          accountNumber.length <= 18;
+      final ifscCodeValid = ifscCode.length == 11 &&
+          RegExp(r'^[A-Z0-9]{11}$').hasMatch(ifscCode);
+      final bankNameValid = bankName.isNotEmpty &&
+          bankName.length >= 2;
+      
+      return accountHolderNameValid &&
+          accountNumberValid &&
+          ifscCodeValid &&
+          bankNameValid;
+    }
+
+    // Step 3: Review step - always allow if previous steps passed
     return true;
   }
 
@@ -166,6 +238,7 @@ class _VendorSetupFlowState extends State<VendorSetupFlow> {
               children: [
                 _BusinessDetailsStep(
                   businessName: _businessName,
+                  vendorName: _vendorName,
                   description: _description,
                   category: _category,
                   address: _address,
@@ -175,16 +248,49 @@ class _VendorSetupFlowState extends State<VendorSetupFlow> {
                   panNumber: _panNumber,
                   aadhaarNumber: _aadhaarNumber,
                   categories: _categories,
-                  onCategoryChanged: (v) => setState(() => _category = v),
-                  onTextChanged: () => setState(() {}),
+                  onCategoryChanged: (v) {
+                    final oldCategory = _category;
+                    final newCategory = v;
+                    setState(() {
+                      _category = newCategory;
+                      // Clear FSSAI if switching from food to non-food category
+                      final oldIsFood = oldCategory.toLowerCase().contains('cater') || 
+                                       oldCategory.toLowerCase().contains('food') ||
+                                       oldCategory.toLowerCase().contains('restaurant');
+                      final newIsFood = newCategory.toLowerCase().contains('cater') || 
+                                       newCategory.toLowerCase().contains('food') ||
+                                       newCategory.toLowerCase().contains('restaurant');
+                      if (oldIsFood && !newIsFood) {
+                        // Switching away from food category - clear FSSAI
+                        _documents['FSSAI License'] = null;
+                        _documentUploaded['FSSAI License'] = false;
+                      }
+                    });
+                  },
+                  onTextChanged: () {
+                    // Clear GST Certificate if GST number is removed
+                    if (_gstNumber.text.trim().isEmpty && _documentUploaded['GST Certificate'] == true) {
+                      _documents['GST Certificate'] = null;
+                      _documentUploaded['GST Certificate'] = false;
+                    }
+                    setState(() {});
+                  },
                 ),
                 _DocumentsStep(
+                  category: _category,
+                  gstNumber: _gstNumber.text.trim(),
                   documents: _documents,
                   documentUploaded: _documentUploaded,
                   onDocumentUploaded: (docType, file) {
                     setState(() {
                       _documents[docType] = file;
                       _documentUploaded[docType] = true;
+                    });
+                  },
+                  onDocumentDeleted: (docType) {
+                    setState(() {
+                      _documents[docType] = null;
+                      _documentUploaded[docType] = false;
                     });
                   },
                 ),
@@ -194,6 +300,7 @@ class _VendorSetupFlowState extends State<VendorSetupFlow> {
                   ifscCode: _ifscCode,
                   bankName: _bankName,
                   branchName: _branchName,
+                  onTextChanged: () => setState(() {}),
                 ),
                 _ReviewStep(
                   businessName: _businessName.text,
@@ -235,7 +342,7 @@ class _VendorSetupFlowState extends State<VendorSetupFlow> {
                   ),
                 const Spacer(),
                 FilledButton(
-                  onPressed: _canProceed ? () {
+                  onPressed: _canProceed && !_isSaving ? () {
                     if (_step < 3) {
                       _controller.nextPage(
                         duration: const Duration(milliseconds: 250),
@@ -246,7 +353,7 @@ class _VendorSetupFlowState extends State<VendorSetupFlow> {
                     }
                   } : null,
                   style: FilledButton.styleFrom(
-                    backgroundColor: _canProceed ? AppColors.primary : Colors.grey.shade300,
+                    backgroundColor: _canProceed && !_isSaving ? AppColors.primary : Colors.grey.shade300,
                     shape: const StadiumBorder(),
                     padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
                   ),
@@ -262,7 +369,7 @@ class _VendorSetupFlowState extends State<VendorSetupFlow> {
                       : Text(
                           _step < 3 ? 'Next' : 'Complete Setup',
                           style: TextStyle(
-                            color: _canProceed ? Colors.white : Colors.grey.shade600,
+                            color: _canProceed && !_isSaving ? Colors.white : Colors.grey.shade600,
                             fontWeight: FontWeight.w600,
                           ),
                         ),
@@ -300,6 +407,7 @@ class _VendorSetupFlowState extends State<VendorSetupFlow> {
       final vendorProfile = VendorProfile(
         userId: currentUser.id,
         businessName: _businessName.text.trim(),
+        vendorName: _vendorName.text.trim(),
         address: _address.text.trim(),
         category: _category,
         phoneNumber: _contact.text.trim().isEmpty ? null : _contact.text.trim(),
@@ -364,11 +472,21 @@ class _VendorSetupFlowState extends State<VendorSetupFlow> {
       }
 
       // Mark vendor setup as complete
-      context.read<AppSession>().completeVendorSetup();
-      
-      // Navigate to dashboard
       if (mounted) {
-        context.go('/');
+        // Inform vendor that account is submitted for verification
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Your vendor account has been submitted for verification. It will be reviewed and activated within 2–7 business days.',
+            ),
+          ),
+        );
+
+        // Let session re-check setup status in background
+        context.read<AppSession>().completeVendorSetup();
+
+        // Navigate to approval pending screen
+        context.go('/vendor/pending');
       }
     } catch (e) {
       if (mounted) {
@@ -391,6 +509,7 @@ class _VendorSetupFlowState extends State<VendorSetupFlow> {
 
 class _BusinessDetailsStep extends StatelessWidget {
   final TextEditingController businessName;
+  final TextEditingController vendorName;
   final TextEditingController description;
   final String category;
   final TextEditingController address;
@@ -405,6 +524,7 @@ class _BusinessDetailsStep extends StatelessWidget {
 
   const _BusinessDetailsStep({
     required this.businessName,
+    required this.vendorName,
     required this.description,
     required this.category,
     required this.address,
@@ -434,7 +554,7 @@ class _BusinessDetailsStep extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            'Tell us about your business. Only business name, address, and category are required.',
+            'Tell us about your business. Fields marked with * are required.',
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
               color: Colors.grey.shade600,
             ),
@@ -449,6 +569,18 @@ class _BusinessDetailsStep extends StatelessWidget {
               labelText: 'Business Name *',
               hintText: 'Enter your business name',
               prefixIcon: Icon(Icons.business),
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // Vendor / Owner Name (Required)
+          TextFormField(
+            controller: vendorName,
+            onChanged: (_) => onTextChanged(),
+            decoration: const InputDecoration(
+              labelText: 'Vendor / Owner Name *',
+              hintText: 'Enter proprietor / contact person name',
+              prefixIcon: Icon(Icons.person),
             ),
           ),
           const SizedBox(height: 16),
@@ -485,11 +617,12 @@ class _BusinessDetailsStep extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           
-          // Contact
+          // Contact (Required)
           TextFormField(
             controller: contact,
+            onChanged: (_) => onTextChanged(),
             decoration: const InputDecoration(
-              labelText: 'Contact Number',
+              labelText: 'Contact Number *',
               hintText: 'Enter your contact number',
               prefixIcon: Icon(Icons.phone),
             ),
@@ -537,6 +670,7 @@ class _BusinessDetailsStep extends StatelessWidget {
           // GST Number
           TextFormField(
             controller: gstNumber,
+            onChanged: (_) => onTextChanged(),
             decoration: const InputDecoration(
               labelText: 'GST Number',
               hintText: 'Enter GST number if applicable',
@@ -573,21 +707,80 @@ class _BusinessDetailsStep extends StatelessWidget {
 }
 
 class _DocumentsStep extends StatelessWidget {
+  final String category;
+  final String gstNumber;
   final Map<String, dynamic> documents;
   final Map<String, bool> documentUploaded;
   final Function(String, dynamic) onDocumentUploaded;
+  final Function(String) onDocumentDeleted;
 
   const _DocumentsStep({
+    required this.category,
+    required this.gstNumber,
     required this.documents,
     required this.documentUploaded,
     required this.onDocumentUploaded,
+    required this.onDocumentDeleted,
   });
+
+  // Check if category is food-related
+  bool get _isFoodRelated {
+    final lowerCategory = category.toLowerCase();
+    return lowerCategory.contains('cater') || 
+           lowerCategory.contains('food') ||
+           lowerCategory.contains('restaurant');
+  }
+
+  // Check if a document is required
+  bool _isDocumentRequired(String docType) {
+    // Always required documents
+    const alwaysRequired = [
+      'PAN Card',
+      'Aadhaar Card',
+      'Address Proof',
+      'Business Registration',
+      'Trade License',
+      'Bank Details',
+      'Cancelled Cheque',
+      'Signed Agreement',
+    ];
+    
+    if (alwaysRequired.contains(docType)) {
+      return true;
+    }
+    
+    // GST Certificate is required only if GST number is provided
+    if (docType == 'GST Certificate') {
+      return gstNumber.isNotEmpty;
+    }
+    
+    // FSSAI License is required for food-related categories
+    if (docType == 'FSSAI License') {
+      return _isFoodRelated;
+    }
+    
+    // All other documents are optional
+    return false;
+  }
 
   @override
   Widget build(BuildContext context) {
+    // Build document categories based on vendor category
+    final businessDocs = <String>[
+      'Business Registration',
+      'GST Certificate',
+      'Trade License',
+      'Udyam Registration',
+    ];
+    
+    // Only add FSSAI License for food-related categories
+    if (_isFoodRelated) {
+      businessDocs.insert(2, 'FSSAI License'); // Insert after GST Certificate
+    }
+
     final docCategories = {
       'Identity Documents': ['PAN Card', 'Aadhaar Card', 'Address Proof'],
-      'Business Documents': ['Business Registration', 'GST Certificate', 'FSSAI License', 'Trade License', 'Udyam Registration'],
+      'Business Documents': businessDocs,
       'Financial Documents': ['Bank Details', 'Cancelled Cheque'],
       'Other Documents': ['Professional Insurance', 'Work Portfolio', 'Signed Agreement', 'Authorization Letter'],
     };
@@ -606,7 +799,7 @@ class _DocumentsStep extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            'Upload your KYC documents. All documents are optional except business name, address, and category.',
+            'Upload your KYC documents. The following are mandatory: PAN, Aadhaar, Address Proof, Business Registration, Trade License, Bank Details, Cancelled Cheque, and Signed Agreement.${gstNumber.isNotEmpty ? ' GST Certificate is mandatory since you provided a GST number.' : ''}${_isFoodRelated ? ' FSSAI License is required for food vendors.' : ''}\n\nGST Certificate${gstNumber.isEmpty ? ' (if applicable)' : ''}, Udyam Registration (if applicable), Professional Insurance (if applicable), Work Portfolio (if applicable), and Authorization Letter (if applicable) are optional documents.',
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
               color: Colors.grey.shade600,
             ),
@@ -626,10 +819,12 @@ class _DocumentsStep extends StatelessWidget {
           const SizedBox(height: 12),
               ...category.value.map((docType) => _DocumentTile(
                 title: docType,
+                isRequired: _isDocumentRequired(docType),
                 isUploaded: documentUploaded[docType] ?? false,
                 file: documents[docType],
                 onUpload: () => _showUploadOptions(context, docType),
                 onView: () => _viewDocument(context, documents[docType]),
+                onDelete: () => onDocumentDeleted(docType),
               )),
               const SizedBox(height: 16),
             ],
@@ -993,17 +1188,21 @@ class _DocumentsStep extends StatelessWidget {
 
 class _DocumentTile extends StatelessWidget {
   final String title;
+  final bool isRequired;
   final bool isUploaded;
   final dynamic file;
   final VoidCallback onUpload;
   final VoidCallback onView;
+  final VoidCallback onDelete;
 
   const _DocumentTile({
     required this.title,
+    required this.isRequired,
     required this.isUploaded,
     required this.file,
     required this.onUpload,
     required this.onView,
+    required this.onDelete,
   });
 
   @override
@@ -1012,12 +1211,52 @@ class _DocumentTile extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 8),
       child: ListTile(
         leading: _buildLeadingWidget(),
-        title: Text(
-          title,
-          style: TextStyle(
-            fontWeight: isUploaded ? FontWeight.w600 : FontWeight.w500,
-            color: isUploaded ? Colors.black87 : Colors.grey.shade700,
-          ),
+        title: Row(
+          children: [
+            Expanded(
+              child: Text(
+                title,
+                style: TextStyle(
+                  fontWeight: isUploaded ? FontWeight.w600 : FontWeight.w500,
+                  color: isUploaded ? Colors.black87 : Colors.grey.shade700,
+                ),
+              ),
+            ),
+            if (isRequired)
+              Container(
+                margin: const EdgeInsets.only(left: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  '*',
+                  style: TextStyle(
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                  ),
+                ),
+              )
+            else
+              Container(
+                margin: const EdgeInsets.only(left: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade200,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  'If applicable',
+                  style: TextStyle(
+                    color: Colors.grey.shade600,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+          ],
         ),
         subtitle: isUploaded ? Text(
           _getFileInfo(),
@@ -1046,12 +1285,44 @@ class _DocumentTile extends StatelessWidget {
                     onPressed: onView,
                     tooltip: 'View Document',
                   ),
+                  const SizedBox(width: 4),
+                  IconButton(
+                    icon: const Icon(Icons.delete_outline, color: Colors.red),
+                    onPressed: () => _showDeleteConfirmation(context),
+                    tooltip: 'Delete Document',
+                  ),
                 ],
               )
             : TextButton(
                 onPressed: onUpload,
                 child: const Text('Upload'),
               ),
+      ),
+    );
+  }
+
+  void _showDeleteConfirmation(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Document'),
+        content: Text('Are you sure you want to delete "$title"? You can upload it again after deletion.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              onDelete();
+            },
+            style: TextButton.styleFrom(
+              foregroundColor: Colors.red,
+            ),
+            child: const Text('Delete'),
+          ),
+        ],
       ),
     );
   }
@@ -1170,6 +1441,7 @@ class _BankDetailsStep extends StatelessWidget {
   final TextEditingController ifscCode;
   final TextEditingController bankName;
   final TextEditingController branchName;
+  final VoidCallback onTextChanged;
 
   const _BankDetailsStep({
     required this.accountHolderName,
@@ -1177,6 +1449,7 @@ class _BankDetailsStep extends StatelessWidget {
     required this.ifscCode,
     required this.bankName,
     required this.branchName,
+    required this.onTextChanged,
   });
 
   @override
@@ -1195,7 +1468,7 @@ class _BankDetailsStep extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            'Provide your bank details for receiving payments. This information is optional.',
+            'Provide your bank details for receiving payments. Fields marked with * are required.',
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
               color: Colors.grey.shade600,
             ),
@@ -1204,53 +1477,100 @@ class _BankDetailsStep extends StatelessWidget {
           
           TextFormField(
             controller: accountHolderName,
+            onChanged: (_) => onTextChanged(),
             decoration: const InputDecoration(
-              labelText: 'Account Holder Name',
+              labelText: 'Account Holder Name *',
               hintText: 'Enter account holder name',
               prefixIcon: Icon(Icons.person),
             ),
+            textCapitalization: TextCapitalization.words,
+            inputFormatters: [
+              FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z\s]')),
+              LengthLimitingTextInputFormatter(100),
+            ],
           ),
           const SizedBox(height: 16),
           
           TextFormField(
             controller: accountNumber,
-            decoration: const InputDecoration(
-              labelText: 'Account Number',
-              hintText: 'Enter account number',
-              prefixIcon: Icon(Icons.account_balance),
+            onChanged: (_) => onTextChanged(),
+            decoration: InputDecoration(
+              labelText: 'Account Number *',
+              hintText: 'Enter account number (9-18 digits)',
+              prefixIcon: const Icon(Icons.account_balance),
+              errorText: accountNumber.text.isNotEmpty && 
+                  (accountNumber.text.length < 9 || accountNumber.text.length > 18)
+                  ? 'Account number must be between 9 and 18 digits'
+                  : null,
             ),
             keyboardType: TextInputType.number,
+            inputFormatters: [
+              FilteringTextInputFormatter.digitsOnly,
+              LengthLimitingTextInputFormatter(18),
+            ],
           ),
           const SizedBox(height: 16),
           
           TextFormField(
             controller: ifscCode,
-            decoration: const InputDecoration(
-              labelText: 'IFSC Code',
-              hintText: 'Enter IFSC code',
-              prefixIcon: Icon(Icons.code),
+            onChanged: (_) => onTextChanged(),
+            decoration: InputDecoration(
+              labelText: 'IFSC Code *',
+              hintText: 'Enter 11-character IFSC code',
+              prefixIcon: const Icon(Icons.code),
+              helperText: 'Format: ABCD0123456 (4 letters + 0 + 6 alphanumeric)',
+              errorText: ifscCode.text.isNotEmpty && ifscCode.text.length != 11
+                  ? 'IFSC code must be exactly 11 characters'
+                  : null,
             ),
             textCapitalization: TextCapitalization.characters,
+            inputFormatters: [
+              FilteringTextInputFormatter.allow(RegExp(r'[A-Z0-9]')),
+              LengthLimitingTextInputFormatter(11),
+              TextInputFormatter.withFunction((oldValue, newValue) {
+                // Ensure exactly 11 characters max and uppercase
+                var text = newValue.text.toUpperCase();
+                if (text.length > 11) {
+                  text = text.substring(0, 11);
+                }
+                return TextEditingValue(
+                  text: text,
+                  selection: TextSelection.collapsed(offset: text.length),
+                );
+              }),
+            ],
           ),
           const SizedBox(height: 16),
           
           TextFormField(
             controller: bankName,
+            onChanged: (_) => onTextChanged(),
             decoration: const InputDecoration(
-              labelText: 'Bank Name',
+              labelText: 'Bank Name *',
               hintText: 'Enter bank name',
               prefixIcon: Icon(Icons.account_balance_wallet),
             ),
+            textCapitalization: TextCapitalization.words,
+            inputFormatters: [
+              FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z\s]')),
+              LengthLimitingTextInputFormatter(100),
+            ],
           ),
           const SizedBox(height: 16),
           
           TextFormField(
             controller: branchName,
+            onChanged: (_) => onTextChanged(),
             decoration: const InputDecoration(
               labelText: 'Branch Name',
-              hintText: 'Enter branch name',
+              hintText: 'Enter branch name (optional)',
               prefixIcon: Icon(Icons.location_city),
             ),
+            textCapitalization: TextCapitalization.words,
+            inputFormatters: [
+              FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z\s]')),
+              LengthLimitingTextInputFormatter(100),
+            ],
           ),
         ],
       ),

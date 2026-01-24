@@ -62,22 +62,51 @@ export default function Dashboard() {
         setError(null)
         
         // Use Promise.allSettled to handle partial failures gracefully
+        // Set a shorter timeout and fewer retries for faster failure
         const results = await Promise.allSettled([
           safeQuery(
-            async () => ({ data: await getDashboardStats(), error: null }),
-            { signal: controller.signal, timeout: 30000, maxRetries: 3 }
+            async () => {
+              try {
+                const data = await getDashboardStats()
+                return { data, error: null }
+              } catch (err: any) {
+                return { data: null, error: err }
+              }
+            },
+            { signal: controller.signal, timeout: 15000, maxRetries: 2 }
           ),
           safeQuery(
-            async () => ({ data: await getTopVendors(5), error: null }),
-            { signal: controller.signal, timeout: 30000, maxRetries: 3 }
+            async () => {
+              try {
+                const data = await getTopVendors(5)
+                return { data, error: null }
+              } catch (err: any) {
+                return { data: null, error: err }
+              }
+            },
+            { signal: controller.signal, timeout: 15000, maxRetries: 2 }
           ),
           safeQuery(
-            async () => ({ data: await getPopularServices(5), error: null }),
-            { signal: controller.signal, timeout: 30000, maxRetries: 3 }
+            async () => {
+              try {
+                const data = await getPopularServices(5)
+                return { data, error: null }
+              } catch (err: any) {
+                return { data: null, error: err }
+              }
+            },
+            { signal: controller.signal, timeout: 15000, maxRetries: 2 }
           ),
           safeQuery(
-            async () => ({ data: await getVendorActivityStatus(), error: null }),
-            { signal: controller.signal, timeout: 30000, maxRetries: 3 }
+            async () => {
+              try {
+                const data = await getVendorActivityStatus()
+                return { data, error: null }
+              } catch (err: any) {
+                return { data: null, error: err }
+              }
+            },
+            { signal: controller.signal, timeout: 15000, maxRetries: 2 }
           ),
         ])
 
@@ -107,13 +136,25 @@ export default function Dashboard() {
         
         if (errors.length > 0) {
           console.error('Error loading dashboard data:', errors)
-          setError('Some data failed to load. Please refresh.')
+          // Only show error if we have no data at all
+          if (!stats && topVendors.length === 0 && popularServices.length === 0 && vendorActivity.length === 0) {
+            setError('Some data failed to load. Please refresh.')
+          }
         }
       } catch (error) {
         console.error('Error loading dashboard data:', error)
-        setError('Failed to load dashboard data. Please refresh.')
+        // Only show error if we have no data at all
+        if (!stats && topVendors.length === 0 && popularServices.length === 0 && vendorActivity.length === 0) {
+          setError('Failed to load dashboard data. Please refresh.')
+        }
       } finally {
-        setLoading(false)
+        // Always set loading to false, even if request was cancelled
+        if (!controller.signal.aborted) {
+          setLoading(false)
+        } else {
+          // If cancelled, still set loading to false after a short delay
+          setTimeout(() => setLoading(false), 100)
+        }
       }
     }
     

@@ -16,6 +16,11 @@ CREATE TABLE IF NOT EXISTS vendor_profiles (
     website TEXT,
     description TEXT,
     services TEXT[] DEFAULT '{}',
+    -- Approval workflow fields
+    approval_status TEXT NOT NULL DEFAULT 'pending' CHECK (approval_status IN ('pending','approved','rejected')),
+    approval_notes TEXT,
+    approved_at TIMESTAMPTZ,
+    approved_by UUID,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -50,6 +55,23 @@ ADD COLUMN IF NOT EXISTS branch_name TEXT,
 ADD COLUMN IF NOT EXISTS pan_number TEXT,
 ADD COLUMN IF NOT EXISTS gst_number TEXT,
 ADD COLUMN IF NOT EXISTS aadhaar_number TEXT;
+
+-- Vendor contact / owner name
+ALTER TABLE vendor_profiles
+ADD COLUMN IF NOT EXISTS vendor_name TEXT;
+
+-- Profile picture URL
+ALTER TABLE vendor_profiles
+ADD COLUMN IF NOT EXISTS profile_picture_url TEXT;
+
+-- Drop existing policies if they exist (for idempotency)
+DROP POLICY IF EXISTS "Users can view own vendor profile" ON vendor_profiles;
+DROP POLICY IF EXISTS "Users can insert own vendor profile" ON vendor_profiles;
+DROP POLICY IF EXISTS "Users can update own vendor profile" ON vendor_profiles;
+DROP POLICY IF EXISTS "Users can delete own vendor profile" ON vendor_profiles;
+DROP POLICY IF EXISTS "Users can view own vendor documents" ON vendor_documents;
+DROP POLICY IF EXISTS "Users can insert own vendor documents" ON vendor_documents;
+DROP POLICY IF EXISTS "Users can delete own vendor documents" ON vendor_documents;
 
 -- Policy: Users can only see their own vendor profile
 CREATE POLICY "Users can view own vendor profile" ON vendor_profiles
@@ -101,6 +123,11 @@ CREATE POLICY "Users can delete own vendor documents" ON vendor_documents
 INSERT INTO storage.buckets (id, name, public) 
 VALUES ('vendor_documents', 'vendor_documents', true)
 ON CONFLICT (id) DO NOTHING;
+
+-- Drop existing storage policies if they exist (for idempotency)
+DROP POLICY IF EXISTS "Users can upload own vendor documents" ON storage.objects;
+DROP POLICY IF EXISTS "Users can view own vendor documents" ON storage.objects;
+DROP POLICY IF EXISTS "Users can delete own vendor documents" ON storage.objects;
 
 -- Storage policy: Users can upload documents to their own folder
 CREATE POLICY "Users can upload own vendor documents" ON storage.objects
