@@ -32,6 +32,63 @@ class RefundService {
 
   RefundService(this._supabase);
 
+  /// Get cancellation policy warning message for a booking date
+  /// Returns null if booking is outside cancellation time windows
+  String? getCancellationPolicyWarning({
+    required String vendorCategory,
+    required DateTime bookingDate,
+    required DateTime currentDate,
+  }) {
+    final timeBeforeEvent = _calculateTimeBeforeEvent(bookingDate, currentDate);
+    final days = timeBeforeEvent['days']!;
+    final hours = timeBeforeEvent['hours']!;
+    final refundCategory = _getRefundCategoryType(vendorCategory);
+
+    switch (refundCategory) {
+      case RefundCategoryType.foodCatering:
+        if (days <= 7) {
+          if (hours < 72) {
+            return '⚠️ Cancellation Policy: Less than 72 hours before event - No refund will be provided if cancelled.';
+          } else if (days < 3) {
+            return '⚠️ Cancellation Policy: 3-7 days before event - Only 50% refund will be provided if cancelled.';
+          }
+        }
+        break;
+      case RefundCategoryType.venues:
+        if (days <= 30) {
+          if (days < 7) {
+            return '⚠️ Cancellation Policy: Less than 7 days before event - No refund will be provided if cancelled.';
+          } else if (days < 15) {
+            return '⚠️ Cancellation Policy: 7-15 days before event - Only 25% refund will be provided if cancelled.';
+          } else if (days < 30) {
+            return '⚠️ Cancellation Policy: 15-30 days before event - Only 50% refund will be provided if cancelled.';
+          }
+        }
+        break;
+      case RefundCategoryType.djMusicians:
+        if (days <= 7) {
+          if (hours < 72) {
+            return '⚠️ Cancellation Policy: Less than 72 hours before event - No refund will be provided if cancelled.';
+          } else if (days < 3) {
+            return '⚠️ Cancellation Policy: 3-7 days before event - Only 50% refund will be provided if cancelled.';
+          }
+        }
+        break;
+      case RefundCategoryType.decorators:
+        if (hours <= 48) {
+          if (hours < 24) {
+            return '⚠️ Cancellation Policy: Less than 24 hours before event - No refund will be provided if cancelled.';
+          } else {
+            return '⚠️ Cancellation Policy: 24-48 hours before event - Only 50% refund will be provided if cancelled.';
+          }
+        }
+        break;
+      default:
+        return null;
+    }
+    return null;
+  }
+
   /// Map vendor category to refund policy category
   RefundCategoryType _getRefundCategoryType(String vendorCategory) {
     final category = vendorCategory.toLowerCase();
@@ -82,15 +139,18 @@ class RefundService {
   /// Calculate refund for Food & Catering Services
   RefundCalculation _calculateFoodCateringRefund({
     required double advanceAmount,
-    required int daysBeforeEvent,
+    required Map<String, int> timeBeforeEvent,
   }) {
+    final days = timeBeforeEvent['days']!;
+    final hours = timeBeforeEvent['hours']!;
+    
     double refundPercentage = 0.0;
     String reason = '';
 
-    if (daysBeforeEvent > 7) {
+    if (days > 7) {
       refundPercentage = 100.0;
-      reason = 'More than 7 days before event - Full refund';
-    } else if (daysBeforeEvent >= 3) {
+      reason = 'More than 7 days before event - 100% refund';
+    } else if (days >= 3 || (days == 2 && hours >= 72)) {
       refundPercentage = 50.0;
       reason = '3-7 days before event - 50% refund';
     } else {
@@ -108,7 +168,8 @@ class RefundService {
       reason: reason,
       breakdown: {
         'category': 'Food & Catering Services',
-        'days_before_event': daysBeforeEvent,
+        'days_before_event': days,
+        'hours_before_event': hours,
         'advance_amount': advanceAmount,
         'refund_percentage': refundPercentage,
         'refundable_amount': refundableAmount,
@@ -161,15 +222,18 @@ class RefundService {
   /// Calculate refund for DJs, Musicians & Live Performers
   RefundCalculation _calculateDjMusicianRefund({
     required double advanceAmount,
-    required int daysBeforeEvent,
+    required Map<String, int> timeBeforeEvent,
   }) {
+    final days = timeBeforeEvent['days']!;
+    final hours = timeBeforeEvent['hours']!;
+    
     double refundPercentage = 0.0;
     String reason = '';
 
-    if (daysBeforeEvent > 7) {
+    if (days > 7) {
       refundPercentage = 75.0;
       reason = 'More than 7 days before event - 75% refund';
-    } else if (daysBeforeEvent >= 3) {
+    } else if (days >= 3 || (days == 2 && hours >= 72)) {
       refundPercentage = 50.0;
       reason = '3-7 days before event - 50% refund';
     } else {
@@ -187,7 +251,8 @@ class RefundService {
       reason: reason,
       breakdown: {
         'category': 'DJs, Musicians & Live Performers',
-        'days_before_event': daysBeforeEvent,
+        'days_before_event': days,
+        'hours_before_event': hours,
         'advance_amount': advanceAmount,
         'refund_percentage': refundPercentage,
         'refundable_amount': refundableAmount,
@@ -199,15 +264,18 @@ class RefundService {
   /// Calculate refund for Decorators & Event Essentials
   RefundCalculation _calculateDecoratorRefund({
     required double advanceAmount,
-    required int daysBeforeEvent,
+    required Map<String, int> timeBeforeEvent,
   }) {
+    final days = timeBeforeEvent['days']!;
+    final hours = timeBeforeEvent['hours']!;
+    
     double refundPercentage = 0.0;
     String reason = '';
 
-    if (daysBeforeEvent >= 2) { // More than 48 hours
+    if (hours > 48) { // More than 48 hours
       refundPercentage = 75.0;
       reason = 'More than 48 hours before event - 75% refund';
-    } else if (daysBeforeEvent >= 1) { // 24-48 hours
+    } else if (hours >= 24) { // 24-48 hours
       refundPercentage = 50.0;
       reason = '24-48 hours before event - 50% refund';
     } else {
@@ -225,7 +293,8 @@ class RefundService {
       reason: reason,
       breakdown: {
         'category': 'Decorators & Event Essentials',
-        'days_before_event': daysBeforeEvent,
+        'days_before_event': days,
+        'hours_before_event': hours,
         'advance_amount': advanceAmount,
         'refund_percentage': refundPercentage,
         'refundable_amount': refundableAmount,
@@ -234,10 +303,14 @@ class RefundService {
     );
   }
 
-  /// Calculate days before event
-  int _calculateDaysBeforeEvent(DateTime bookingDate, DateTime cancellationDate) {
+  /// Calculate days/hours before event
+  /// Returns a map with 'days' and 'hours' for precise calculation
+  Map<String, int> _calculateTimeBeforeEvent(DateTime bookingDate, DateTime cancellationDate) {
     final difference = bookingDate.difference(cancellationDate);
-    return difference.inDays;
+    return {
+      'days': difference.inDays,
+      'hours': difference.inHours,
+    };
   }
 
   /// Calculate refund for a booking cancellation
@@ -262,7 +335,6 @@ class RefundService {
           .single();
 
       final bookingDate = DateTime.parse(bookingResult['booking_date']);
-      final totalAmount = (bookingResult['amount'] as num).toDouble();
       final vendorCategory = bookingResult['vendor_profiles']['category'] as String;
       final milestones = bookingResult['payment_milestones'] as List<dynamic>;
 
@@ -289,7 +361,8 @@ class RefundService {
       }
 
       // Customer cancellation: Category-specific refund policy
-      final daysBeforeEvent = _calculateDaysBeforeEvent(bookingDate, cancellationDate);
+      // Use hours for precise calculation (important for < 72 hours and < 24 hours rules)
+      final timeBeforeEvent = _calculateTimeBeforeEvent(bookingDate, cancellationDate);
       final refundCategory = _getRefundCategoryType(vendorCategory);
 
       // Get advance payment milestone (20%)
@@ -333,25 +406,25 @@ class RefundService {
         case RefundCategoryType.foodCatering:
           calculation = _calculateFoodCateringRefund(
             advanceAmount: advanceAmount,
-            daysBeforeEvent: daysBeforeEvent,
+            timeBeforeEvent: timeBeforeEvent,
           );
           break;
         case RefundCategoryType.venues:
           calculation = _calculateVenueRefund(
             advanceAmount: advanceAmount,
-            daysBeforeEvent: daysBeforeEvent,
+            daysBeforeEvent: timeBeforeEvent['days']!,
           );
           break;
         case RefundCategoryType.djMusicians:
           calculation = _calculateDjMusicianRefund(
             advanceAmount: advanceAmount,
-            daysBeforeEvent: daysBeforeEvent,
+            timeBeforeEvent: timeBeforeEvent,
           );
           break;
         case RefundCategoryType.decorators:
           calculation = _calculateDecoratorRefund(
             advanceAmount: advanceAmount,
-            daysBeforeEvent: daysBeforeEvent,
+            timeBeforeEvent: timeBeforeEvent,
           );
           break;
         default:
@@ -363,7 +436,8 @@ class RefundService {
             reason: 'Category not eligible for refund',
             breakdown: {
               'category': vendorCategory,
-              'days_before_event': daysBeforeEvent,
+              'days_before_event': timeBeforeEvent['days'],
+              'hours_before_event': timeBeforeEvent['hours'],
               'advance_amount': advanceAmount,
             },
           );

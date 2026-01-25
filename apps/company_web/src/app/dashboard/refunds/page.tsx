@@ -26,9 +26,13 @@ type Refund = {
   created_at: string
   processed_at: string | null
   processed_by: string | null
+  company_amount?: number | null
+  vendor_amount?: number | null
+  customer_amount?: number | null
   bookings?: {
     booking_date: string
     amount: number
+    vendor_id: string
     services?: { name: string } | null
     vendor_profiles?: { business_name: string } | null
   } | null
@@ -58,6 +62,7 @@ export default function RefundsPage() {
         bookings!inner(
           booking_date,
           amount,
+          vendor_id,
           services(name),
           vendor_profiles(business_name)
         )
@@ -117,7 +122,117 @@ export default function RefundsPage() {
       return
     }
 
-    await updateRefundStatus(refundId, 'completed')
+    // Get refund details to calculate split
+    const refund = refunds.find(r => r.id === refundId)
+    if (!refund) {
+      alert('Refund not found')
+      return
+    }
+
+    // Calculate refund split:
+    // - Customer gets: refund_amount (already calculated)
+    // - From non_refundable_amount:
+    //   - Company gets: 5% of non_refundable_amount
+    //   - Vendor gets: 95% of non_refundable_amount
+    // - If customer gets 100% refund, company gets nothing (non_refundable = 0)
+    const customerAmount = refund.refund_amount
+    const nonRefundable = refund.non_refundable_amount
+    const companyAmount = nonRefundable > 0 ? nonRefundable * 0.05 : 0
+    const vendorAmount = nonRefundable > 0 ? nonRefundable * 0.95 : 0
+
+    // Get current admin user
+    const { data: { user } } = await supabase.auth.getUser()
+    const adminUserId = user?.id || null
+
+    // Update refund with split amounts and status
+    const updateData: any = {
+      status: 'completed',
+      processed_at: new Date().toISOString(),
+      processed_by: adminUserId,
+      updated_at: new Date().toISOString(),
+      customer_amount: customerAmount,
+      company_amount: companyAmount,
+      vendor_amount: vendorAmount,
+    }
+
+    const { error: refundError } = await supabase
+      .from('refunds')
+      .update(updateData)
+      .eq('id', refundId)
+
+    if (refundError) {
+      alert(`Error updating refund: ${refundError.message}`)
+      return
+    }
+
+    // If vendor should receive amount, credit their wallet
+    if (vendorAmount > 0 && refund.bookings?.vendor_id) {
+      try {
+        // Get or create vendor wallet
+        let wallet
+        const { data: newWallet, error: insertErr } = await supabase
+          .from('vendor_wallets')
+          .insert({ vendor_id: refund.bookings.vendor_id })
+          .select()
+          .maybeSingle()
+
+        if (insertErr) {
+          // Wallet might already exist, try to fetch it
+          const { data: existingWallet, error: fetchErr } = await supabase
+            .from('vendor_wallets')
+            .select('*')
+            .eq('vendor_id', refund.bookings.vendor_id)
+            .maybeSingle()
+
+          if (fetchErr || !existingWallet) {
+            console.error('Failed to get or create wallet:', fetchErr?.message)
+            // Continue with refund even if wallet update fails
+          } else {
+            wallet = existingWallet
+          }
+        } else {
+          wallet = newWallet
+        }
+
+        if (wallet) {
+          const newBalance = Number(wallet.balance) + vendorAmount
+          const newTotal = Number(wallet.total_earned || 0) + vendorAmount
+
+          // Update wallet
+          await supabase
+            .from('vendor_wallets')
+            .update({
+              balance: newBalance,
+              total_earned: newTotal,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', wallet.id)
+
+          // Create wallet transaction
+          await supabase
+            .from('wallet_transactions')
+            .insert({
+              wallet_id: wallet.id,
+              vendor_id: refund.bookings.vendor_id,
+              txn_type: 'credit',
+              source: 'refund_split',
+              amount: vendorAmount,
+              balance_after: newBalance,
+              booking_id: refund.booking_id,
+              notes: `Refund split: 95% of non-refundable amount (₹${nonRefundable.toFixed(2)}) from cancelled booking`,
+            })
+        }
+      } catch (walletError: any) {
+        console.error('Error crediting vendor wallet:', walletError)
+        // Don't fail the refund if wallet update fails - log and continue
+      }
+    }
+
+    // Reload refunds to show updated data
+    await loadRefunds()
+    if (selectedRefund?.id === refundId) {
+      setSelectedRefund(prev => prev ? { ...prev, ...updateData } : null)
+    }
   }
 
   const filtered = refunds.filter(r => {
@@ -326,13 +441,31 @@ export default function RefundsPage() {
                   <StatusBadge status={selectedRefund.status} />
                 </div>
                 <div>
-                  <p className="text-sm text-gray-600">Refund Amount</p>
-                  <p className="text-lg font-bold text-green-600">₹{selectedRefund.refund_amount.toFixed(2)}</p>
+                  <p className="text-sm text-gray-600">Customer Refund</p>
+                  <p className="text-lg font-bold text-green-600">
+                    ₹{(selectedRefund.customer_amount ?? selectedRefund.refund_amount).toFixed(2)}
+                  </p>
                 </div>
                 <div>
                   <p className="text-sm text-gray-600">Non-refundable</p>
                   <p className="text-lg font-bold text-gray-600">₹{selectedRefund.non_refundable_amount.toFixed(2)}</p>
                 </div>
+                {selectedRefund.status === 'completed' && selectedRefund.non_refundable_amount > 0 && (
+                  <>
+                    <div>
+                      <p className="text-sm text-gray-600">Company Amount (5%)</p>
+                      <p className="text-lg font-bold text-blue-600">
+                        ₹{(selectedRefund.company_amount ?? 0).toFixed(2)}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600">Vendor Amount (95%)</p>
+                      <p className="text-lg font-bold text-purple-600">
+                        ₹{(selectedRefund.vendor_amount ?? 0).toFixed(2)}
+                      </p>
+                    </div>
+                  </>
+                )}
                 <div>
                   <p className="text-sm text-gray-600">Reason</p>
                   <p className="text-sm">{selectedRefund.reason}</p>
@@ -342,6 +475,41 @@ export default function RefundsPage() {
                   <p className="text-sm capitalize">{selectedRefund.cancelled_by}</p>
                 </div>
               </div>
+              {selectedRefund.status === 'completed' && selectedRefund.non_refundable_amount > 0 && (
+                <div className="mt-4 p-4 bg-gray-50 rounded-lg">
+                  <p className="text-sm font-medium text-gray-700 mb-2">Refund Split Breakdown</p>
+                  <div className="space-y-1 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Customer receives:</span>
+                      <span className="font-medium text-green-600">
+                        ₹{(selectedRefund.customer_amount ?? selectedRefund.refund_amount).toFixed(2)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Company receives (5%):</span>
+                      <span className="font-medium text-blue-600">
+                        ₹{(selectedRefund.company_amount ?? 0).toFixed(2)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Vendor wallet credited (95%):</span>
+                      <span className="font-medium text-purple-600">
+                        ₹{(selectedRefund.vendor_amount ?? 0).toFixed(2)}
+                      </span>
+                    </div>
+                    <div className="pt-2 mt-2 border-t border-gray-200 flex justify-between font-medium">
+                      <span>Total:</span>
+                      <span>
+                        ₹{(
+                          (selectedRefund.customer_amount ?? selectedRefund.refund_amount) +
+                          (selectedRefund.company_amount ?? 0) +
+                          (selectedRefund.vendor_amount ?? 0)
+                        ).toFixed(2)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
               {selectedRefund.status === 'pending' && (
                 <div className="pt-4 border-t">
                   <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">

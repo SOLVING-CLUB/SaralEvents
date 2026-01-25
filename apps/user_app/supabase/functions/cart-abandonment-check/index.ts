@@ -22,15 +22,19 @@ serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
     // Find all cart items that are 6+ hours old and haven't been notified
+    // Only check items where abandonment_notified_at is NULL or was notified more than 24 hours ago (to allow re-notification)
     const sixHoursAgo = new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString()
+    const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
     
-    const { data: abandonedCarts, error: cartError } = await supabase
+    // First, get all active cart items that are 6+ hours old
+    const { data: allAbandonedCarts, error: cartError } = await supabase
       .from('cart_items')
       .select(`
         id,
         user_id,
         service_id,
         created_at,
+        abandonment_notified_at,
         services(name)
       `)
       .eq('status', 'active')
@@ -41,7 +45,18 @@ serve(async (req) => {
       throw cartError
     }
 
-    if (!abandonedCarts || abandonedCarts.length === 0) {
+    // Filter in JavaScript to check abandonment_notified_at
+    // Only include items that haven't been notified OR were notified more than 24 hours ago
+    const abandonedCarts = (allAbandonedCarts || []).filter(item => {
+      if (!item.abandonment_notified_at) {
+        return true // Never notified
+      }
+      const notifiedAt = new Date(item.abandonment_notified_at)
+      const twentyFourHoursAgoDate = new Date(twentyFourHoursAgo)
+      return notifiedAt < twentyFourHoursAgoDate // Notified more than 24 hours ago
+    })
+
+    if (abandonedCarts.length === 0) {
       return new Response(
         JSON.stringify({ message: 'No abandoned carts found', count: 0 }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
@@ -92,6 +107,17 @@ serve(async (req) => {
         console.error(`Error sending notification to user ${userId}:`, notificationError)
         results.push({ userId, success: false, error: notificationError.message })
       } else {
+        // Mark all items for this user as notified
+        const itemIds = items.map(i => i.id)
+        const { error: updateError } = await supabase
+          .from('cart_items')
+          .update({ abandonment_notified_at: new Date().toISOString() })
+          .in('id', itemIds)
+        
+        if (updateError) {
+          console.error(`Error updating abandonment_notified_at for user ${userId}:`, updateError)
+        }
+        
         results.push({ userId, success: true, itemsCount: items.length })
       }
     }

@@ -5,6 +5,7 @@ import '../services/booking_draft_service.dart';
 import '../widgets/user_availability_calendar.dart';
 import '../widgets/time_slot_picker.dart';
 import '../services/availability_service.dart';
+import '../services/refund_service.dart';
 import '../checkout/checkout_state.dart';
 import '../checkout/booking_flow.dart';
 import 'package:provider/provider.dart';
@@ -21,6 +22,7 @@ class BookingScreen extends StatefulWidget {
 class _BookingScreenState extends State<BookingScreen> {
   late final BookingDraftService _draftService;
   late final AvailabilityService _availabilityService;
+  late final RefundService _refundService;
   DateTime? _selectedDate;
   TimeOfDay? _selectedTime;
   final TextEditingController _notesController = TextEditingController();
@@ -30,6 +32,7 @@ class _BookingScreenState extends State<BookingScreen> {
   TimeSlot? _selectedTimeSlot;
   String? _actualVendorCategory;
   bool _isLoadingCategory = false;
+  String? _cancellationPolicyWarning;
   
   // Categories that require location link (normalized to lowercase for robust matching)
   static const List<String> _locationRequiredCategories = [
@@ -65,6 +68,7 @@ class _BookingScreenState extends State<BookingScreen> {
     super.initState();
     _draftService = BookingDraftService(Supabase.instance.client);
     _availabilityService = AvailabilityService(Supabase.instance.client);
+    _refundService = RefundService(Supabase.instance.client);
     
     // Debug: Print service information
     print('=== BOOKING SCREEN DEBUG ===');
@@ -139,6 +143,19 @@ class _BookingScreenState extends State<BookingScreen> {
       _availableTimeSlots = [];
     });
     
+    // Check cancellation policy warning
+    final category = _actualVendorCategory ?? widget.service.vendorCategory;
+    if (category != null) {
+      final warning = _refundService.getCancellationPolicyWarning(
+        vendorCategory: category,
+        bookingDate: date,
+        currentDate: DateTime.now(),
+      );
+      setState(() {
+        _cancellationPolicyWarning = warning;
+      });
+    }
+    
     // Load available time slots for the selected date
     _loadTimeSlotsForDate(date);
   }
@@ -210,6 +227,36 @@ class _BookingScreenState extends State<BookingScreen> {
             const SizedBox(height: 12),
             _buildAvailabilityCalendar(),
             const SizedBox(height: 24),
+
+            // Cancellation Policy Warning (if applicable)
+            if (_selectedDate != null && _cancellationPolicyWarning != null) ...[
+              Container(
+                padding: const EdgeInsets.all(12),
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                  color: Colors.orange.shade50,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.orange.shade200),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(Icons.warning_amber_rounded, color: Colors.orange.shade700, size: 20),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        _cancellationPolicyWarning!,
+                        style: TextStyle(
+                          color: Colors.orange.shade900,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
 
             // Time Slots (if date is selected) - MANDATORY
             if (_selectedDate != null) ...[
