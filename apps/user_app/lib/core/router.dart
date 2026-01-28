@@ -29,6 +29,7 @@ import '../screens/refer_earn_screen.dart';
 import '../screens/cancellation_flow_screen.dart';
 import '../screens/refund_details_screen.dart';
 import '../screens/support_screen.dart';
+import '../screens/notifications_screen.dart';
 
 
 class AppRouter {
@@ -249,6 +250,10 @@ class AppRouter {
         GoRoute(
           path: '/support',
           builder: (_, __) => const SupportScreen(),
+        ),
+        GoRoute(
+          path: '/notifications',
+          builder: (_, __) => const NotificationsScreen(),
         ),
       ],
     );

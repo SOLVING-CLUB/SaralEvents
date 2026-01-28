@@ -109,7 +109,10 @@ class _CatalogScreenState extends State<CatalogScreen> {
   Future<List<ServiceItem>> _loadServicesByVendorCategory(String categoryName) async {
     try {
       print('Loading services for vendor category: $categoryName');
-      // Direct fetch (no cache) to reflect latest changes immediately
+      // Normalize category name for case-insensitive matching
+      final normalizedCategoryName = categoryName.trim().toLowerCase();
+      
+      // Fetch services with vendor profiles, then filter by vendor category
       final response = await _supabase
           .from('services')
           .select('''
@@ -129,19 +132,49 @@ class _CatalogScreenState extends State<CatalogScreen> {
             policies,
             vendor_profiles!inner(
               id,
-              business_name
+              business_name,
+              category
             )
           ''')
-          .eq('category', categoryName)
           .eq('is_active', true)
           .eq('is_visible_to_users', true)
           .order('created_at', ascending: false)
-          .limit(100);
+          .limit(500); // Fetch more to filter client-side
+      
+      print('Raw response length: ${response.length}');
+      
+      // Filter by vendor category (case-insensitive)
+      // Handle variations: Music/Dj, Music/DJ, music/dj all match
+      final filteredResponse = (response as List<dynamic>).where((service) {
+        final vendorData = service['vendor_profiles'] as Map<String, dynamic>?;
+        if (vendorData == null) return false;
+        
+        final vendorCategory = (vendorData['category'] as String?)?.trim().toLowerCase() ?? '';
+        
+        // Exact match or contains match (handles Music/Dj vs Music/DJ)
+        final exactMatch = vendorCategory == normalizedCategoryName;
+        final containsMatch = vendorCategory.contains(normalizedCategoryName) || 
+                             normalizedCategoryName.contains(vendorCategory);
+        
+        // Also check for common variations (dj vs dj, music vs music)
+        final normalizedVendor = vendorCategory.replaceAll('/', '').replaceAll(' ', '');
+        final normalizedSearch = normalizedCategoryName.replaceAll('/', '').replaceAll(' ', '');
+        final variationMatch = normalizedVendor == normalizedSearch ||
+                              (normalizedVendor.contains('music') && normalizedSearch.contains('music')) ||
+                              (normalizedVendor.contains('dj') && normalizedSearch.contains('dj'));
+        
+        final matches = exactMatch || containsMatch || variationMatch;
+        
+        if (matches) {
+          print('✅ Service "${service['name']}" matches category: ${vendorData['category']} (normalized: $vendorCategory)');
+        }
+        
+        return matches;
+      }).take(100).toList();
+      
+      print('Filtered response length: ${filteredResponse.length}');
 
-      print('Raw response: $response');
-      print('Response length: ${response.length}');
-
-      final services = response.map((data) {
+      final services = filteredResponse.map((data) {
         print('Processing service data: $data');
         final vendorData = data['vendor_profiles'] as Map<String, dynamic>;
         print('Vendor data: $vendorData');

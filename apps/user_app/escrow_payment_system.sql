@@ -396,7 +396,8 @@ CREATE TABLE IF NOT EXISTS withdrawal_requests (
   admin_id UUID, -- admin processing the payout (references auth.users or admin table)
   rejection_reason TEXT,
   bank_snapshot JSONB, -- captures account_number, ifsc, holder_name, bank_name at request time
-  notes TEXT
+  notes TEXT,
+  updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS idx_wallet_transactions_vendor ON wallet_transactions(vendor_id, created_at DESC);

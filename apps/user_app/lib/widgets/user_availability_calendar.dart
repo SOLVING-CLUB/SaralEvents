@@ -249,6 +249,13 @@ class _UserAvailabilityCalendarState extends State<UserAvailabilityCalendar> {
     return status;
   }
 
+  bool _isPastDate(DateTime date) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final target = DateTime(date.year, date.month, date.day);
+    return target.isBefore(today);
+  }
+
   Color _getDayColor(DayStatus status) {
     final theme = Theme.of(context);
     Color color;
@@ -271,6 +278,11 @@ class _UserAvailabilityCalendarState extends State<UserAvailabilityCalendar> {
   }
 
   void _onDayTap(DateTime date) {
+    // Prevent selecting dates before today
+    if (_isPastDate(date)) {
+      return;
+    }
+
     final status = _getDayStatus(date);
     if (status == DayStatus.available || status == DayStatus.partiallyAvailable) {
       widget.onDateSelected(date, null);
@@ -437,6 +449,7 @@ class _UserAvailabilityCalendarState extends State<UserAvailabilityCalendar> {
     for (int day = 1; day <= daysInMonth; day++) {
       final date = DateTime(_currentMonth.year, _currentMonth.month, day);
       final status = _getDayStatus(date);
+      final isPast = _isPastDate(date);
       final isSelected = widget.selectedDate != null &&
           widget.selectedDate!.year == date.year &&
           widget.selectedDate!.month == date.month &&
@@ -450,7 +463,7 @@ class _UserAvailabilityCalendarState extends State<UserAvailabilityCalendar> {
 
       dayWidgets.add(
         GestureDetector(
-          onTap: () => _onDayTap(date),
+          onTap: isPast ? null : () => _onDayTap(date),
           child: Container(
             height: 40,
             width: 40,
@@ -458,13 +471,13 @@ class _UserAvailabilityCalendarState extends State<UserAvailabilityCalendar> {
               shape: BoxShape.circle,
               color: isSelected
                   ? Theme.of(context).colorScheme.primary
-                  : (status == DayStatus.unavailable 
+                  : (isPast || status == DayStatus.unavailable 
                       ? Colors.transparent 
                       : _getDayColor(status)),
               border: isSelected
                   ? null
                   : Border.all(
-                      color: status == DayStatus.unavailable 
+                      color: isPast || status == DayStatus.unavailable 
                           ? Theme.of(context).colorScheme.outline.withOpacity(0.3)
                           : Colors.transparent,
                       width: 1,
@@ -476,7 +489,7 @@ class _UserAvailabilityCalendarState extends State<UserAvailabilityCalendar> {
                 style: TextStyle(
                   color: isSelected
                       ? Theme.of(context).colorScheme.onPrimary
-                      : (status == DayStatus.unavailable 
+                      : ((isPast || status == DayStatus.unavailable)
                           ? Theme.of(context).colorScheme.onSurface.withOpacity(0.4)
                           : Theme.of(context).colorScheme.onPrimary),
                   fontWeight: FontWeight.w500,

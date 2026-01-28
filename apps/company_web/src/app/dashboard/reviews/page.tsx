@@ -1,10 +1,11 @@
 "use client"
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase'
 import { Star, ThumbsUp, ThumbsDown, MessageSquare, Filter } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
+import type { RealtimeChannel } from '@supabase/supabase-js'
 
 interface Review {
   id: string
@@ -14,6 +15,7 @@ interface Review {
   user_id: string
   service_id: string | null
   vendor_id: string | null
+  user_name?: string | null
   profiles?: { full_name: string } | null
   services?: { name: string } | null
   vendor_profiles?: { business_name: string } | null
@@ -26,9 +28,37 @@ export default function ReviewsPage() {
   const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [ratingFilter, setRatingFilter] = useState<number | 'all'>('all')
+   // Filter by vendor and quickly see bad reviews
+  const [vendorFilter, setVendorFilter] = useState<string>('all')
+  const [showNegativeOnly, setShowNegativeOnly] = useState(false)
+  const channelRef = useRef<RealtimeChannel | null>(null)
 
   useEffect(() => {
     loadReviews()
+    
+    // Set up real-time subscription
+    const channel = supabase
+      .channel('reviews_realtime')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'service_reviews',
+        },
+        () => {
+          // Reload reviews when any change occurs
+          loadReviews()
+        }
+      )
+      .subscribe()
+    
+    channelRef.current = channel
+
+    // Cleanup on unmount
+    return () => {
+      channel.unsubscribe()
+    }
   }, [])
 
   async function loadReviews() {
@@ -36,7 +66,8 @@ export default function ReviewsPage() {
     setError(null)
     
     const { data, error } = await supabase
-      .from('reviews')
+      // Use dedicated table for service reviews to avoid conflicts
+      .from('service_reviews')
       .select(`
         id,
         rating,
@@ -45,9 +76,10 @@ export default function ReviewsPage() {
         user_id,
         service_id,
         vendor_id,
+        user_name,
         profiles(full_name),
-        services(name),
-        vendor_profiles(business_name)
+        services!service_reviews_service_id_fkey(name),
+        vendor_profiles!service_reviews_vendor_id_fkey(business_name)
       `)
       .order('created_at', { ascending: false })
       .limit(200)
@@ -74,6 +106,12 @@ export default function ReviewsPage() {
   }
 
   const filteredReviews = reviews.filter(review => {
+    if (vendorFilter !== 'all' && review.vendor_profiles?.business_name !== vendorFilter) {
+      return false
+    }
+    if (showNegativeOnly && review.rating > 2) {
+      return false
+    }
     if (ratingFilter !== 'all' && review.rating !== ratingFilter) return false
     if (search) {
       const q = search.toLowerCase()
@@ -88,8 +126,20 @@ export default function ReviewsPage() {
     return true
   })
 
-  const avgRating = reviews.length > 0 
+  const vendorOptions = Array.from(
+    new Set(
+      reviews
+        .map((r) => r.vendor_profiles?.business_name || null)
+        .filter((v): v is string => !!v)
+    )
+  ).sort()
+
+  const overallAvgRating = reviews.length > 0 
     ? (reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length).toFixed(1)
+    : '0'
+
+  const filteredAvgRating = filteredReviews.length > 0
+    ? (filteredReviews.reduce((sum, r) => sum + r.rating, 0) / filteredReviews.length).toFixed(1)
     : '0'
   
   const ratingCounts = [5, 4, 3, 2, 1].map(rating => ({
@@ -117,8 +167,8 @@ export default function ReviewsPage() {
               <Star className="h-6 w-6 text-yellow-500 fill-yellow-500" />
             </div>
             <div className="ml-4">
-              <p className="text-sm text-gray-600">Average Rating</p>
-              <p className="text-2xl font-bold text-gray-900">{avgRating}</p>
+              <p className="text-sm text-gray-600">Overall Average Rating</p>
+              <p className="text-2xl font-bold text-gray-900">{overallAvgRating}</p>
             </div>
           </div>
         </div>
@@ -161,6 +211,19 @@ export default function ReviewsPage() {
         </div>
       </div>
 
+      {/* Filtered Stats (for current vendor/service filters) */}
+      <div className="bg-white p-4 rounded-lg border border-gray-200">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm text-gray-600">Average Rating (current filters)</p>
+            <p className="text-2xl font-bold text-gray-900">{filteredAvgRating}</p>
+          </div>
+          <p className="text-sm text-gray-600">
+            {filteredReviews.length} review{filteredReviews.length === 1 ? '' : 's'} matching filters
+          </p>
+        </div>
+      </div>
+
       {/* Rating Distribution */}
       <div className="bg-white p-6 rounded-lg border border-gray-200">
         <h3 className="text-lg font-semibold mb-4">Rating Distribution</h3>
@@ -193,20 +256,50 @@ export default function ReviewsPage() {
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
-          <div className="flex items-center gap-2">
-            <Filter className="h-4 w-4 text-gray-500" />
-            <select
-              className="h-10 rounded-md border border-input bg-background px-3 text-sm"
-              value={ratingFilter}
-              onChange={(e) => setRatingFilter(e.target.value === 'all' ? 'all' : Number(e.target.value))}
-            >
-              <option value="all">All ratings</option>
-              <option value={5}>5 stars</option>
-              <option value={4}>4 stars</option>
-              <option value={3}>3 stars</option>
-              <option value={2}>2 stars</option>
-              <option value={1}>1 star</option>
-            </select>
+          <div className="flex flex-wrap gap-4 items-center">
+            <div className="flex items-center gap-2">
+              <Filter className="h-4 w-4 text-gray-500" />
+              <select
+                className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                value={ratingFilter}
+                onChange={(e) =>
+                  setRatingFilter(e.target.value === 'all' ? 'all' : Number(e.target.value))
+                }
+              >
+                <option value="all">All ratings</option>
+                <option value={5}>5 stars</option>
+                <option value={4}>4 stars</option>
+                <option value={3}>3 stars</option>
+                <option value={2}>2 stars</option>
+                <option value={1}>1 star</option>
+              </select>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-600">Vendor</span>
+              <select
+                className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                value={vendorFilter}
+                onChange={(e) => setVendorFilter(e.target.value)}
+              >
+                <option value="all">All vendors</option>
+                {vendorOptions.map((name) => (
+                  <option key={name} value={name}>
+                    {name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <label className="flex items-center gap-2 text-sm text-gray-700">
+              <input
+                type="checkbox"
+                className="h-4 w-4"
+                checked={showNegativeOnly}
+                onChange={(e) => setShowNegativeOnly(e.target.checked)}
+              />
+              <span>Only 1–2★ (bad) reviews</span>
+            </label>
           </div>
         </div>
       </div>
@@ -227,7 +320,7 @@ export default function ReviewsPage() {
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1">
                       <span className="font-medium text-gray-900">
-                        {review.profiles?.full_name || 'Anonymous'}
+                        {review.profiles?.full_name || review.user_name || 'Anonymous'}
                       </span>
                       <div className="flex items-center">
                         {[1, 2, 3, 4, 5].map((star) => (

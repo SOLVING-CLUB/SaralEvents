@@ -33,7 +33,19 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
   @override
   Widget build(BuildContext context) {
     return WishlistManager(
-      child: Scaffold(
+      child: WillPopScope(
+        onWillPop: () async {
+          // If we are not on the Home tab, go to Home instead of closing the app
+          if (_currentIndex != 0) {
+            setState(() {
+              _currentIndex = 0;
+            });
+            return false; // prevent app from popping
+          }
+          // Already on Home → allow normal back behaviour (app can close)
+          return true;
+        },
+        child: Scaffold(
         appBar: null,
         body: _tabs[_currentIndex],
         floatingActionButton: Consumer<CheckoutState>(
@@ -147,6 +159,7 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
           },
         ),
       ),
+    ),
     );
   }
 }

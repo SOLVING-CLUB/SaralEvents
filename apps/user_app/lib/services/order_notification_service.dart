@@ -41,13 +41,26 @@ class OrderNotification {
   });
 
   factory OrderNotification.fromMap(Map<String, dynamic> map) {
+    // Convert snake_case to camelCase for enum matching
+    String snakeToCamel(String snake) {
+      final parts = snake.split('_');
+      if (parts.isEmpty) return snake;
+      return parts[0] + parts.sublist(1).map((p) {
+        if (p.isEmpty) return p;
+        return p[0].toUpperCase() + p.substring(1);
+      }).join();
+    }
+
+    final notificationTypeStr = map['notification_type'].toString();
+    final camelCaseType = snakeToCamel(notificationTypeStr);
+
     return OrderNotification(
       id: map['id'].toString(),
       bookingId: map['booking_id'].toString(),
       orderId: map['order_id']?.toString(),
       userId: map['user_id'].toString(),
       type: OrderNotificationType.values.firstWhere(
-        (e) => e.name == map['notification_type'].toString().replaceAll('_', ''),
+        (e) => e.name == camelCaseType,
         orElse: () => OrderNotificationType.bookingCreated,
       ),
       title: map['title'] as String,
@@ -64,6 +77,14 @@ class OrderNotificationService {
 
   OrderNotificationService(this._supabase);
 
+  /// Convert camelCase to snake_case for database
+  String _camelToSnake(String camel) {
+    return camel.replaceAllMapped(
+      RegExp(r'[A-Z]'),
+      (match) => '_${match.group(0)!.toLowerCase()}',
+    );
+  }
+
   /// Create a notification
   Future<bool> createNotification({
     required String bookingId,
@@ -79,7 +100,7 @@ class OrderNotificationService {
         'booking_id': bookingId,
         'order_id': orderId,
         'user_id': userId,
-        'notification_type': type.name,
+        'notification_type': _camelToSnake(type.name),
         'title': title,
         'message': message,
         'action_url': actionUrl,
@@ -168,22 +189,106 @@ class OrderNotificationService {
     }
   }
 
-  /// Get notification count
+  /// Get notification count (with 24-hour filtering)
   Future<int> getUnreadCount() async {
     try {
-      final userId = _supabase.auth.currentUser?.id;
-      if (userId == null) return 0;
-
-      final result = await _supabase
-          .from('order_notifications')
-          .select('id', const FetchOptions(count: CountOption.exact))
-          .eq('user_id', userId)
-          .eq('is_read', false);
-
-      return result.count ?? 0;
+      final notifications = await getFilteredNotifications();
+      return notifications.where((n) => !n.isRead).length;
     } catch (e) {
       print('Error getting notification count: $e');
       return 0;
+    }
+  }
+
+  /// Get filtered notifications based on 24-hour rule and special cases
+  /// - Regular notifications expire after 24 hours
+  /// - vendor_arrived and setup_completed stay active until user confirms
+  Future<List<OrderNotification>> getFilteredNotifications({int limit = 50}) async {
+    try {
+      final userId = _supabase.auth.currentUser?.id;
+      if (userId == null) return [];
+
+      // Get all notifications
+      final result = await _supabase
+          .from('order_notifications')
+          .select('*')
+          .eq('user_id', userId)
+          .order('created_at', ascending: false)
+          .limit(limit * 2); // Get more to filter
+
+      final allNotifications = (result as List<dynamic>)
+          .map((row) => OrderNotification.fromMap(Map<String, dynamic>.from(row)))
+          .toList();
+
+      // Filter notifications
+      final now = DateTime.now();
+      final filteredNotifications = <OrderNotification>[];
+
+      for (final notification in allNotifications) {
+        final hoursSinceCreation = now.difference(notification.createdAt).inHours;
+        
+        // Special handling for vendor_arrived and setup_completed
+        if (notification.type == OrderNotificationType.vendorArrived ||
+            notification.type == OrderNotificationType.setupCompleted) {
+          // Check if user has confirmed (by checking booking milestone_status)
+          final isConfirmed = await _isNotificationConfirmed(notification);
+          
+          if (isConfirmed) {
+            // If confirmed, apply 24-hour rule
+            if (hoursSinceCreation < 24) {
+              filteredNotifications.add(notification);
+            }
+          } else {
+            // If not confirmed, keep it active regardless of time
+            filteredNotifications.add(notification);
+          }
+        } else {
+          // Regular notifications: expire after 24 hours
+          if (hoursSinceCreation < 24) {
+            filteredNotifications.add(notification);
+          }
+        }
+
+        // Limit results
+        if (filteredNotifications.length >= limit) break;
+      }
+
+      return filteredNotifications;
+    } catch (e) {
+      print('Error fetching filtered notifications: $e');
+      return [];
+    }
+  }
+
+  /// Check if a vendor_arrived or setup_completed notification has been confirmed
+  Future<bool> _isNotificationConfirmed(OrderNotification notification) async {
+    try {
+      final bookingResult = await _supabase
+          .from('bookings')
+          .select('milestone_status')
+          .eq('id', notification.bookingId)
+          .maybeSingle();
+
+      if (bookingResult == null) return false;
+
+      final milestoneStatus = bookingResult['milestone_status'] as String?;
+
+      if (notification.type == OrderNotificationType.vendorArrived) {
+        // Vendor arrived is confirmed when milestone_status is 'arrival_confirmed' or later
+        return milestoneStatus == 'arrival_confirmed' ||
+            milestoneStatus == 'setup_completed' ||
+            milestoneStatus == 'setup_confirmed' ||
+            milestoneStatus == 'completed';
+      } else if (notification.type == OrderNotificationType.setupCompleted) {
+        // Setup completed is confirmed when milestone_status is 'setup_confirmed' or later
+        return milestoneStatus == 'setup_confirmed' ||
+            milestoneStatus == 'completed';
+      }
+
+      return false;
+    } catch (e) {
+      print('Error checking notification confirmation: $e');
+      return false;
     }
   }
 

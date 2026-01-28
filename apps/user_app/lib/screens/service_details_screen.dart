@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:share_plus/share_plus.dart';
 import '../models/service_models.dart';
 import '../services/service_service.dart';
+import '../services/review_service.dart';
 import '../widgets/location_aware_widget.dart';
 import '../widgets/wishlist_button.dart';
 import '../utils/deep_link_helper.dart';
@@ -23,6 +24,7 @@ class ServiceDetailsScreen extends StatefulWidget {
 class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> 
     with TickerProviderStateMixin {
   late final ServiceService _serviceService;
+  late final ReviewService _reviewService;
   late final TabController _tabController;
   late final PageController _imagePageController;
   
@@ -32,21 +34,65 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen>
   String? _error;
   int _currentImageIndex = 0;
   bool _showFullDescription = false;
+  
+  // Review state
+  List<Review> _reviews = [];
+  bool _reviewsLoading = false;
+  Map<String, dynamic> _ratingStats = {'averageRating': 0.0, 'count': 0};
+  RealtimeChannel? _reviewsChannel;
 
   @override
   void initState() {
     super.initState();
     _serviceService = ServiceService(Supabase.instance.client);
+    _reviewService = ReviewService(Supabase.instance.client);
     _tabController = TabController(length: 4, vsync: this);
     _imagePageController = PageController();
     _loadServiceData();
+    _loadReviews();
+    
+    // Listen to tab changes to load reviews when Reviews tab is selected
+    _tabController.addListener(() {
+      if (_tabController.index == 1 && _reviews.isEmpty && !_reviewsLoading) {
+        _loadReviews();
+      }
+    });
   }
 
   @override
   void dispose() {
     _tabController.dispose();
     _imagePageController.dispose();
+    _reviewsChannel?.unsubscribe();
     super.dispose();
+  }
+  
+  Future<void> _loadReviews() async {
+    if (_reviewsLoading) return;
+    
+    setState(() {
+      _reviewsLoading = true;
+    });
+
+    try {
+      // Load reviews and rating stats
+      final reviews = await _reviewService.getServiceReviews(widget.service.id);
+      final stats = await _reviewService.getServiceRatingStats(widget.service.id);
+      
+      if (mounted) {
+        setState(() {
+          _reviews = reviews;
+          _ratingStats = stats;
+          _reviewsLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _reviewsLoading = false;
+        });
+      }
+    }
   }
 
   Future<void> _loadServiceData() async {
@@ -848,33 +894,57 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen>
           ),
           const SizedBox(height: 16),
           
-          // Sample Reviews (In real app, fetch from database)
-          _buildReviewItem(
-            'Aysha Mishra',
-            5,
-            '2 days ago',
-            'Excellent service! The venue was perfect for our wedding. Great staff and beautiful decorations.',
-          ),
-          _buildReviewItem(
-            'Rajul Jayakrya',
-            4,
-            '1 week ago',
-            'Good location and service. Our family enjoyed the event. Parking was convenient.',
-          ),
-          _buildReviewItem(
-            'Priya Sharma',
-            5,
-            '2 weeks ago',
-            'Amazing experience! Highly recommended for any celebration. Professional team.',
-          ),
+          // Real Reviews from Database
+          if (_reviewsLoading)
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.all(20.0),
+                child: CircularProgressIndicator(),
+              ),
+            )
+          else if (_reviews.isEmpty)
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.all(20.0),
+                child: Column(
+                  children: [
+                    Icon(
+                      Icons.reviews_outlined,
+                      size: 64,
+                      color: Colors.grey.shade400,
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'No reviews yet',
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: Colors.grey.shade600,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Be the first to review this service!',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.grey.shade500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          else
+            ..._reviews.take(10).map((review) => _buildReviewItemFromData(review)),
           
-          const SizedBox(height: 16),
-          Center(
-            child: OutlinedButton(
-              onPressed: () => _showAllReviews(service),
-              child: const Text('View All Reviews'),
+          if (_reviews.length > 10)
+            const SizedBox(height: 16),
+          if (_reviews.length > 10)
+            Center(
+              child: OutlinedButton(
+                onPressed: () => _showAllReviews(service),
+                child: Text('View All ${_reviews.length} Reviews'),
+              ),
             ),
-          ),
         ],
       ),
     );
@@ -1057,6 +1127,18 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen>
   }
 
   Widget _buildRatingSummary(ServiceItem service) {
+    // Use real stats if available, otherwise fall back to service data
+    final avgRating = (_ratingStats['averageRating'] as num?)?.toDouble() ?? 
+                      service.ratingAvg ?? 0.0;
+    final reviewCount = (_ratingStats['count'] as int?) ?? 
+                        service.ratingCount ?? 0;
+    
+    // Calculate rating distribution from actual reviews
+    final ratingDistribution = <int, int>{};
+    for (var review in _reviews) {
+      ratingDistribution[review.rating] = (ratingDistribution[review.rating] ?? 0) + 1;
+    }
+    
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -1075,7 +1157,7 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen>
           Column(
             children: [
               Text(
-                service.ratingAvg?.toStringAsFixed(1) ?? '0.0',
+                avgRating.toStringAsFixed(1),
                 style: const TextStyle(
                   fontSize: 32,
                   fontWeight: FontWeight.bold,
@@ -1087,7 +1169,7 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen>
                   return Icon(
                     Icons.star,
                     size: 16,
-                    color: index < (service.ratingAvg?.round() ?? 0)
+                    color: index < avgRating.round()
                         ? Colors.amber
                         : Colors.grey.shade300,
                   );
@@ -1095,7 +1177,7 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen>
               ),
               const SizedBox(height: 4),
               Text(
-                '${service.ratingCount ?? 0} reviews',
+                '$reviewCount review${reviewCount == 1 ? '' : 's'}',
                 style: const TextStyle(color: Colors.grey),
               ),
             ],
@@ -1105,7 +1187,8 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen>
             child: Column(
               children: List.generate(5, (index) {
                 final rating = 5 - index;
-                final percentage = 0.8 - (index * 0.15); // Sample data
+                final count = ratingDistribution[rating] ?? 0;
+                final percentage = reviewCount > 0 ? count / reviewCount : 0.0;
                 return Padding(
                   padding: const EdgeInsets.symmetric(vertical: 2),
                   child: Row(
@@ -1121,6 +1204,14 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen>
                           ),
                         ),
                       ),
+                      const SizedBox(width: 8),
+                      Text(
+                        '$count',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey,
+                        ),
+                      ),
                     ],
                   ),
                 );
@@ -1132,7 +1223,14 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen>
     );
   }
 
-  Widget _buildReviewItem(String name, int rating, String date, String review) {
+  Widget _buildReviewItem(
+    String name,
+    int rating,
+    String date,
+    String review, {
+    bool isOwn = false,
+    VoidCallback? onDelete,
+  }) {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(16),
@@ -1150,7 +1248,7 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen>
                 radius: 20,
                 backgroundColor: Colors.blue.shade100,
                 child: Text(
-                  name[0].toUpperCase(),
+                  name.isNotEmpty ? name[0].toUpperCase() : '?',
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
                     color: Colors.blue.shade700,
@@ -1162,12 +1260,28 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen>
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      name,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w600,
-                        fontSize: 16,
-                      ),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            name,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 16,
+                            ),
+                          ),
+                        ),
+                        if (isOwn && onDelete != null)
+                          IconButton(
+                            icon: const Icon(
+                              Icons.delete_outline,
+                              size: 18,
+                              color: Colors.redAccent,
+                            ),
+                            tooltip: 'Delete review',
+                            onPressed: onDelete,
+                          ),
+                      ],
                     ),
                     Row(
                       children: [
@@ -1205,6 +1319,110 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen>
         ],
       ),
     );
+  }
+  
+  Widget _buildReviewItemFromData(Review review) {
+    final currentUser = Supabase.instance.client.auth.currentUser;
+    final isOwn = currentUser != null && currentUser.id == review.userId;
+
+    return _buildReviewItem(
+      review.userName ?? 'Anonymous',
+      review.rating,
+      _formatDate(review.createdAt),
+      review.comment ?? '',
+      isOwn: isOwn,
+      onDelete: isOwn
+          ? () async {
+              // Confirm delete
+              final shouldDelete = await showDialog<bool>(
+                context: context,
+                builder: (dialogContext) => AlertDialog(
+                  title: const Text('Delete review?'),
+                  content: const Text(
+                    'Are you sure you want to delete your review? This action cannot be undone.',
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.of(dialogContext).pop(false),
+                      child: const Text('Cancel'),
+                    ),
+                    TextButton(
+                      onPressed: () => Navigator.of(dialogContext).pop(true),
+                      child: const Text(
+                        'Delete',
+                        style: TextStyle(color: Colors.redAccent),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+
+              if (shouldDelete != true) return;
+
+              try {
+                await _reviewService.deleteReview(review.id);
+
+                if (!mounted) return;
+
+                setState(() {
+                  _reviews.removeWhere((r) => r.id == review.id);
+                });
+
+                // Refresh stats after deletion
+                final stats =
+                    await _reviewService.getServiceRatingStats(widget.service.id);
+                if (mounted) {
+                  setState(() {
+                    _ratingStats = stats;
+                  });
+                }
+
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Review deleted successfully'),
+                    backgroundColor: Colors.green,
+                  ),
+                );
+              } catch (e) {
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Failed to delete review: $e'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+              }
+            }
+          : null,
+    );
+  }
+  
+  String _formatDate(DateTime date) {
+    final now = DateTime.now();
+    final difference = now.difference(date);
+    
+    if (difference.inDays == 0) {
+      if (difference.inHours == 0) {
+        if (difference.inMinutes == 0) {
+          return 'Just now';
+        }
+        return '${difference.inMinutes} minute${difference.inMinutes == 1 ? '' : 's'} ago';
+      }
+      return '${difference.inHours} hour${difference.inHours == 1 ? '' : 's'} ago';
+    } else if (difference.inDays == 1) {
+      return 'Yesterday';
+    } else if (difference.inDays < 7) {
+      return '${difference.inDays} days ago';
+    } else if (difference.inDays < 30) {
+      final weeks = (difference.inDays / 7).floor();
+      return '$weeks week${weeks == 1 ? '' : 's'} ago';
+    } else if (difference.inDays < 365) {
+      final months = (difference.inDays / 30).floor();
+      return '$months month${months == 1 ? '' : 's'} ago';
+    } else {
+      final years = (difference.inDays / 365).floor();
+      return '$years year${years == 1 ? '' : 's'} ago';
+    }
   }
 
   Widget _buildVendorStat(String label, String value) {
@@ -1503,16 +1721,19 @@ Tap the link above to view and book on Saral Events! 🎉''';
   }
 
   void _showAddReviewDialog(ServiceItem service) {
+    // Use the screen's build context for snackbars/navigation to avoid
+    // using a disposed dialog context after the dialog is closed.
+    final screenContext = context;
+
     showDialog(
-      context: context,
+      context: screenContext,
       builder: (context) {
         final formKey = GlobalKey<FormState>();
         final reviewController = TextEditingController();
         int selectedRating = 5;
-        final nameController = TextEditingController();
 
         return StatefulBuilder(
-          builder: (context, setDialogState) => Dialog(
+          builder: (dialogContext, setDialogState) => Dialog(
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
             child: Container(
               constraints: const BoxConstraints(maxHeight: 500),
@@ -1542,7 +1763,7 @@ Tap the link above to view and book on Saral Events! 🎉''';
                           ),
                         ),
                         IconButton(
-                          onPressed: () => Navigator.pop(context),
+                          onPressed: () => Navigator.of(dialogContext).pop(),
                           icon: const Icon(Icons.close, color: Colors.black87),
                         ),
                       ],
@@ -1568,22 +1789,6 @@ Tap the link above to view and book on Saral Events! 🎉''';
                           ),
                         ),
                         const SizedBox(height: 20),
-                        
-                        // Your Name
-                        TextFormField(
-                          controller: nameController,
-                          decoration: const InputDecoration(
-                            labelText: 'Your Name *',
-                            border: OutlineInputBorder(),
-                          ),
-                          validator: (value) {
-                            if (value == null || value.trim().isEmpty) {
-                              return 'Please enter your name';
-                            }
-                            return null;
-                          },
-                        ),
-                        const SizedBox(height: 16),
                         
                         // Rating
                         const Text(
@@ -1640,23 +1845,63 @@ Tap the link above to view and book on Saral Events! 🎉''';
                           children: [
                             Expanded(
                               child: OutlinedButton(
-                                onPressed: () => Navigator.pop(context),
+                                onPressed: () => Navigator.of(dialogContext).pop(),
                                 child: const Text('Cancel'),
                               ),
                             ),
                             const SizedBox(width: 12),
                             Expanded(
                               child: ElevatedButton(
-                                onPressed: () {
-                                  if (formKey.currentState!.validate()) {
-                                    Navigator.pop(context);
-                                    // TODO: Save review to database
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(
-                                        content: Text('Review submitted successfully!'),
-                                        backgroundColor: Colors.green,
-                                      ),
+                                onPressed: () async {
+                                  if (!formKey.currentState!.validate()) return;
+
+                                  // Close the dialog first
+                                  Navigator.of(dialogContext).pop();
+
+                                  try {
+                                    // Save review to database and get the created review
+                                    final newReview = await _reviewService.submitReview(
+                                      rating: selectedRating,
+                                      comment: reviewController.text.trim(),
+                                      serviceId: service.id,
+                                      vendorId: service.vendorId,
                                     );
+
+                                    // Optimistically add the new review to the top of the list
+                                    if (mounted) {
+                                      setState(() {
+                                        _reviews = [newReview, ..._reviews];
+                                      });
+                                    }
+
+                                    // Refresh rating stats in the background
+                                    _reviewService
+                                        .getServiceRatingStats(service.id)
+                                        .then((stats) {
+                                      if (mounted) {
+                                        setState(() {
+                                          _ratingStats = stats;
+                                        });
+                                      }
+                                    });
+
+                                    if (mounted) {
+                                      ScaffoldMessenger.of(screenContext).showSnackBar(
+                                        const SnackBar(
+                                          content: Text('Review submitted successfully!'),
+                                          backgroundColor: Colors.green,
+                                        ),
+                                      );
+                                    }
+                                  } catch (e) {
+                                    if (mounted) {
+                                      ScaffoldMessenger.of(screenContext).showSnackBar(
+                                        SnackBar(
+                                          content: Text('Failed to submit review: ${e.toString()}'),
+                                          backgroundColor: Colors.red,
+                                        ),
+                                      );
+                                    }
                                   }
                                 },
                                 style: ElevatedButton.styleFrom(

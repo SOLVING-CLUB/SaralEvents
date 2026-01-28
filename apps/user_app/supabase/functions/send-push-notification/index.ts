@@ -1,5 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+// Google Auth Library for proper OAuth2 authentication (Firebase Admin SDK compatible)
+import { GoogleAuth } from 'https://esm.sh/google-auth-library@9.0.0'
 
 // FCM Service Account JSON (base64 encoded) - loaded from Supabase secrets
 const FCM_SERVICE_ACCOUNT_BASE64 = Deno.env.get('FCM_SERVICE_ACCOUNT_BASE64') ?? ''
@@ -18,96 +20,40 @@ interface ServiceAccount {
   project_id: string
   private_key: string
   client_email: string
+  type: string
 }
 
-// Get OAuth2 access token from Google
-async function getAccessToken(serviceAccount: ServiceAccount): Promise<string> {
-  const jwtHeader = {
-    alg: 'RS256',
-    typ: 'JWT',
+// Initialize Google Auth with service account
+let googleAuth: GoogleAuth | null = null
+
+function getGoogleAuth(): GoogleAuth {
+  if (googleAuth) {
+    return googleAuth
   }
 
-  const now = Math.floor(Date.now() / 1000)
-  const jwtClaim = {
-    iss: serviceAccount.client_email,
-    scope: 'https://www.googleapis.com/auth/firebase.messaging',
-    aud: 'https://oauth2.googleapis.com/token',
-    exp: now + 3600,
-    iat: now,
+  if (!FCM_SERVICE_ACCOUNT_BASE64) {
+    throw new Error('FCM service account not configured. Please set FCM_SERVICE_ACCOUNT_BASE64 secret.')
   }
 
-  // Create JWT
-  const jwt = await createJWT(jwtHeader, jwtClaim, serviceAccount.private_key)
+  // Parse service account JSON
+  const serviceAccountJson = atob(FCM_SERVICE_ACCOUNT_BASE64)
+  const serviceAccount: ServiceAccount = JSON.parse(serviceAccountJson)
 
-  // Exchange JWT for access token
-  const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
+  // Initialize Google Auth with service account credentials
+  googleAuth = new GoogleAuth({
+    credentials: {
+      client_email: serviceAccount.client_email,
+      private_key: serviceAccount.private_key.replace(/\\n/g, '\n'),
+      project_id: serviceAccount.project_id,
     },
-    body: new URLSearchParams({
-      grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
-      assertion: jwt,
-    }),
+    scopes: ['https://www.googleapis.com/auth/firebase.messaging'],
   })
 
-  if (!tokenResponse.ok) {
-    const error = await tokenResponse.text()
-    throw new Error(`Failed to get access token: ${error}`)
-  }
-
-  const tokenData = await tokenResponse.json()
-  return tokenData.access_token
+  return googleAuth
 }
 
-// Create JWT token
-async function createJWT(header: any, claim: any, privateKey: string): Promise<string> {
-  const base64UrlEncode = (str: string) => {
-    return btoa(str)
-      .replace(/\+/g, '-')
-      .replace(/\//g, '_')
-      .replace(/=/g, '')
-  }
-
-  const headerB64 = base64UrlEncode(JSON.stringify(header))
-  const claimB64 = base64UrlEncode(JSON.stringify(claim))
-
-  const message = `${headerB64}.${claimB64}`
-  
-  // Import private key
-  const keyData = privateKey
-    .replace(/-----BEGIN PRIVATE KEY-----/g, '')
-    .replace(/-----END PRIVATE KEY-----/g, '')
-    .replace(/\s/g, '')
-  
-  const keyBuffer = Uint8Array.from(atob(keyData), c => c.charCodeAt(0))
-  
-  const cryptoKey = await crypto.subtle.importKey(
-    'pkcs8',
-    keyBuffer,
-    {
-      name: 'RSASSA-PKCS1-v1_5',
-      hash: 'SHA-256',
-    },
-    false,
-    ['sign']
-  )
-
-  // Sign the message
-  const signature = await crypto.subtle.sign(
-    'RSASSA-PKCS1-v1_5',
-    cryptoKey,
-    new TextEncoder().encode(message)
-  )
-
-  const signatureB64 = base64UrlEncode(String.fromCharCode(...new Uint8Array(signature)))
-  
-  return `${message}.${signatureB64}`
-}
-
-// Send FCM message using V1 API
+// Send FCM message using FCM REST API v1 with proper OAuth2 authentication
 async function sendFCMessage(
-  accessToken: string,
   projectId: string,
   token: string,
   title: string,
@@ -115,12 +61,23 @@ async function sendFCMessage(
   data?: Record<string, any>,
   imageUrl?: string
 ): Promise<any> {
+  // Get access token using Google Auth Library (Firebase Admin SDK compatible)
+  const auth = getGoogleAuth()
+  const client = await auth.getClient()
+  const accessToken = await client.getAccessToken()
+
+  if (!accessToken.token) {
+    throw new Error('Failed to get access token from Google Auth')
+  }
+
+  // Build message payload
   const message: any = {
     message: {
       token: token,
       notification: {
         title: title,
         body: body,
+        ...(imageUrl ? { imageUrl: imageUrl } : {}),
       },
       android: {
         priority: 'high',
@@ -142,22 +99,20 @@ async function sendFCMessage(
     },
   }
 
+  // Add data payload if provided
   if (data) {
     message.message.data = Object.fromEntries(
       Object.entries(data).map(([key, value]) => [key, String(value)])
     )
   }
 
-  if (imageUrl) {
-    message.message.notification.imageUrl = imageUrl
-  }
-
+  // Send to FCM REST API v1
   const fcmUrl = `https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`
   
   const response = await fetch(fcmUrl, {
     method: 'POST',
     headers: {
-      'Authorization': `Bearer ${accessToken}`,
+      'Authorization': `Bearer ${accessToken.token}`,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify(message),
@@ -184,26 +139,6 @@ serve(async (req) => {
   }
 
   try {
-    // Validate FCM service account is configured
-    if (!FCM_SERVICE_ACCOUNT_BASE64) {
-      return new Response(
-        JSON.stringify({ 
-          error: 'FCM service account not configured. Please set FCM_SERVICE_ACCOUNT_BASE64 secret.' 
-        }),
-        { 
-          status: 500,
-          headers: {
-            'Content-Type': 'application/json',
-            'Access-Control-Allow-Origin': '*',
-          },
-        }
-      )
-    }
-
-    // Parse service account JSON
-    const serviceAccountJson = atob(FCM_SERVICE_ACCOUNT_BASE64)
-    const serviceAccount: ServiceAccount = JSON.parse(serviceAccountJson)
-
     // Parse request body
     const body: FCMRequest = await req.json()
 
@@ -213,6 +148,29 @@ serve(async (req) => {
         JSON.stringify({ error: 'Missing required fields: title, body' }),
         { 
           status: 400,
+          headers: {
+            'Content-Type': 'application/json',
+            'Access-Control-Allow-Origin': '*',
+          },
+        }
+      )
+    }
+
+    // Initialize Google Auth (validates service account)
+    let projectId: string
+    try {
+      const auth = getGoogleAuth()
+      const serviceAccountJson = atob(FCM_SERVICE_ACCOUNT_BASE64)
+      const serviceAccount: ServiceAccount = JSON.parse(serviceAccountJson)
+      projectId = serviceAccount.project_id
+    } catch (error: any) {
+      return new Response(
+        JSON.stringify({ 
+          error: 'Failed to initialize Firebase authentication',
+          details: error.message 
+        }),
+        { 
+          status: 500,
           headers: {
             'Content-Type': 'application/json',
             'Access-Control-Allow-Origin': '*',
@@ -271,15 +229,11 @@ serve(async (req) => {
       )
     }
 
-    // Get access token
-    const accessToken = await getAccessToken(serviceAccount)
-
-    // Send notifications to all tokens
+    // Send notifications to all tokens using Firebase Admin SDK compatible authentication
     const results = await Promise.allSettled(
       targetTokens.map(token =>
         sendFCMessage(
-          accessToken,
-          serviceAccount.project_id,
+          projectId,
           token,
           body.title,
           body.body,
@@ -299,7 +253,7 @@ serve(async (req) => {
         failed: failed,
         total: targetTokens.length,
         results: results.map((r, i) => ({
-          token: targetTokens[i],
+          token: targetTokens[i]?.substring(0, 20) + '...', // Partial token for logging
           status: r.status,
           ...(r.status === 'fulfilled' ? { result: r.value } : { error: r.reason?.message }),
         })),
@@ -313,7 +267,7 @@ serve(async (req) => {
       }
     )
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error sending push notification:', error)
     
     return new Response(

@@ -170,21 +170,43 @@ class _BookingScreenState extends State<BookingScreen> {
   Future<void> _loadTimeSlotsForDate(DateTime date) async {
     try {
       final timeSlotsData = await _availabilityService.getAvailableTimeSlots(widget.service.id, date);
-      
+
       final slots = timeSlotsData.map((slotData) {
         final startTimeParts = slotData['start_time'].split(':');
         final endTimeParts = slotData['end_time'].split(':');
-        
+
+        final startTime = TimeOfDay(
+          hour: int.parse(startTimeParts[0]),
+          minute: int.parse(startTimeParts[1]),
+        );
+        final endTime = TimeOfDay(
+          hour: int.parse(endTimeParts[0]),
+          minute: int.parse(endTimeParts[1]),
+        );
+
+        // For today's date, mark slots that have already passed as unavailable
+        bool isAvailable = slotData['is_available'] as bool;
+        final now = DateTime.now();
+        final today = DateTime(now.year, now.month, now.day);
+        final selectedDay = DateTime(date.year, date.month, date.day);
+        if (isAvailable && selectedDay.isAtSameMomentAs(today)) {
+          final nowMinutes = now.hour * 60 + now.minute;
+          final slotEndMinutes = endTime.hour * 60 + endTime.minute;
+          if (slotEndMinutes <= nowMinutes) {
+            isAvailable = false;
+          }
+        }
+
         return TimeSlot(
           startTime: TimeOfDay(
-            hour: int.parse(startTimeParts[0]),
-            minute: int.parse(startTimeParts[1]),
+            hour: startTime.hour,
+            minute: startTime.minute,
           ),
           endTime: TimeOfDay(
-            hour: int.parse(endTimeParts[0]),
-            minute: int.parse(endTimeParts[1]),
+            hour: endTime.hour,
+            minute: endTime.minute,
           ),
-          isAvailable: slotData['is_available'] as bool,
+          isAvailable: isAvailable,
         );
       }).toList();
       

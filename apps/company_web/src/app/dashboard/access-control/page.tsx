@@ -361,15 +361,6 @@ export default function AccessControlPage() {
               <UserPlus className="h-4 w-4 mr-2" />
               Add Admin User
             </Button>
-            <Button 
-              variant="outline" 
-              onClick={() => setShowCleanupConfirm(true)} 
-              disabled={processing}
-              className="text-red-600 border-red-300 hover:bg-red-50"
-            >
-              <Trash2 className="h-4 w-4 mr-2" />
-              Cleanup Orphaned Users
-            </Button>
           </div>
         )}
       </div>
@@ -432,66 +423,7 @@ export default function AccessControlPage() {
         </div>
       )}
 
-      {/* Cleanup Confirmation Modal */}
-      {showCleanupConfirm && isSuperAdmin && (
-        <div className="bg-white p-6 rounded-lg border border-red-200">
-          <div className="flex items-start mb-4">
-            <AlertCircle className="h-6 w-6 text-red-600 mt-0.5 mr-3 flex-shrink-0" />
-            <div className="flex-1">
-              <h3 className="text-lg font-semibold text-red-900 mb-2">Cleanup Orphaned Users</h3>
-              <p className="text-sm text-gray-700 mb-4">
-                This will delete all admin_users entries that don't have a matching auth.users account (orphaned entries).
-                The super admin account will be preserved.
-              </p>
-              <p className="text-sm text-red-700 font-medium mb-4">
-                ⚠️ To delete auth.users accounts (like karthikeyabalaji123@gmail.com), you must run the SQL script <code className="bg-red-50 px-2 py-1 rounded">cleanup_orphaned_auth_users.sql</code> in Supabase SQL Editor.
-              </p>
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Type <strong className="text-red-600">DELETE ALL</strong> to confirm:
-                </label>
-                <Input
-                  placeholder="DELETE ALL"
-                  value={cleanupConfirmText}
-                  onChange={(e) => setCleanupConfirmText(e.target.value)}
-                  disabled={processing}
-                  className="border-red-300 focus:border-red-500"
-                />
-              </div>
-            </div>
-          </div>
-          <div className="flex gap-2">
-            <Button 
-              onClick={cleanupOrphanedUsers} 
-              disabled={processing || cleanupConfirmText !== 'DELETE ALL'}
-              className="bg-red-600 hover:bg-red-700 text-white"
-            >
-              {processing ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Cleaning up...
-                </>
-              ) : (
-                <>
-                  <Trash2 className="h-4 w-4 mr-2" />
-                  Cleanup Orphaned Admin Users
-                </>
-              )}
-            </Button>
-            <Button 
-              variant="outline" 
-              onClick={() => {
-                setShowCleanupConfirm(false)
-                setCleanupConfirmText('')
-                setError(null)
-              }} 
-              disabled={processing}
-            >
-              Cancel
-            </Button>
-          </div>
-        </div>
-      )}
+      {/* Cleanup Confirmation Modal temporarily disabled */}
 
       {/* Add User Modal */}
       {showAddUser && isSuperAdmin && (

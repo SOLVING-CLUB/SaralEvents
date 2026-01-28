@@ -24,6 +24,7 @@ import '../core/services/permission_service.dart';
 import '../widgets/location_startup_bottom_sheet.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:geolocator/geolocator.dart';
+import '../services/order_notification_service.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -655,17 +656,64 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware, WidgetsBinding
               // const SizedBox(width: 8),
               
               // Notification bell
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(
-                  Icons.notifications_outlined,
-                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
-                  size: 20,
+              GestureDetector(
+                onTap: () {
+                  context.push('/notifications');
+                },
+                child: Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Stack(
+                    children: [
+                      Center(
+                        child: Icon(
+                          Icons.notifications_outlined,
+                          color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+                          size: 20,
+                        ),
+                      ),
+                      // Badge for unread notifications
+                      FutureBuilder<int>(
+                        future: _getUnreadNotificationCount(),
+                        builder: (context, snapshot) {
+                          final count = snapshot.data ?? 0;
+                          if (count == 0) return const SizedBox.shrink();
+                          return Positioned(
+                            right: 6,
+                            top: 6,
+                            child: Container(
+                              padding: const EdgeInsets.all(4),
+                              decoration: BoxDecoration(
+                                color: Colors.red,
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: Theme.of(context).colorScheme.surface,
+                                  width: 1.5,
+                                ),
+                              ),
+                              constraints: const BoxConstraints(
+                                minWidth: 16,
+                                minHeight: 16,
+                              ),
+                              child: Text(
+                                count > 99 ? '99+' : count.toString(),
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ],
@@ -1045,6 +1093,15 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware, WidgetsBinding
       return Icons.checkroom;
     } else {
       return Icons.miscellaneous_services;
+    }
+  }
+
+  Future<int> _getUnreadNotificationCount() async {
+    try {
+      final service = OrderNotificationService(Supabase.instance.client);
+      return await service.getUnreadCount();
+    } catch (e) {
+      return 0;
     }
   }
 

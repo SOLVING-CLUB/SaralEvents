@@ -81,8 +81,17 @@ class _AvailabilityCalendarState extends State<AvailabilityCalendar> {
   }
 
   void _changeMonth(int delta) {
+    final now = DateTime.now();
+    final minMonth = DateTime(now.year, now.month, 1);
+    final next = DateTime(_visibleMonth.year, _visibleMonth.month + delta, 1);
+
+    // Do not allow navigating to months before the current month
+    if (next.isBefore(minMonth)) {
+      return;
+    }
+
     setState(() {
-      _visibleMonth = DateTime(_visibleMonth.year, _visibleMonth.month + delta, 1);
+      _visibleMonth = next;
     });
     _loadMonth();
   }
@@ -350,6 +359,13 @@ class _AvailabilityCalendarState extends State<AvailabilityCalendar> {
     if (widget.serviceId != null && widget.persistImmediately) {
       await widget.availabilityService.upsertOverride(widget.serviceId!, up);
     }
+  }
+
+  bool _isPastDate(DateTime day) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final target = DateTime(day.year, day.month, day.day);
+    return target.isBefore(today);
   }
 
   Future<void> _promptStatusAndTimes(BuildContext context, DateTime day) async {
@@ -678,10 +694,15 @@ class _AvailabilityCalendarState extends State<AvailabilityCalendar> {
     for (int d = 1; d <= daysInMonth; d++) {
       final day = DateTime(_visibleMonth.year, _visibleMonth.month, d);
       final status = _statusFor(day);
+      final isPast = _isPastDate(day);
       items.add(_StatusDayTile(
         day: day,
         status: status,
         onTap: () async {
+          // Prevent editing past dates
+          if (isPast) {
+            return;
+          }
           if (widget.isViewMode) {
             if (status != null) setState(() => _selectedForDetails = day);
             return;
@@ -692,7 +713,7 @@ class _AvailabilityCalendarState extends State<AvailabilityCalendar> {
             await _promptStatusAndTimes(context, day);
           }
         },
-        onLongPress: () => _openDayEditor(context, day),
+        onLongPress: isPast ? null : () => _openDayEditor(context, day),
       ));
     }
 
