@@ -7,8 +7,8 @@ export const metadata: Metadata = {
   description: 'Your one-stop solution for all event planning needs...',
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || 'https://saralevents.com'),
   icons: {
-    icon: '/images/Copy%20of%20SARAL%20EVENTS%20LOGO/5-removebg-preview.png',
-    apple: '/images/Copy%20of%20SARAL%20EVENTS%20LOGO/5-removebg-preview.png',
+    icon: '/logo.png',
+    apple: '/logo.png',
   },
   openGraph: {
     title: 'Saral Events',
@@ -38,8 +38,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <head>
-        <link rel="icon" type="image/png" href="/images/Copy%20of%20SARAL%20EVENTS%20LOGO/5-removebg-preview.png" />
-        <link rel="apple-touch-icon" href="/images/Copy%20of%20SARAL%20EVENTS%20LOGO/5-removebg-preview.png" />
+        <link rel="icon" type="image/png" href="/logo.png" />
+        <link rel="apple-touch-icon" href="/logo.png" />
         <meta name="theme-color" content="#d97706" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
