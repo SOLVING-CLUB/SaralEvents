@@ -1,11 +1,15 @@
 # Deployment Guide: Saral Events Website & Admin Dashboard
 
-This guide explains how to deploy both `saral-events-website` (landing page) and `company_web` (admin dashboard) on the same domain `saralevents.com`.
+This guide explains how to deploy a **single Next.js app** (`apps/company_web`) that serves:
+
+- **Landing Page** at `saralevents.com/`
+- **Admin Dashboard** at `saralevents.com/admin`
 
 ## Architecture
 
-- **Landing Page**: `saralevents.com/` → `apps/saral-events-website`
-- **Admin Dashboard**: `saralevents.com/admin` → `apps/company_web`
+- **Single Web App**: `apps/company_web`
+  - `/` → Landing page
+  - `/admin/*` → Admin
 
 ## Deployment Options
 
@@ -13,74 +17,24 @@ This guide explains how to deploy both `saral-events-website` (landing page) and
 
 Vercel is the easiest option for Next.js applications.
 
-#### Step 1: Deploy Landing Page
+#### Deploy the single app
 
 1. **Connect Repository to Vercel**
    - Go to [Vercel Dashboard](https://vercel.com/dashboard)
    - Click "Add New Project"
    - Import your GitHub repository
 
-2. **Configure Landing Page Project**
-   - **Root Directory**: `apps/saral-events-website`
-   - **Framework Preset**: Next.js
-   - **Build Command**: `npm run build` (or `cd apps/saral-events-website && npm run build`)
-   - **Output Directory**: `.next`
-   - **Install Command**: `npm install`
-
-3. **Set Environment Variables** (if needed)
-   - Add any required environment variables in Vercel dashboard
-
-4. **Deploy**
-   - Click "Deploy"
-   - Once deployed, note the deployment URL (e.g., `saral-events-website.vercel.app`)
-
-#### Step 2: Deploy Admin Dashboard
-
-1. **Create Second Project in Vercel**
-   - Click "Add New Project" again
-   - Import the same GitHub repository
-
-2. **Configure Admin Dashboard Project**
+2. **Configure Project**
    - **Root Directory**: `apps/company_web`
    - **Framework Preset**: Next.js
-   - **Build Command**: `npm run build` (or `cd apps/company_web && npm run build`)
-   - **Output Directory**: `.next`
    - **Install Command**: `npm install`
+   - **Build Command**: `npm run build`
 
-3. **Set Base Path Environment Variable**
-   - Go to **Settings > Environment Variables**
-   - Add: `NEXT_PUBLIC_BASE_PATH` = `/admin`
-
-4. **Set Other Environment Variables**
-   - Add Supabase and other required environment variables
-
-5. **Deploy**
-   - Click "Deploy"
-   - Note the deployment URL (e.g., `company-web.vercel.app`)
-
-#### Step 3: Configure Domain Routing
-
-1. **Add Domain to Landing Page Project**
-   - Go to landing page project settings
-   - Navigate to **Domains**
+3. **Add Domain**
+   - Project → **Settings → Domains**
    - Add `saralevents.com` and `www.saralevents.com`
-   - Follow DNS configuration instructions
 
-2. **Configure Rewrites in Landing Page Project**
-   - The `vercel.json` file in `apps/saral-events-website` is already configured
-   - **IMPORTANT**: Update the `destination` URL in `apps/saral-events-website/vercel.json` with your actual company_web Vercel deployment URL
-   - After deploying company_web, copy its deployment URL and update the vercel.json file
-   - Or configure rewrites via Vercel Dashboard:
-     - Go to **Settings > Rewrites**
-     - Add rewrite rule:
-       ```
-       Source: /admin/:path*
-       Destination: https://your-company-web-url.vercel.app/:path*
-       ```
-
-#### Step 4: Update Company Web Configuration
-
-The `next.config.mjs` in `company_web` is already configured to use `NEXT_PUBLIC_BASE_PATH`. Make sure this environment variable is set to `/admin` in Vercel.
+> Important: Do **NOT** set `NEXT_PUBLIC_BASE_PATH` anymore. The app already routes admin pages under `/admin/*`.
 
 ---
 
@@ -111,32 +65,9 @@ sudo apt-get install -y nginx
 sudo npm install -g pm2
 ```
 
-#### Step 2: Clone and Build Landing Page
+#### Step 2: Build & Start the single web app
 
 ```bash
-# Navigate to your project directory
-cd /var/www/saralevents  # or your preferred directory
-
-# Clone repository (if not already cloned)
-git clone <your-repo-url> .
-
-# Install dependencies
-cd apps/saral-events-website
-npm install
-
-# Build the application
-npm run build
-
-# Start with PM2
-pm2 start npm --name "landing-page" -- start
-pm2 save
-pm2 startup  # Follow instructions to enable auto-start
-```
-
-#### Step 3: Clone and Build Admin Dashboard
-
-```bash
-# In the same project directory
 cd apps/company_web
 npm install
 
@@ -144,7 +75,7 @@ npm install
 npm run build
 
 # Start with PM2 (on port 3005)
-pm2 start npm --name "admin-dashboard" -- start
+pm2 start npm --name "company-web" -- start
 pm2 save
 ```
 
@@ -193,7 +124,7 @@ sudo ufw allow OpenSSH
 sudo ufw enable
 ```
 
-#### Step 7: Verify Deployment
+#### Step 6: Verify Deployment
 
 - Visit `http://saralevents.com` - should show landing page
 - Visit `http://saralevents.com/admin` - should show admin dashboard login

@@ -14,26 +14,15 @@ if ! command -v pm2 &> /dev/null; then
     sudo npm install -g pm2
 fi
 
-# Deploy Landing Page
-echo -e "${GREEN}📦 Building Landing Page...${NC}"
-cd apps/saral-events-website
+# Deploy Single Web App (Landing + Admin)
+echo -e "${GREEN}📦 Building Web App (Landing + Admin)...${NC}"
+cd apps/company_web
 npm install
 npm run build
 
-echo -e "${GREEN}🚀 Starting Landing Page on port 3000...${NC}"
-pm2 delete landing-page 2>/dev/null || true
-pm2 start npm --name "landing-page" -- start
-pm2 save
-
-# Deploy Admin Dashboard
-echo -e "${GREEN}📦 Building Admin Dashboard...${NC}"
-cd ../company_web
-npm install
-npm run build
-
-echo -e "${GREEN}🚀 Starting Admin Dashboard on port 3005...${NC}"
-pm2 delete admin-dashboard 2>/dev/null || true
-pm2 start npm --name "admin-dashboard" -- start
+echo -e "${GREEN}🚀 Starting Web App on port 3005...${NC}"
+pm2 delete company-web 2>/dev/null || true
+pm2 start npm --name "company-web" -- start
 pm2 save
 
 # Return to root
@@ -41,8 +30,7 @@ cd ../..
 
 echo -e "${GREEN}✅ Deployment complete!${NC}"
 echo ""
-echo "Landing Page: http://localhost:3000"
-echo "Admin Dashboard: http://localhost:3005"
+echo "Web App (Landing + Admin): http://localhost:3005"
 echo ""
 echo "Next steps:"
 echo "1. Configure nginx with: sudo cp nginx.conf /etc/nginx/sites-available/saralevents.com"
@@ -51,5 +39,4 @@ echo "3. Test nginx: sudo nginx -t"
 echo "4. Reload nginx: sudo systemctl reload nginx"
 echo ""
 echo "View logs:"
-echo "  pm2 logs landing-page"
-echo "  pm2 logs admin-dashboard"
+echo "  pm2 logs company-web"
