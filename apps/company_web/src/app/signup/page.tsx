@@ -1,12 +1,6 @@
-import { AuthForm } from '@/components/auth/AuthForm'
-import { ProtectedRoute } from '@/components/auth/ProtectedRoute'
+import { redirect } from 'next/navigation'
 
-export default function SignUpPage() {
-  return (
-    <ProtectedRoute requireAuth={false}>
-      <AuthForm mode="signup" />
-    </ProtectedRoute>
-  )
+export default function LegacySignupRedirect() {
+  redirect('/admin/signup')
 }
-
 

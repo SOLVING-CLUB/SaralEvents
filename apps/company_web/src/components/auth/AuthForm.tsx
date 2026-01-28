@@ -73,14 +73,14 @@ export function AuthForm({ mode }: AuthFormProps) {
             {isSignUp ? (
               <>
                 Or{' '}
-                <Link href="/signin" className="font-medium text-indigo-600 hover:text-indigo-500">
+                <Link href="/admin/signin" className="font-medium text-indigo-600 hover:text-indigo-500">
                   sign in to your existing account
                 </Link>
               </>
             ) : (
               <>
                 Or{' '}
-                <Link href="/signup" className="font-medium text-indigo-600 hover:text-indigo-500">
+                <Link href="/admin/signup" className="font-medium text-indigo-600 hover:text-indigo-500">
                   create a new account
                 </Link>
               </>
@@ -154,7 +154,7 @@ export function AuthForm({ mode }: AuthFormProps) {
           {!isSignUp && (
             <div className="text-center">
               <Link
-                href="/forgot-password"
+                href="/admin/forgot-password"
                 className="text-sm text-indigo-600 hover:text-indigo-500"
               >
                 Forgot your password?

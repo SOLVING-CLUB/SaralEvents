@@ -53,23 +53,23 @@ self.addEventListener('notificationclick', function(event) {
   const data = event.notification.data;
   const type = data?.type;
 
-  let url = '/dashboard';
+  let url = '/admin/dashboard';
 
   switch (type) {
     case 'order_update':
-      url = `/dashboard/orders${data.order_id ? `?id=${data.order_id}` : ''}`;
+      url = `/admin/dashboard/orders${data.order_id ? `?id=${data.order_id}` : ''}`;
       break;
     case 'payment':
-      url = `/dashboard/orders${data.order_id ? `?id=${data.order_id}` : ''}`;
+      url = `/admin/dashboard/orders${data.order_id ? `?id=${data.order_id}` : ''}`;
       break;
     case 'booking_request':
-      url = `/dashboard/orders${data.booking_id ? `?id=${data.booking_id}` : ''}`;
+      url = `/admin/dashboard/orders${data.booking_id ? `?id=${data.booking_id}` : ''}`;
       break;
     case 'support':
-      url = '/dashboard/support';
+      url = '/admin/dashboard/support';
       break;
     default:
-      url = '/dashboard';
+      url = '/admin/dashboard';
   }
 
   event.waitUntil(

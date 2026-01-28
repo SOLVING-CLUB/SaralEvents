@@ -32,7 +32,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     }, 10000) // 10 second timeout
 
     if (!loading && !user) {
-      router.push('/signin')
+      router.push('/admin/signin')
     }
 
     return () => clearTimeout(timeoutId)

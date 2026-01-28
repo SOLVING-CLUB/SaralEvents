@@ -13,7 +13,7 @@ interface ProtectedRouteProps {
 export function ProtectedRoute({ 
   children, 
   requireAuth = true, 
-  redirectTo = '/signin' 
+  redirectTo = '/admin/signin' 
 }: ProtectedRouteProps) {
   const { user, loading } = useAuth()
   const router = useRouter()
@@ -23,7 +23,7 @@ export function ProtectedRoute({
       if (requireAuth && !user) {
         router.push(redirectTo)
       } else if (!requireAuth && user) {
-        router.push('/dashboard')
+        router.push('/admin/dashboard')
       }
     }
   }, [user, loading, requireAuth, redirectTo, router])

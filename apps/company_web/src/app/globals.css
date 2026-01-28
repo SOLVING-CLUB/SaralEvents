@@ -2,6 +2,60 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Landing page additions (migrated from saral-events-website) */
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #d97706;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #b45309;
+}
+
+/* Hide scrollbar while allowing scroll */
+.hide-scrollbar {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE/Edge */
+}
+.hide-scrollbar::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, Opera */
+}
+
+/* Swiper pagination styles */
+.swiper-pagination-bullet {
+  background-color: transparent !important;
+  border: 2px solid #e2e8f0;
+  opacity: 1 !important;
+  width: 10px;
+  height: 10px;
+  transition: all 0.3s ease;
+  margin: 0 4px !important;
+  border-radius: 9999px;
+}
+
+.swiper-pagination-bullet-active {
+  background-color: #facc15 !important;
+  border-color: #facc15 !important;
+}
+
 @layer base {
   :root {
     --background: 0 0% 100%;

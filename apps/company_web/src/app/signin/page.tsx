@@ -1,12 +1,6 @@
-import { AuthForm } from '@/components/auth/AuthForm'
-import { ProtectedRoute } from '@/components/auth/ProtectedRoute'
+import { redirect } from 'next/navigation'
 
-export default function SignInPage() {
-  return (
-    <ProtectedRoute requireAuth={false}>
-      <AuthForm mode="signin" />
-    </ProtectedRoute>
-  )
+export default function LegacySigninRedirect() {
+  redirect('/admin/signin')
 }
-
 

@@ -23,20 +23,20 @@ import {
 } from 'lucide-react'
 
 const navigation = [
-  { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-  { name: 'Orders', href: '/dashboard/orders', icon: ShoppingBag },
-  { name: 'Payment Milestones', href: '/dashboard/payment-milestones', icon: CreditCard },
-  { name: 'Cancellations & Refunds', href: '/dashboard/refunds', icon: XCircle },
-  { name: 'Vendor Wallets', href: '/dashboard/vendor-wallets', icon: Wallet },
-  { name: 'Services', href: '/dashboard/services', icon: Settings },
-  { name: 'Vendors', href: '/dashboard/vendors', icon: Store },
-  { name: 'Users', href: '/dashboard/users', icon: Users },
-  { name: 'Reviews & Feedback', href: '/dashboard/reviews', icon: Star },
-  { name: 'Support Tickets', href: '/dashboard/support', icon: HeadphonesIcon },
-  { name: 'Campaigns', href: '/dashboard/campaigns', icon: Bell },
-  { name: 'Marketing & Promotions', href: '/dashboard/marketing', icon: Megaphone },
-  { name: 'Analytics', href: '/dashboard/analytics', icon: BarChart3 },
-  { name: 'Access Control', href: '/dashboard/access-control', icon: Shield },
+  { name: 'Dashboard', href: '/admin/dashboard', icon: LayoutDashboard },
+  { name: 'Orders', href: '/admin/dashboard/orders', icon: ShoppingBag },
+  { name: 'Payment Milestones', href: '/admin/dashboard/payment-milestones', icon: CreditCard },
+  { name: 'Cancellations & Refunds', href: '/admin/dashboard/refunds', icon: XCircle },
+  { name: 'Vendor Wallets', href: '/admin/dashboard/vendor-wallets', icon: Wallet },
+  { name: 'Services', href: '/admin/dashboard/services', icon: Settings },
+  { name: 'Vendors', href: '/admin/dashboard/vendors', icon: Store },
+  { name: 'Users', href: '/admin/dashboard/users', icon: Users },
+  { name: 'Reviews & Feedback', href: '/admin/dashboard/reviews', icon: Star },
+  { name: 'Support Tickets', href: '/admin/dashboard/support', icon: HeadphonesIcon },
+  { name: 'Campaigns', href: '/admin/dashboard/campaigns', icon: Bell },
+  { name: 'Marketing & Promotions', href: '/admin/dashboard/marketing', icon: Megaphone },
+  { name: 'Analytics', href: '/admin/dashboard/analytics', icon: BarChart3 },
+  { name: 'Access Control', href: '/admin/dashboard/access-control', icon: Shield },
 ]
 
 interface SidebarProps {
@@ -64,8 +64,8 @@ export function Sidebar({ onClose }: SidebarProps) {
         <ul className="space-y-1">
           {navigation.map((item) => {
             // For Dashboard, only match exactly; for others, match subpaths too
-            const isActive = item.href === '/dashboard' 
-              ? pathname === '/dashboard'
+            const isActive = item.href === '/admin/dashboard' 
+              ? pathname === '/admin/dashboard'
               : pathname === item.href || pathname?.startsWith(item.href + '/')
             return (
               <li key={item.name}>
