@@ -282,7 +282,7 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
             Text(
               _selectedStatus == 'all' 
                   ? 'No orders yet' 
-                  : 'No ${_selectedStatus} orders',
+                  : 'No $_selectedStatus orders',
               style: Theme.of(context).textTheme.titleLarge?.copyWith(
                 color: Colors.grey[600],
               ),
@@ -370,6 +370,7 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
               padding: const EdgeInsets.all(16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
                 children: [
               // Header row with status and amount
               Row(
@@ -379,6 +380,7 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
                       children: [
                         Text(
                           serviceName,
@@ -397,10 +399,14 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
                               color: Colors.grey[600],
                             ),
                             const SizedBox(width: 4),
-                            Text(
-                              customerName,
-                              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                color: Colors.grey[700],
+                            Expanded(
+                              child: Text(
+                                customerName,
+                                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                  color: Colors.grey[700],
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                               ),
                             ),
                           ],
@@ -428,6 +434,8 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
                             fontWeight: FontWeight.bold,
                             fontSize: 11,
                           ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
                       const SizedBox(height: 8),
@@ -452,17 +460,25 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
                 children: [
                   Icon(Icons.calendar_today, size: 18, color: Colors.grey[600]),
                   const SizedBox(width: 8),
-                  Text(
-                    _formatDate(bookingDate),
-                    style: Theme.of(context).textTheme.bodyMedium,
+                  Expanded(
+                    child: Text(
+                      _formatDate(bookingDate),
+                      style: Theme.of(context).textTheme.bodyMedium,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
                   if (bookingTime != null && bookingTime.isNotEmpty) ...[
                     const SizedBox(width: 16),
                     Icon(Icons.access_time, size: 18, color: Colors.grey[600]),
                     const SizedBox(width: 8),
-                    Text(
-                      _formatTime(bookingTime),
-                      style: Theme.of(context).textTheme.bodyMedium,
+                    Expanded(
+                      child: Text(
+                        _formatTime(bookingTime),
+                        style: Theme.of(context).textTheme.bodyMedium,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
                   ],
                 ],
@@ -474,10 +490,14 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
                   children: [
                     Icon(Icons.schedule, size: 16, color: Colors.grey[500]),
                     const SizedBox(width: 8),
-                    Text(
-                      'Ordered ${_getRelativeTime(createdAt)}',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Colors.grey[600],
+                    Expanded(
+                      child: Text(
+                        'Ordered ${_getRelativeTime(createdAt)}',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Colors.grey[600],
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
                   ],
@@ -497,6 +517,8 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
                         color: Theme.of(context).colorScheme.primary,
                         fontStyle: FontStyle.italic,
                       ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                     const SizedBox(width: 4),
                     Icon(

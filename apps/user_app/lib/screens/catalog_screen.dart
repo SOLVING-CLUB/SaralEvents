@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:flutter/services.dart';
 import '../models/service_models.dart';
 import '../services/service_service.dart';
+import '../services/review_service.dart';
+import '../core/theme/color_tokens.dart';
 import 'service_details_screen.dart';
 import '../widgets/wishlist_button.dart';
 import '../core/input_formatters.dart';
@@ -30,10 +31,12 @@ class CatalogScreen extends StatefulWidget {
 class _CatalogScreenState extends State<CatalogScreen> {
   final SupabaseClient _supabase = Supabase.instance.client;
   late final ServiceService _serviceService;
+  late final ReviewService _reviewService;
   final FocusNode _searchFocusNode = FocusNode();
 
   List<ServiceItem> _services = <ServiceItem>[]; // filtered view
   List<ServiceItem> _allServices = <ServiceItem>[]; // original
+  Map<String, Map<String, dynamic>> _serviceRatings = {}; // serviceId -> {averageRating, count}
   String? _selectedCategoryId;
   String? _selectedVendorCategory; // For vendor category filter
   bool _isLoading = true;
@@ -51,6 +54,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
   void initState() {
     super.initState();
     _serviceService = ServiceService(_supabase);
+    _reviewService = ReviewService(_supabase);
     _load();
     
     // If a category is pre-selected, set it
@@ -98,6 +102,9 @@ class _CatalogScreenState extends State<CatalogScreen> {
         }
         _applyFilters();
       });
+      
+      // Load real-time ratings for all services
+      _loadServiceRatings();
     } catch (e) {
       print('Error loading data: $e');
       setState(() { _error = e.toString(); });
@@ -245,6 +252,24 @@ class _CatalogScreenState extends State<CatalogScreen> {
     }
   }
 
+  Future<void> _loadServiceRatings() async {
+    if (_allServices.isEmpty) return;
+    
+    try {
+      final serviceIds = _allServices.map((s) => s.id).toList();
+      final ratings = await _reviewService.getBatchServiceRatings(serviceIds);
+      
+      if (mounted) {
+        setState(() {
+          _serviceRatings = ratings;
+        });
+      }
+    } catch (e) {
+      print('Error loading service ratings: $e');
+      // Continue without ratings - cards will show N/A
+    }
+  }
+
   void _applyFilters() async {
     var list = List<ServiceItem>.from(_allServices);
     
@@ -252,6 +277,14 @@ class _CatalogScreenState extends State<CatalogScreen> {
     if (_selectedVendorCategory != null) {
       final filteredServices = await _loadServicesByVendorCategory(_selectedVendorCategory!);
       list = filteredServices;
+      // Reload ratings for filtered services
+      if (mounted) {
+        final serviceIds = list.map((s) => s.id).toList();
+        final ratings = await _reviewService.getBatchServiceRatings(serviceIds);
+        setState(() {
+          _serviceRatings = ratings;
+        });
+      }
     }
     
     // price filter
@@ -713,7 +746,11 @@ class _CatalogScreenState extends State<CatalogScreen> {
                     const SizedBox(width: 4),
                     Text(
                       widget.selectedCategory!,
-                      style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w700,
+                        color: ColorTokens.textPrimary(context),
+                      ),
                     ),
                   ],
                 ),
@@ -863,12 +900,12 @@ class _CatalogScreenState extends State<CatalogScreen> {
             },
             child: Container(
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: ColorTokens.bgSurface(context),
                 borderRadius: BorderRadius.circular(16),
                 boxShadow: [
                   BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 12, offset: const Offset(0, 6)),
                 ],
-                border: Border.all(color: Colors.black.withOpacity(0.06)),
+                border: Border.all(color: ColorTokens.borderDefault(context).withOpacity(0.3)),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -905,7 +942,34 @@ class _CatalogScreenState extends State<CatalogScreen> {
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             Text('₹ ${service.price.toStringAsFixed(0)}/-', style: const TextStyle(fontWeight: FontWeight.w800)),
-                            Row(children: const [Icon(Icons.star, size: 14, color: Color(0xFFFFC107)), SizedBox(width: 4), Text('4.5k')]),
+                            Builder(
+                              builder: (context) {
+                                final ratingData = _serviceRatings[service.id];
+                                final count = ratingData?['count'] as int? ?? 0;
+                                final avgRating = ratingData?['averageRating'] as double? ?? 0.0;
+                                
+                                if (count == 0) {
+                                  return const Row(
+                                    children: [
+                                      Icon(Icons.star, size: 14, color: Colors.grey),
+                                      SizedBox(width: 4),
+                                      Text('N/A', style: TextStyle(color: Colors.grey)),
+                                    ],
+                                  );
+                                }
+                                
+                                return Row(
+                                  children: [
+                                    const Icon(Icons.star, size: 14, color: Color(0xFFFFC107)),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      avgRating.toStringAsFixed(1),
+                                      style: const TextStyle(fontSize: 12),
+                                    ),
+                                  ],
+                                );
+                              },
+                            ),
                           ],
                         ),
                       ],

@@ -122,6 +122,8 @@ class _ApprovalPendingScreenState extends State<ApprovalPendingScreen> {
                                     color: Colors.orange.shade900,
                                   ),
                               textAlign: TextAlign.center,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
                             ),
                             const SizedBox(height: 12),
                             Text(
@@ -132,6 +134,8 @@ class _ApprovalPendingScreenState extends State<ApprovalPendingScreen> {
                                     color: Colors.grey.shade700,
                                   ),
                               textAlign: TextAlign.center,
+                              maxLines: 10,
+                              overflow: TextOverflow.ellipsis,
                             ),
                             if (vendor?.approvalStatus == 'rejected' && vendor?.approvalNotes != null) ...[
                               const SizedBox(height: 16),
@@ -162,6 +166,8 @@ class _ApprovalPendingScreenState extends State<ApprovalPendingScreen> {
                                     Text(
                                       vendor!.approvalNotes!,
                                       style: TextStyle(color: Colors.red.shade800),
+                                      maxLines: 5,
+                                      overflow: TextOverflow.ellipsis,
                                     ),
                                   ],
                                 ),
@@ -268,10 +274,14 @@ class _ApprovalPendingScreenState extends State<ApprovalPendingScreen> {
                               title: Text(
                                 doc.documentType,
                                 style: const TextStyle(fontWeight: FontWeight.w500),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
                               ),
                               subtitle: Text(
                                 doc.fileName,
                                 style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                               ),
                               trailing: IconButton(
                                 icon: const Icon(Icons.open_in_new),
@@ -328,6 +338,8 @@ class _ApprovalPendingScreenState extends State<ApprovalPendingScreen> {
                 fontWeight: FontWeight.w400,
                 fontSize: 14,
               ),
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
             ),
           ),
         ],

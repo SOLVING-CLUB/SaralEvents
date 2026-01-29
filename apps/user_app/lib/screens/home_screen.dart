@@ -10,7 +10,6 @@ import 'catalog_screen.dart';
 import 'profile_screen.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../services/profile_service.dart';
-import '../widgets/wishlist_button.dart';
 import 'service_details_screen.dart';
 import '../widgets/banner_widget.dart';
 // import '../widgets/banner_debug_widget.dart'; // COMMENTED OUT
@@ -20,10 +19,10 @@ import '../widgets/events_section.dart';
 import '../services/banner_service.dart';
 import '../services/featured_services_service.dart';
 import '../core/services/location_service.dart';
-import '../core/services/permission_service.dart';
+import '../core/services/location_session_manager.dart';
+import '../core/theme/color_tokens.dart';
 import '../widgets/location_startup_bottom_sheet.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:geolocator/geolocator.dart';
 import '../services/order_notification_service.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -88,155 +87,137 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware, WidgetsBinding
         _categories.map((c) => c['asset']!).toList(),
       );
       _attachSessionListenerAndLoadName();
+      // Load address first, then check location (which will reload address if needed)
       _loadActiveAddress();
+      // Check location and show bottom sheet if needed
+      // This will also reload address after location is set
       _checkLocationAndShowBottomSheet();
     });
   }
 
   bool _hasAppBeenInBackground = false;
+  bool _isInitialStartup = true;
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
     // Track if app has been in background
+    // But ignore lifecycle changes during initial startup (first few seconds)
+    if (_isInitialStartup) {
+      // Wait a bit before tracking background state
+      // This prevents false positives during app startup
+      Future.delayed(const Duration(seconds: 2), () {
+        _isInitialStartup = false;
+      });
+      return;
+    }
+    
+    // Only track background state after initial startup is complete
     if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
       _hasAppBeenInBackground = true;
+      debugPrint('App went to background');
+    } else if (state == AppLifecycleState.resumed) {
+      debugPrint('App resumed from background');
     }
   }
 
-  /// Check location status and show bottom sheet if location is off
-  /// Only shows on FRESH APP START, not when resuming from recent apps
+  /// Check location status and show bottom sheet if needed
+  /// Follows Swiggy Instamart-style location handling
   /// 
-  /// LOGIC EXPLANATION:
-  /// 1. On app startup, main.dart resets 'location_checked_this_session' to false
-  /// 2. We track if app has been in background using WidgetsBindingObserver
-  /// 3. If app has been in background (_hasAppBeenInBackground = true), skip check (it's a resume)
-  /// 4. If app hasn't been in background, it's a fresh start → check location
-  /// 5. After checking, set 'location_checked_this_session' to true to prevent re-checking
+  /// LOGIC FLOW:
+  /// 1️⃣ Check if user has valid last-selected location → Use it, don't show bottom sheet
+  /// 2️⃣ If no location → Check if already resolved this session → Skip if yes
+  /// 3️⃣ If not resolved → Check permission & GPS status
+  /// 4️⃣ If permission granted AND GPS ON → Auto-fetch location (don't show bottom sheet)
+  /// 5️⃣ If permission denied OR GPS OFF → Show bottom sheet (non-dismissible)
   /// 
-  /// CONDITIONS FOR SHOWING BOTTOM SHEET:
-  /// - Fresh app start (not resumed from background)
-  /// - User is authenticated
-  /// - Device location service is OFF OR permission not granted
-  /// 
-  /// CONDITIONS FOR AUTO-FETCHING LOCATION:
-  /// - Fresh app start
-  /// - User is authenticated
-  /// - Device location service is ON
-  /// - Permission is already granted
+  /// SESSION BEHAVIOR:
+  /// - Only runs on cold start (app process created)
+  /// - Skips on background/foreground transitions
+  /// - Flags reset in main.dart on every app start
   Future<void> _checkLocationAndShowBottomSheet() async {
-    final prefs = await SharedPreferences.getInstance();
-    
-    // If app has been in background, this is a resume - don't check location again
-    // The location was already fetched when app first started
-    if (_hasAppBeenInBackground) {
-      debugPrint('App resumed from background - skipping location check');
+    // Skip if app was resumed from background (not a cold start)
+    if (_hasAppBeenInBackground && !_isInitialStartup) {
+      debugPrint('🔄 App resumed from background - skipping location check');
       return;
     }
     
-    // Check if we've already checked in this session (safety check)
-    final hasCheckedThisSession = prefs.getBool('location_checked_this_session') ?? false;
-    if (hasCheckedThisSession) {
-      debugPrint('Location already checked this session - skipping');
-      return;
-    }
-    
-    // Check if user is authenticated
-    final user = Supabase.instance.client.auth.currentUser;
-    if (user == null) {
-      await prefs.setBool('location_checked_this_session', true);
-      return;
-    }
-
-    // Wait a bit for the UI to be fully ready
+    // Wait for UI to be ready
     await Future.delayed(const Duration(milliseconds: 800));
-
-    if (!mounted) {
-      await prefs.setBool('location_checked_this_session', true);
+    
+    if (!mounted) return;
+    
+    debugPrint('🚀 Starting location check (cold start)');
+    
+    // Step 1: Check if user has valid last-selected location
+    final hasValidLocation = await LocationSessionManager.hasValidLastSelectedLocation();
+    if (hasValidLocation) {
+      debugPrint('✅ Valid last-selected location exists - using it, NOT showing bottom sheet');
+      await LocationSessionManager.markLocationResolvedThisSession();
+      // Load the address to display it
+      _loadActiveAddress();
       return;
     }
-
-    // FRESH APP START: Check device location status
-    try {
-      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      
-      // Case 1: Device location is OFF → Show bottom sheet (non-dismissible)
-      if (!serviceEnabled) {
-        await prefs.setBool('location_checked_this_session', true);
-        debugPrint('Device location is OFF - showing bottom sheet');
-        if (mounted) {
-          showModalBottomSheet(
-            context: context,
-            isScrollControlled: true,
-            backgroundColor: Colors.transparent,
-            isDismissible: false, // User must select a location
-            enableDrag: false,
-            builder: (context) => const LocationStartupBottomSheet(),
-          ).then((_) {
-            if (mounted) {
-              _loadActiveAddress();
-            }
-          });
-        }
-        return;
-      }
-      
-      // Case 2: Device location is ON - check permission
-      final status = await PermissionService.getLocationPermissionStatus();
-      
-      if (status == LocationPermissionStatus.granted) {
-        // Permission granted → fetch fresh location automatically
-        await prefs.setBool('location_checked_this_session', true);
-        debugPrint('Location ON and permission granted - fetching location automatically');
-        await _fetchLocationDirectly();
-        return;
-      }
-      
-      // Case 3: Location is ON but permission not granted → Show bottom sheet
-      await prefs.setBool('location_checked_this_session', true);
-      debugPrint('Location ON but permission not granted - showing bottom sheet');
-      if (mounted) {
-        showModalBottomSheet(
-          context: context,
-          isScrollControlled: true,
-          backgroundColor: Colors.transparent,
-          isDismissible: false,
-          enableDrag: false,
-          builder: (context) => const LocationStartupBottomSheet(),
-        ).then((result) {
-          // Reload address when bottom sheet closes (address selected or dismissed)
-          if (mounted) {
-            debugPrint('Bottom sheet closed, reloading address...');
-            _loadActiveAddress();
-          }
-        });
-      }
-    } catch (e) {
-      // If there's an error checking location, show bottom sheet as fallback
-      await prefs.setBool('location_checked_this_session', true);
-      debugPrint('Error checking location: $e');
-      if (mounted) {
-        showModalBottomSheet(
-          context: context,
-          isScrollControlled: true,
-          backgroundColor: Colors.transparent,
-          isDismissible: false,
-          enableDrag: false,
-          builder: (context) => const LocationStartupBottomSheet(),
-        ).then((result) {
-          // Reload address when bottom sheet closes (address selected or dismissed)
-          if (mounted) {
-            debugPrint('Bottom sheet closed, reloading address...');
-            _loadActiveAddress();
-          }
-        });
-      }
+    
+    // Step 2: Check if location was already resolved this session
+    final wasResolved = await LocationSessionManager.wasLocationResolvedThisSession();
+    if (wasResolved) {
+      debugPrint('✅ Location already resolved this session - NOT showing bottom sheet');
+      _loadActiveAddress();
+      return;
     }
+    
+    // Step 3: Get location state (permission + GPS)
+    final state = await LocationSessionManager.getLocationState();
+    debugPrint('📍 Location state: GPS=${state.isServiceEnabled}, Permission=${state.permissionStatus}');
+    
+    // Step 4: If permission granted AND GPS ON → Try auto-fetch
+    if (state.canAutoFetch) {
+      debugPrint('📍 Permission granted & GPS ON - attempting auto-fetch');
+      await LocationSessionManager.markLocationResolvedThisSession();
+      await _fetchLocationDirectly();
+      return;
+    }
+    
+    // Step 5: If permission denied OR GPS OFF → Show bottom sheet
+    debugPrint('📍 Permission denied OR GPS OFF - showing bottom sheet');
+    await LocationSessionManager.markLocationResolvedThisSession();
+    await _showLocationBottomSheet();
+  }
+  
+  /// Show location bottom sheet (non-dismissible)
+  Future<void> _showLocationBottomSheet() async {
+    if (!mounted) return;
+    
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      isDismissible: false, // Cannot dismiss by tapping outside
+      enableDrag: false, // Cannot dismiss by swiping down
+      builder: (context) => const LocationStartupBottomSheet(),
+    ).then((result) async {
+      // Bottom sheet closed - address was selected or location resolved
+      await Future.delayed(const Duration(milliseconds: 200));
+      if (mounted) {
+        debugPrint('📍 Bottom sheet closed - reloading address');
+        _loadActiveAddress();
+        
+        // Save last selected location ID
+        final activeAddress = await AddressStorage.getActive();
+        if (activeAddress != null) {
+          await LocationSessionManager.saveLastSelectedLocationId(activeAddress.id);
+        }
+      }
+    });
   }
 
   /// Fetch location directly when service is enabled and permission is granted
+  /// Auto-detection attempt (only once per session)
   Future<void> _fetchLocationDirectly() async {
     try {
+      debugPrint('📍 Auto-fetching location...');
+      
       // Get current location
       final position = await LocationService.getCurrentPosition();
       
@@ -257,31 +238,22 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware, WidgetsBinding
 
       await AddressStorage.setTemporaryLocation(addressInfo);
       
+      // Save last selected location ID
+      await LocationSessionManager.saveLastSelectedLocationId(addressInfo.id);
+      
+      // Small delay to ensure save operation completes
+      await Future.delayed(const Duration(milliseconds: 100));
+      
       // Reload address to update UI
       if (mounted) {
         _loadActiveAddress();
       }
       
-      debugPrint('Location fetched automatically at startup');
+      debugPrint('✅ Location auto-fetched successfully: ${addressInfo.address}');
     } catch (e) {
-      debugPrint('Error fetching location directly: $e');
-      // If fetching fails, show bottom sheet as fallback
-      if (mounted) {
-        showModalBottomSheet(
-          context: context,
-          isScrollControlled: true,
-          backgroundColor: Colors.transparent,
-          isDismissible: true,
-          enableDrag: true,
-          builder: (context) => const LocationStartupBottomSheet(),
-        ).then((result) {
-          // Reload address when bottom sheet closes (address selected or dismissed)
-          if (mounted) {
-            debugPrint('Bottom sheet closed, reloading address...');
-            _loadActiveAddress();
-          }
-        });
-      }
+      debugPrint('❌ Error auto-fetching location: $e');
+      // If auto-fetch fails, show bottom sheet as fallback
+      await _showLocationBottomSheet();
     }
   }
 
@@ -799,10 +771,10 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware, WidgetsBinding
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                   decoration: BoxDecoration(
-                    color: Theme.of(context).cardColor,
+                    color: ColorTokens.bgSurface(context),
                     borderRadius: BorderRadius.circular(14),
                     border: Border.all(
-                      color: Theme.of(context).colorScheme.outline.withOpacity(0.1),
+                      color: ColorTokens.borderDefault(context).withOpacity(0.3),
                     ),
                   ),
                   child: Row(
@@ -812,13 +784,14 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware, WidgetsBinding
                         'See All',
                         style: Theme.of(context).textTheme.titleMedium?.copyWith(
                           fontWeight: FontWeight.w600,
+                          color: ColorTokens.textPrimary(context),
                         ),
                       ),
                       const SizedBox(width: 6),
                       Icon(
                         Icons.north_east,
                         size: 18,
-                        color: Theme.of(context).colorScheme.onSurface,
+                        color: ColorTokens.iconPrimary(context),
                       ),
                     ],
                   ),
@@ -882,127 +855,6 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware, WidgetsBinding
           ],
         ),
       ),
-    );
-  }
-
-  Widget _buildEventsSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Featured Events',
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              GestureDetector(
-                onTap: () => GoRouter.of(context).push('/events'),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        'See All',
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      const SizedBox(width: 4),
-                      Icon(
-                        Icons.arrow_forward_ios,
-                        size: 12,
-                        color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 16),
-        SizedBox(
-          height: 160,
-          child: _isLoading
-              ? const Center(child: CircularProgressIndicator())
-              : _error != null
-                  ? Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            Icons.error_outline, 
-                            color: Theme.of(context).colorScheme.onSurface.withOpacity(0.4), 
-                            size: 32,
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            'Error loading services',
-                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          ElevatedButton(
-                            onPressed: _loadData,
-                            child: const Text('Retry'),
-                          ),
-                        ],
-                      ),
-                    )
-                  : _featuredServices.isEmpty
-                      ? Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(
-                                Icons.event_busy, 
-                                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.4), 
-                                size: 32,
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                'No services available',
-                                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
-                                ),
-                              ),
-                            ],
-                          ),
-                        )
-                      : ListView.builder(
-                          scrollDirection: Axis.horizontal,
-                          padding: const EdgeInsets.symmetric(horizontal: 20),
-                          itemCount: _featuredServices.length,
-                          itemBuilder: (context, index) {
-                            final service = _featuredServices[index];
-                            return Padding(
-                              padding: const EdgeInsets.only(right: 16),
-                              child: Stack(
-                                children: [
-                                  _buildEventCard(service),
-                                  Positioned(
-                                    top: 8,
-                                    right: 8,
-                                    child: WishlistButton(serviceId: service.id, size: 34),
-                                  ),
-                                ],
-                              ),
-                            );
-                          },
-                        ),
-        ),
-      ],
     );
   }
 

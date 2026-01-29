@@ -163,6 +163,8 @@ class _OnboardPage extends StatelessWidget {
                     letterSpacing: 0.0,
                   ),
                   textAlign: TextAlign.center,
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
                 ),
                 const SizedBox(height: 16),
                 Text(
@@ -172,6 +174,8 @@ class _OnboardPage extends StatelessWidget {
                     height: 1.5,
                   ),
                   textAlign: TextAlign.center,
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ],
             ),

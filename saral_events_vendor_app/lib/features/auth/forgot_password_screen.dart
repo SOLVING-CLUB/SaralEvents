@@ -45,7 +45,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Forgot Password')),
-      body: Padding(
+      body: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),
         child: Form(
           key: _formKey,
@@ -67,7 +67,10 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
               ),
               if (_message != null) ...[
                 const SizedBox(height: 12),
-                Text(_message!),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                  child: Text(_message!, maxLines: 3, overflow: TextOverflow.ellipsis, textAlign: TextAlign.center),
+                ),
               ]
             ],
           ),

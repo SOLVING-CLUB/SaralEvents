@@ -7,7 +7,6 @@ import 'widgets.dart';
 import '../services/payment_service.dart';
 import '../services/booking_draft_service.dart';
 import '../services/billing_details_service.dart';
-import 'package:intl/intl.dart';
 
 // Shared button style
 ButtonStyle _primaryBtn(BuildContext context) => ElevatedButton.styleFrom(

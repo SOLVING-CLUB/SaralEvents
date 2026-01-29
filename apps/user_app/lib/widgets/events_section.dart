@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import '../core/theme/color_tokens.dart';
 import '../models/event_models.dart';
 import '../screens/event_categories_screen.dart';
 
@@ -24,12 +25,12 @@ class EventsSection extends StatelessWidget {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
+              Text(
                 'Events',
                 style: TextStyle(
                   fontSize: 28,
                   fontWeight: FontWeight.w800,
-                  color: Colors.black87,
+                  color: ColorTokens.textPrimary(context),
                   letterSpacing: 0.2,
                 ),
               ),
@@ -38,26 +39,26 @@ class EventsSection extends StatelessWidget {
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: ColorTokens.bgSurface(context),
                     borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: Colors.black.withValues(alpha: 0.1)),
+                    border: Border.all(color: ColorTokens.borderDefault(context).withOpacity(0.3)),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Text(
+                      Text(
                         'See All',
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w600,
-                          color: Colors.black87,
+                          color: ColorTokens.textPrimary(context),
                         ),
                       ),
                       const SizedBox(width: 6),
-                      const Icon(
+                      Icon(
                         Icons.north_east,
                         size: 18,
-                        color: Colors.black87,
+                        color: ColorTokens.iconPrimary(context),
                       ),
                     ],
                   ),
@@ -150,20 +151,29 @@ class EventsSection extends StatelessWidget {
                       bottom: 12,
                       left: 12,
                       right: 12,
-                      child: Text(
-                        eventType.name,
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w700,
-                          color: Theme.of(context).colorScheme.onSurface,
-                          shadows: [
-                            Shadow(
-                              offset: const Offset(0, 1),
-                              blurRadius: 3,
-                              color: Theme.of(context).colorScheme.shadow.withOpacity(0.26),
+                      child: Builder(
+                        builder: (context) {
+                          final isDark = Theme.of(context).brightness == Brightness.dark;
+                          final titleColor = isDark
+                              ? ColorTokens.textPrimary(context) // dark mode → light text
+                              : Colors.white; // light mode → white text on gradient
+
+                          return Text(
+                            eventType.name,
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w700,
+                              color: titleColor,
+                              shadows: [
+                                Shadow(
+                                  offset: const Offset(0, 1),
+                                  blurRadius: 3,
+                                  color: Colors.black.withOpacity(0.26),
+                                ),
+                              ],
                             ),
-                          ],
-                        ),
+                          );
+                        },
                       ),
                     ),
                   ],
@@ -171,18 +181,27 @@ class EventsSection extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 10),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                eventType.description,
-                textAlign: TextAlign.start,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  fontWeight: FontWeight.w500,
-                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
-                ),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
+            Builder(
+              builder: (context) {
+                final isDark = Theme.of(context).brightness == Brightness.dark;
+                final descColor = isDark
+                    ? ColorTokens.textSecondary(context) // dark mode → light-ish text
+                    : Colors.white.withOpacity(0.9); // light mode → white text on gradient
+
+                return Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    eventType.description,
+                    textAlign: TextAlign.start,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w500,
+                      color: descColor,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                );
+              },
             ),
           ],
         ),

@@ -157,7 +157,7 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
       // Prepare ticket data
       final ticketData = {
         'user_id': userId,
-        'subject': 'Issue Report: ${_issueType}',
+        'subject': 'Issue Report: $_issueType',
         'message': _issueDescriptionController.text.trim(),
         'category': category,
         'status': 'open',

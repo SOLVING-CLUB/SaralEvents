@@ -196,11 +196,13 @@ class _BusinessDetailsScreenState extends State<BusinessDetailsScreen> {
             TextField(
               controller: _name,
               decoration: const InputDecoration(labelText: 'Business Name *', prefixIcon: Icon(Icons.business)),
+              maxLines: 1,
             ),
             const SizedBox(height: 12),
             TextField(
               controller: _category,
               decoration: const InputDecoration(labelText: 'Category *', prefixIcon: Icon(Icons.category)),
+              maxLines: 1,
             ),
             const SizedBox(height: 12),
             TextField(
@@ -213,6 +215,7 @@ class _BusinessDetailsScreenState extends State<BusinessDetailsScreen> {
               controller: _contact,
               decoration: const InputDecoration(labelText: 'Contact', prefixIcon: Icon(Icons.phone)),
               keyboardType: TextInputType.phone,
+              maxLines: 1,
               inputFormatters: [
                 FilteringTextInputFormatter.digitsOnly,
                 LengthLimitingTextInputFormatter(10),
@@ -223,6 +226,7 @@ class _BusinessDetailsScreenState extends State<BusinessDetailsScreen> {
               controller: _email,
               decoration: const InputDecoration(labelText: 'Email', prefixIcon: Icon(Icons.email)),
               keyboardType: TextInputType.emailAddress,
+              maxLines: 1,
             ),
             const SizedBox(height: 12),
             TextField(

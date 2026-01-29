@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../core/theme/color_tokens.dart';
 import '../models/event_models.dart';
 import 'event_categories_screen.dart';
 
@@ -9,14 +10,15 @@ class AllEventsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
+        title: Text(
           'All Events',
           style: TextStyle(
             fontWeight: FontWeight.bold,
             fontSize: 24,
+            color: ColorTokens.textPrimary(context),
           ),
         ),
-        backgroundColor: Colors.white,
+        backgroundColor: ColorTokens.bgApp(context),
         elevation: 0,
       ),
       body: ListView.builder(

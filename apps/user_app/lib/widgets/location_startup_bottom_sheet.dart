@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import '../core/services/location_service.dart';
-import '../core/services/permission_service.dart';
 import '../core/services/address_storage.dart';
+import '../core/services/location_session_manager.dart';
 import 'package:go_router/go_router.dart';
 
 /// Bottom sheet shown at app startup when user is logged in but location is off
@@ -86,8 +85,17 @@ class _LocationStartupBottomSheetState extends State<LocationStartupBottomSheet>
 
         await AddressStorage.setTemporaryLocation(addressInfo);
         
+        // Save last selected location ID
+        await LocationSessionManager.saveLastSelectedLocationId(addressInfo.id);
+        await LocationSessionManager.markLocationResolvedThisSession();
+        
+        // Verify the address was set correctly
+        final verifyActive = await AddressStorage.getActive();
+        debugPrint('Location enabled - saved address: ${addressInfo.address}');
+        debugPrint('Verified active address: ${verifyActive?.label} - ${verifyActive?.address}');
+        
         if (mounted) {
-          Navigator.of(context).pop();
+          Navigator.of(context).pop(addressInfo); // Pass address as result to trigger reload
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('Location enabled successfully'),
@@ -125,6 +133,10 @@ class _LocationStartupBottomSheetState extends State<LocationStartupBottomSheet>
     // Save the selected saved address as active (persists across sessions)
     // This is a saved address, so it should persist
     await AddressStorage.setActive(address, addToSaved: true);
+    
+    // Save last selected location ID
+    await LocationSessionManager.saveLastSelectedLocationId(address.id);
+    await LocationSessionManager.markLocationResolvedThisSession();
     
     // Verify the address was set correctly
     final verifyActive = await AddressStorage.getActive();

@@ -551,6 +551,8 @@ class _BusinessDetailsStep extends StatelessWidget {
               color: Colors.black87,
               fontWeight: FontWeight.w600,
             ),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
           ),
           const SizedBox(height: 8),
           Text(
@@ -558,6 +560,8 @@ class _BusinessDetailsStep extends StatelessWidget {
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
               color: Colors.grey.shade600,
             ),
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
           ),
           const SizedBox(height: 24),
           
@@ -796,6 +800,8 @@ class _DocumentsStep extends StatelessWidget {
               color: Colors.black87,
               fontWeight: FontWeight.w600,
             ),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
           ),
           const SizedBox(height: 8),
           Text(
@@ -803,6 +809,8 @@ class _DocumentsStep extends StatelessWidget {
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
               color: Colors.grey.shade600,
             ),
+            maxLines: 10,
+            overflow: TextOverflow.ellipsis,
           ),
           const SizedBox(height: 24),
           
@@ -1213,15 +1221,17 @@ class _DocumentTile extends StatelessWidget {
         leading: _buildLeadingWidget(),
         title: Row(
           children: [
-            Expanded(
-              child: Text(
-                title,
-                style: TextStyle(
-                  fontWeight: isUploaded ? FontWeight.w600 : FontWeight.w500,
-                  color: isUploaded ? Colors.black87 : Colors.grey.shade700,
+              Expanded(
+                child: Text(
+                  title,
+                  style: TextStyle(
+                    fontWeight: isUploaded ? FontWeight.w600 : FontWeight.w500,
+                    color: isUploaded ? Colors.black87 : Colors.grey.shade700,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
-            ),
             if (isRequired)
               Container(
                 margin: const EdgeInsets.only(left: 8),
@@ -1465,6 +1475,8 @@ class _BankDetailsStep extends StatelessWidget {
               color: Colors.black87,
               fontWeight: FontWeight.w600,
             ),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
           ),
           const SizedBox(height: 8),
           Text(
@@ -1472,6 +1484,8 @@ class _BankDetailsStep extends StatelessWidget {
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
               color: Colors.grey.shade600,
             ),
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
           ),
           const SizedBox(height: 24),
           
@@ -1607,6 +1621,8 @@ class _ReviewStep extends StatelessWidget {
               color: Colors.black87,
               fontWeight: FontWeight.w600,
             ),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
           ),
           const SizedBox(height: 8),
           Text(
@@ -1614,6 +1630,8 @@ class _ReviewStep extends StatelessWidget {
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
               color: Colors.grey.shade600,
             ),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
           ),
           const SizedBox(height: 24),
           
@@ -1657,14 +1675,16 @@ class _ReviewStep extends StatelessWidget {
               children: [
                 Icon(Icons.info_outline, color: AppColors.primary),
                 const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    'Only business name, address, and category are mandatory. All other information and documents are optional.',
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Colors.black87,
+                    Expanded(
+                      child: Text(
+                        'Only business name, address, and category are mandatory. All other information and documents are optional.',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: Colors.black87,
+                        ),
+                        maxLines: 3,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
-                  ),
-                ),
               ],
             ),
           ),
@@ -1750,6 +1770,8 @@ class _ReviewItem extends StatelessWidget {
                 color: valueColor ?? Colors.black87,
                 fontWeight: FontWeight.w500,
               ),
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
             ),
           ),
         ],

@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:share_plus/share_plus.dart';
+import '../core/theme/color_tokens.dart';
 import '../models/service_models.dart';
 import '../services/service_service.dart';
 import '../services/review_service.dart';
@@ -27,6 +28,8 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen>
   late final ReviewService _reviewService;
   late final TabController _tabController;
   late final PageController _imagePageController;
+  final ScrollController _scrollController = ScrollController();
+  final GlobalKey _reviewsTabKey = GlobalKey();
   
   List<ServiceItem> _similarServices = <ServiceItem>[];
   VendorProfile? _vendorProfile;
@@ -63,6 +66,7 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen>
   void dispose() {
     _tabController.dispose();
     _imagePageController.dispose();
+    _scrollController.dispose();
     _reviewsChannel?.unsubscribe();
     super.dispose();
   }
@@ -190,6 +194,7 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen>
         // Add bottom padding to prevent overlap with cart button from main navigation
         padding: const EdgeInsets.only(bottom: 80),
         child: CustomScrollView(
+          controller: _scrollController,
           slivers: [
           // Enhanced App Bar with Image Gallery
           SliverAppBar(
@@ -249,7 +254,7 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen>
                 _buildTabNavigation(),
                 
                 // Tab Content
-                _buildTabContent(service),
+                _buildTabContent(service, key: _reviewsTabKey),
               ],
             ),
           ),
@@ -518,37 +523,45 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen>
           const SizedBox(height: 12),
           
           // Rating and Reviews
-          Row(
-            children: [
-              if (service.ratingAvg != null) ...[
-                Icon(
-                  Icons.star, 
-                  size: 16, 
-                  color: Theme.of(context).colorScheme.primary,
-                ),
-                const SizedBox(width: 4),
-                Text(
-                  service.ratingAvg!.toStringAsFixed(1),
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
+          Builder(
+            builder: (context) {
+              // Use dynamic rating stats instead of static service data
+              final reviewCount = _ratingStats['count'] as int? ?? 0;
+              final avgRating = (_ratingStats['averageRating'] as num?)?.toDouble() ?? 0.0;
+              
+              return Row(
+                children: [
+                  if (reviewCount > 0) ...[
+                    Icon(
+                      Icons.star, 
+                      size: 16, 
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      avgRating.toStringAsFixed(1),
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                  ],
+                  Text(
+                    reviewCount > 0
+                        ? '$reviewCount review${reviewCount == 1 ? '' : 's'}'
+                        : 'No reviews yet',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                    ),
                   ),
-                ),
-                const SizedBox(width: 8),
-              ],
-              Text(
-                service.ratingCount != null && service.ratingCount! > 0
-                    ? '${service.ratingCount} reviews'
-                    : 'No reviews yet',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
-                ),
-              ),
-              const Spacer(),
-              TextButton(
-                onPressed: () => _showAllReviews(service),
-                child: const Text('See all reviews'),
-              ),
-            ],
+                  const Spacer(),
+                  TextButton(
+                    onPressed: () => _showAllReviews(service),
+                    child: const Text('See all reviews'),
+                  ),
+                ],
+              );
+            },
           ),
           
           const SizedBox(height: 16),
@@ -721,8 +734,9 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen>
   }
 
   // Build Tab Content
-  Widget _buildTabContent(ServiceItem service) {
+  Widget _buildTabContent(ServiceItem service, {Key? key}) {
     return SizedBox(
+      key: key,
       height: 600, // Fixed height for tab content
       child: TabBarView(
         controller: _tabController,
@@ -872,11 +886,12 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen>
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
+              Text(
                 'Customer Reviews',
                 style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
+                  color: ColorTokens.textPrimary(context),
                 ),
               ),
               ElevatedButton.icon(
@@ -911,14 +926,14 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen>
                     Icon(
                       Icons.reviews_outlined,
                       size: 64,
-                      color: Colors.grey.shade400,
+                      color: ColorTokens.iconTertiary(context),
                     ),
                     const SizedBox(height: 16),
                     Text(
                       'No reviews yet',
                       style: TextStyle(
                         fontSize: 16,
-                        color: Colors.grey.shade600,
+                        color: ColorTokens.textSecondary(context),
                       ),
                     ),
                     const SizedBox(height: 8),
@@ -926,7 +941,7 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen>
                       'Be the first to review this service!',
                       style: TextStyle(
                         fontSize: 14,
-                        color: Colors.grey.shade500,
+                        color: ColorTokens.textTertiary(context),
                       ),
                     ),
                   ],
@@ -962,7 +977,7 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen>
             children: [
               CircleAvatar(
                 radius: 30,
-                backgroundColor: Colors.blue.shade100,
+                backgroundColor: ColorTokens.brandPrimary.withOpacity(0.1),
                 child: Text(
                   service.vendorName.isNotEmpty 
                       ? service.vendorName[0].toUpperCase()
@@ -970,7 +985,7 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen>
                   style: TextStyle(
                     fontSize: 24,
                     fontWeight: FontWeight.bold,
-                    color: Colors.blue.shade700,
+                    color: ColorTokens.brandPrimary,
                   ),
                 ),
               ),
@@ -1111,14 +1126,14 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen>
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: Colors.blue.shade50,
+        color: ColorTokens.brandPrimary.withOpacity(0.1),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.blue.shade200),
+        border: Border.all(color: ColorTokens.brandPrimary.withOpacity(0.3)),
       ),
       child: Text(
         tag,
         style: TextStyle(
-          color: Colors.blue.shade700,
+          color: ColorTokens.brandPrimary,
           fontSize: 12,
           fontWeight: FontWeight.w500,
         ),
@@ -1142,8 +1157,11 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen>
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: ColorTokens.bgSurface(context),
         borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: ColorTokens.borderDefault(context),
+        ),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.05),
@@ -1158,9 +1176,10 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen>
             children: [
               Text(
                 avgRating.toStringAsFixed(1),
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 32,
                   fontWeight: FontWeight.bold,
+                  color: ColorTokens.textPrimary(context),
                 ),
               ),
               const SizedBox(height: 4),
@@ -1170,15 +1189,17 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen>
                     Icons.star,
                     size: 16,
                     color: index < avgRating.round()
-                        ? Colors.amber
-                        : Colors.grey.shade300,
+                        ? Colors.amber // Keep amber for filled stars (semantic color)
+                        : ColorTokens.iconTertiary(context),
                   );
                 }),
               ),
               const SizedBox(height: 4),
               Text(
                 '$reviewCount review${reviewCount == 1 ? '' : 's'}',
-                style: const TextStyle(color: Colors.grey),
+                style: TextStyle(
+                  color: ColorTokens.textSecondary(context),
+                ),
               ),
             ],
           ),
@@ -1193,23 +1214,28 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen>
                   padding: const EdgeInsets.symmetric(vertical: 2),
                   child: Row(
                     children: [
-                      Text('$rating'),
+                      Text(
+                        '$rating',
+                        style: TextStyle(
+                          color: ColorTokens.textPrimary(context),
+                        ),
+                      ),
                       const SizedBox(width: 8),
                       Expanded(
                         child: LinearProgressIndicator(
                           value: percentage,
-                          backgroundColor: Colors.grey.shade200,
+                          backgroundColor: ColorTokens.borderDefault(context),
                           valueColor: AlwaysStoppedAnimation<Color>(
-                            Colors.amber.shade600,
+                            Colors.amber.shade600, // Keep amber for progress bars (semantic color)
                           ),
                         ),
                       ),
                       const SizedBox(width: 8),
                       Text(
                         '$count',
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 12,
-                          color: Colors.grey,
+                          color: ColorTokens.textSecondary(context),
                         ),
                       ),
                     ],
@@ -1235,9 +1261,9 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen>
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: ColorTokens.bgSurface(context),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.shade200),
+        border: Border.all(color: ColorTokens.borderDefault(context)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1246,12 +1272,12 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen>
             children: [
               CircleAvatar(
                 radius: 20,
-                backgroundColor: Colors.blue.shade100,
+                backgroundColor: ColorTokens.brandPrimary.withOpacity(0.1),
                 child: Text(
                   name.isNotEmpty ? name[0].toUpperCase() : '?',
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
-                    color: Colors.blue.shade700,
+                    color: ColorTokens.brandPrimary,
                   ),
                 ),
               ),
@@ -1265,9 +1291,10 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen>
                         Expanded(
                           child: Text(
                             name,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontWeight: FontWeight.w600,
                               fontSize: 16,
+                              color: ColorTokens.textPrimary(context),
                             ),
                           ),
                         ),
@@ -1291,16 +1318,16 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen>
                               Icons.star,
                               size: 14,
                               color: index < rating
-                                  ? Colors.amber
-                                  : Colors.grey.shade300,
+                                  ? Colors.amber // Keep amber for filled stars (semantic color)
+                                  : ColorTokens.iconTertiary(context),
                             );
                           }),
                         ),
                         const SizedBox(width: 8),
                         Text(
                           date,
-                          style: const TextStyle(
-                            color: Colors.grey,
+                          style: TextStyle(
+                            color: ColorTokens.textTertiary(context),
                             fontSize: 12,
                           ),
                         ),
@@ -1314,7 +1341,11 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen>
           const SizedBox(height: 12),
           Text(
             review,
-            style: const TextStyle(fontSize: 14, height: 1.4),
+            style: TextStyle(
+              fontSize: 14,
+              height: 1.4,
+              color: ColorTokens.textPrimary(context),
+            ),
           ),
         ],
       ),
@@ -1560,14 +1591,34 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen>
                           ),
                         ),
                         const Spacer(),
-                        if (service.ratingAvg != null) ...[
-                          Icon(Icons.star, size: 14, color: Colors.amber.shade600),
-                          const SizedBox(width: 2),
-                          Text(
-                            service.ratingAvg!.toStringAsFixed(1),
-                            style: const TextStyle(fontSize: 12),
-                          ),
-                        ],
+                        Builder(
+                          builder: (context) {
+                            // For similar services, we don't have loaded ratings, so use service data or show N/A
+                            if (service.ratingCount == null || service.ratingCount == 0) {
+                              return const Row(
+                                children: [
+                                  Icon(Icons.star, size: 14, color: Colors.grey),
+                                  SizedBox(width: 2),
+                                  Text(
+                                    'N/A',
+                                    style: TextStyle(fontSize: 12, color: Colors.grey),
+                                  ),
+                                ],
+                              );
+                            }
+                            
+                            return Row(
+                              children: [
+                                Icon(Icons.star, size: 14, color: Colors.amber.shade600),
+                                const SizedBox(width: 2),
+                                Text(
+                                  (service.ratingAvg ?? 0.0).toStringAsFixed(1),
+                                  style: const TextStyle(fontSize: 12),
+                                ),
+                              ],
+                            );
+                          },
+                        ),
                       ],
                     ),
                   ],
@@ -1928,10 +1979,22 @@ Tap the link above to view and book on Saral Events! 🎉''';
   }
 
   void _showAllReviews(ServiceItem service) {
-    // Navigate to reviews screen
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Reviews screen coming soon!')),
-    );
+    // Switch to Reviews tab (index 1)
+    if (_tabController.index != 1) {
+      _tabController.animateTo(1);
+    }
+    
+    // Scroll to the Reviews tab section after a short delay to allow tab animation
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_reviewsTabKey.currentContext != null) {
+        Scrollable.ensureVisible(
+          _reviewsTabKey.currentContext!,
+          duration: const Duration(milliseconds: 500),
+          curve: Curves.easeInOut,
+          alignment: 0.0, // Align to top of the widget
+        );
+      }
+    });
   }
 
 }

@@ -372,7 +372,7 @@ class _AvailabilityCalendarState extends State<AvailabilityCalendar> {
     final status = await showDialog<DayStatus>(
       context: context,
       builder: (ctx) => SimpleDialog(
-        title: Text('Set ${DateFormat('EEE, MMM d').format(day)}'),
+        title: Text('Set ${DateFormat('EEE, MMM d').format(day)}', maxLines: 2, overflow: TextOverflow.ellipsis),
         children: [
           SimpleDialogOption(
             onPressed: () => Navigator.pop(ctx, DayStatus.available),
@@ -438,9 +438,13 @@ class _AvailabilityCalendarState extends State<AvailabilityCalendar> {
               Widget slotsChecklist(Set<DaySlot> target, {Color? color}) {
                 Widget tile(DaySlot s) => CheckboxListTile(
                   value: target.contains(s),
-                  onChanged: (v) => setS(() { if (v == true) target.add(s); else target.remove(s); }),
-                  title: Text(slotLabel(s)),
-                  subtitle: Text(slotTimeLabel(s)),
+                  onChanged: (v) => setS(() { if (v == true) {
+                    target.add(s);
+                  } else {
+                    target.remove(s);
+                  } }),
+                  title: Text(slotLabel(s), maxLines: 1, overflow: TextOverflow.ellipsis),
+                  subtitle: Text(slotTimeLabel(s), maxLines: 1, overflow: TextOverflow.ellipsis),
                   dense: true,
                   controlAffinity: ListTileControlAffinity.leading,
                   activeColor: color ?? Theme.of(context).colorScheme.primary,
@@ -526,7 +530,7 @@ class _AvailabilityCalendarState extends State<AvailabilityCalendar> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Edit ${DateFormat('EEE, MMM d').format(day)}', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
+                Text('Edit ${DateFormat('EEE, MMM d').format(day)}', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700), maxLines: 2, overflow: TextOverflow.ellipsis),
                 const SizedBox(height: 12),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -725,7 +729,7 @@ class _AvailabilityCalendarState extends State<AvailabilityCalendar> {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(monthLabel, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
+              Flexible(child: Text(monthLabel, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700), maxLines: 1, overflow: TextOverflow.ellipsis)),
               Row(
                 children: [
                   IconButton(icon: const Icon(Icons.chevron_left), onPressed: _loading ? null : () => _changeMonth(-1)),
@@ -909,9 +913,9 @@ class _PartialDetailsCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Partially Available', style: TextStyle(fontWeight: FontWeight.w700)),
+                const Text('Partially Available', style: TextStyle(fontWeight: FontWeight.w700), maxLines: 1, overflow: TextOverflow.ellipsis),
                 const SizedBox(height: 4),
-                Text(_humanize(overrideFor)),
+                Text(_humanize(overrideFor), maxLines: 3, overflow: TextOverflow.ellipsis),
               ],
             ),
           ),

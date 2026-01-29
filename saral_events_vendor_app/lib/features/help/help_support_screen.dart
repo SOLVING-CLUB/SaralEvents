@@ -135,7 +135,7 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
       final ticketData = {
         'user_id': userId,
         'vendor_id': vendorId,
-        'subject': 'Vendor Support Request: ${_issueType}',
+        'subject': 'Vendor Support Request: $_issueType',
         'message': _issueDescriptionController.text.trim(),
         'category': _issueType == 'payment' ? 'Payment/Refund' : 
                    _issueType == 'booking' ? 'Booking Issue' :
@@ -320,6 +320,8 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
                       fontSize: 14,
                       color: Colors.grey[700],
                     ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ],
               ),
@@ -399,9 +401,11 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
                     });
                   }
                   return ListTile(
-                    title: Text(
+                    title:                     Text(
                       faq.question,
                       style: const TextStyle(fontWeight: FontWeight.w600),
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
                     ),
                     subtitle: faq.category != 'General'
                         ? Text(
@@ -419,7 +423,7 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(faq.answer),
+                      Text(faq.answer, maxLines: 20, overflow: TextOverflow.ellipsis),
                       const SizedBox(height: 12),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.end,
@@ -576,12 +580,13 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
                     label: Text(_issueAttachment == null ? 'Attach screenshot (optional)' : 'Change attachment'),
                   ),
                   const SizedBox(width: 12),
-                  if (_issueAttachment != null)
+                    if (_issueAttachment != null)
                     Expanded(
                       child: Text(
                         _issueAttachment!.path.split('/').last,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(fontSize: 12, color: Colors.grey),
+                        maxLines: 1,
                       ),
                     ),
                 ],

@@ -309,7 +309,7 @@ class _ServicesScreenState extends State<ServicesScreen> with TickerProviderStat
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Delete Services'),
-        content: Text('Delete ${_selectedServiceIds.length} service(s) and ${_selectedCategoryIds.length} categor${_selectedCategoryIds.length == 1 ? 'y' : 'ies'}?'),
+        content: Text('Delete ${_selectedServiceIds.length} service(s) and ${_selectedCategoryIds.length} categor${_selectedCategoryIds.length == 1 ? 'y' : 'ies'}?', maxLines: 3, overflow: TextOverflow.ellipsis),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
           FilledButton(
@@ -383,7 +383,7 @@ class _ServicesScreenState extends State<ServicesScreen> with TickerProviderStat
           value: targetId,
           items: [
             const DropdownMenuItem(value: 'root', child: Text('Root (No Category)')),
-            ...filteredCategories.map((cat) => DropdownMenuItem(value: cat.id, child: Text(cat.name))),
+            ...filteredCategories.map((cat) => DropdownMenuItem(value: cat.id, child: Text(cat.name, maxLines: 1, overflow: TextOverflow.ellipsis))),
           ],
           onChanged: (v) => targetId = v ?? targetId,
           decoration: const InputDecoration(labelText: 'Select Category', border: OutlineInputBorder()),
@@ -597,7 +597,7 @@ class _ServicesScreenState extends State<ServicesScreen> with TickerProviderStat
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'Query: "${_query}"',
+                        'Query: "$_query"',
                         style: const TextStyle(color: Colors.grey),
                       ),
                       const SizedBox(height: 8),
@@ -656,7 +656,7 @@ class _ServicesScreenState extends State<ServicesScreen> with TickerProviderStat
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Delete Service'),
-        content: Text('Delete service "${item.name}"?'),
+        content: Text('Delete service "${item.name}"?', maxLines: 3, overflow: TextOverflow.ellipsis),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
           FilledButton(
@@ -832,7 +832,7 @@ class _ServicesScreenState extends State<ServicesScreen> with TickerProviderStat
         context: context,
         builder: (context) => AlertDialog(
           title: const Text('Delete Category'),
-          content: Text('Delete empty category "${category.name}"?'),
+          content: Text('Delete empty category "${category.name}"?', maxLines: 3, overflow: TextOverflow.ellipsis),
           actions: [
             TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
             FilledButton(
@@ -889,7 +889,7 @@ class _ServicesScreenState extends State<ServicesScreen> with TickerProviderStat
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text('Move "${service.name}" to:'),
+            Text('Move "${service.name}" to:', maxLines: 2, overflow: TextOverflow.ellipsis),
             const SizedBox(height: 16),
             DropdownButtonFormField<String>(
               value: selectedCategoryId,
@@ -900,7 +900,7 @@ class _ServicesScreenState extends State<ServicesScreen> with TickerProviderStat
                 ),
                 ...filteredCategories.map((cat) => DropdownMenuItem(
                   value: cat.id,
-                  child: Text(cat.name),
+                  child: Text(cat.name, maxLines: 1, overflow: TextOverflow.ellipsis),
                 )),
               ],
               onChanged: (value) => selectedCategoryId = value ?? selectedCategoryId,
@@ -1236,12 +1236,13 @@ class _ServiceCardState extends State<_ServiceCard> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(widget.item.name, style: const TextStyle(fontWeight: FontWeight.w600)),
+                      Text(widget.item.name, style: const TextStyle(fontWeight: FontWeight.w600), maxLines: 2, overflow: TextOverflow.ellipsis),
                       const SizedBox(height: 4),
-                      Text('₹${widget.item.price}', style: const TextStyle(fontWeight: FontWeight.w700)),
+                      Text('₹${widget.item.price}', style: const TextStyle(fontWeight: FontWeight.w700), maxLines: 1, overflow: TextOverflow.ellipsis),
                     ],
                   ),
                 ),
+                const SizedBox(width: 8),
                 Switch(
                   value: widget.item.enabled,
                   onChanged: (v) async {
@@ -1256,7 +1257,7 @@ class _ServiceCardState extends State<_ServiceCard> {
                 spacing: 6,
                 runSpacing: 6,
                 children: widget.item.tags
-                    .map((t) => Chip(label: Text(t), materialTapTargetSize: MaterialTapTargetSize.shrinkWrap))
+                    .map((t) => Chip(label: Text(t, maxLines: 1, overflow: TextOverflow.ellipsis), materialTapTargetSize: MaterialTapTargetSize.shrinkWrap))
                     .toList(),
               ),
             const SizedBox(height: 8),
@@ -1335,24 +1336,29 @@ class _ServiceCardState extends State<_ServiceCard> {
                     ],
                   ],
                 ),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    TextButton(onPressed: widget.onEdit ?? widget.onOpen, child: const Text('Edit')),
-                    if (widget.onOpenAvailability != null)
-                      TextButton(onPressed: widget.onOpenAvailability, child: const Text('Availability')),
-                    TextButton(
-                      onPressed: () async {
-                        final link = 'https://example.com/service/${widget.item.id}';
-                        await Clipboard.setData(ClipboardData(text: link));
-                        if (mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Link copied to clipboard')));
-                        }
-                      },
-                      child: const Text('Share'),
+                Flexible(
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        TextButton(onPressed: widget.onEdit ?? widget.onOpen, child: const Text('Edit')),
+                        if (widget.onOpenAvailability != null)
+                          TextButton(onPressed: widget.onOpenAvailability, child: const Text('Availability')),
+                        TextButton(
+                          onPressed: () async {
+                            final link = 'https://example.com/service/${widget.item.id}';
+                            await Clipboard.setData(ClipboardData(text: link));
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Link copied to clipboard')));
+                            }
+                          },
+                          child: const Text('Share'),
+                        ),
+                        FilledButton.tonal(onPressed: widget.onOpen, child: const Text('Open')),
+                      ],
                     ),
-                    FilledButton.tonal(onPressed: widget.onOpen, child: const Text('Open')),
-                  ],
+                  ),
                 ),
               ],
             )
@@ -1413,10 +1419,11 @@ class _ServiceCardWithCategory extends StatelessWidget {
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(item.name, style: const TextStyle(fontWeight: FontWeight.w600)),
+                      Text(item.name, style: const TextStyle(fontWeight: FontWeight.w600), maxLines: 2, overflow: TextOverflow.ellipsis),
                       const SizedBox(height: 4),
-                      Text('₹${item.price}', style: const TextStyle(fontWeight: FontWeight.w700)),
+                      Text('₹${item.price}', style: const TextStyle(fontWeight: FontWeight.w700), maxLines: 1, overflow: TextOverflow.ellipsis),
                       const SizedBox(height: 4),
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -1431,12 +1438,16 @@ class _ServiceCardWithCategory extends StatelessWidget {
                             fontSize: 12,
                             fontWeight: FontWeight.w500,
                           ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
                     ],
                   ),
                 ),
+                const SizedBox(width: 8),
                 Column(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     Switch(
                       value: item.enabled,
@@ -1473,7 +1484,7 @@ class _ServiceCardWithCategory extends StatelessWidget {
                 spacing: 6,
                 runSpacing: 6,
                 children: item.tags
-                    .map((t) => Chip(label: Text(t), materialTapTargetSize: MaterialTapTargetSize.shrinkWrap))
+                    .map((t) => Chip(label: Text(t, maxLines: 1, overflow: TextOverflow.ellipsis), materialTapTargetSize: MaterialTapTargetSize.shrinkWrap))
                     .toList(),
               ),
             const SizedBox(height: 8),
@@ -1499,12 +1510,17 @@ class _ServiceCardWithCategory extends StatelessWidget {
                     ),
                   ],
                 ),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    TextButton(onPressed: onEdit ?? onOpen, child: const Text('Edit')),
-                    FilledButton.tonal(onPressed: onOpen, child: const Text('Open')),
-                  ],
+                Flexible(
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        TextButton(onPressed: onEdit ?? onOpen, child: const Text('Edit')),
+                        FilledButton.tonal(onPressed: onOpen, child: const Text('Open')),
+                      ],
+                    ),
+                  ),
                 ),
               ],
             )
@@ -1584,7 +1600,7 @@ class _ServiceDetailsPageState extends State<ServiceDetailsPage> {
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
     return Scaffold(
-      appBar: AppBar(title: Text(widget.item.name)),
+      appBar: AppBar(title: Text(widget.item.name, maxLines: 1, overflow: TextOverflow.ellipsis)),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -1624,10 +1640,14 @@ class _ServiceDetailsPageState extends State<ServiceDetailsPage> {
               Wrap(
                 spacing: 6,
                 runSpacing: 6,
-                children: widget.item.tags.map((t) => Chip(label: Text(t))).toList(),
+                children: widget.item.tags.map((t) => Chip(label: Text(t, maxLines: 1, overflow: TextOverflow.ellipsis))).toList(),
               ),
             const SizedBox(height: 12),
-            Text(widget.item.description),
+            Text(
+              widget.item.description,
+              maxLines: 10,
+              overflow: TextOverflow.ellipsis,
+            ),
             const SizedBox(height: 24),
             // Availability section for existing service (view mode with Edit)
             Container(
@@ -1881,7 +1901,7 @@ class _EditServicePageState extends State<_EditServicePage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.item.name),
+        title: Text(widget.item.name, maxLines: 1, overflow: TextOverflow.ellipsis),
         actions: [
           TextButton(onPressed: _save, child: const Text('Save')),
         ],
@@ -2078,9 +2098,9 @@ class _FolderLikeCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(title, style: const TextStyle(fontWeight: FontWeight.w600), overflow: TextOverflow.ellipsis),
+                    Text(title, style: const TextStyle(fontWeight: FontWeight.w600), maxLines: 2, overflow: TextOverflow.ellipsis),
                     const SizedBox(height: 4),
-                    Text(subtitle, style: const TextStyle(color: Colors.black54), overflow: TextOverflow.ellipsis),
+                    Text(subtitle, style: const TextStyle(color: Colors.black54), maxLines: 2, overflow: TextOverflow.ellipsis),
                   ],
                 ),
               ),

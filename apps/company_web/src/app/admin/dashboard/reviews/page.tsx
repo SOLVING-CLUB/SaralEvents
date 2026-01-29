@@ -16,6 +16,8 @@ interface Review {
   service_id: string | null
   vendor_id: string | null
   user_name?: string | null
+  service_name?: string | null
+  vendor_name?: string | null
   profiles?: { full_name: string } | null
   services?: { name: string } | null
   vendor_profiles?: { business_name: string } | null
@@ -30,6 +32,8 @@ export default function ReviewsPage() {
   const [ratingFilter, setRatingFilter] = useState<number | 'all'>('all')
    // Filter by vendor and quickly see bad reviews
   const [vendorFilter, setVendorFilter] = useState<string>('all')
+  const [selectedServiceName, setSelectedServiceName] = useState<string | null>(null)
+  const [showVendorBrowser, setShowVendorBrowser] = useState(false)
   const [showNegativeOnly, setShowNegativeOnly] = useState(false)
   const channelRef = useRef<RealtimeChannel | null>(null)
 
@@ -77,6 +81,8 @@ export default function ReviewsPage() {
         service_id,
         vendor_id,
         user_name,
+        service_name,
+        vendor_name,
         profiles(full_name),
         services!service_reviews_service_id_fkey(name),
         vendor_profiles!service_reviews_vendor_id_fkey(business_name)
@@ -106,7 +112,16 @@ export default function ReviewsPage() {
   }
 
   const filteredReviews = reviews.filter(review => {
-    if (vendorFilter !== 'all' && review.vendor_profiles?.business_name !== vendorFilter) {
+    const vendorName =
+      review.vendor_profiles?.business_name ||
+      review.vendor_name ||
+      null
+
+    if (vendorFilter !== 'all' && vendorName !== vendorFilter) {
+      return false
+    }
+    const serviceName = review.services?.name || review.service_name || null
+    if (selectedServiceName && serviceName !== selectedServiceName) {
       return false
     }
     if (showNegativeOnly && review.rating > 2) {
@@ -116,8 +131,10 @@ export default function ReviewsPage() {
     if (search) {
       const q = search.toLowerCase()
       const userName = review.profiles?.full_name?.toLowerCase() || ''
-      const serviceName = review.services?.name?.toLowerCase() || ''
-      const vendorName = review.vendor_profiles?.business_name?.toLowerCase() || ''
+      const serviceName =
+        (review.services?.name || review.service_name || '').toLowerCase()
+      const vendorName =
+        (review.vendor_profiles?.business_name || review.vendor_name || '').toLowerCase()
       const comment = review.comment?.toLowerCase() || ''
       if (!userName.includes(q) && !serviceName.includes(q) && !vendorName.includes(q) && !comment.includes(q)) {
         return false
@@ -129,10 +146,60 @@ export default function ReviewsPage() {
   const vendorOptions = Array.from(
     new Set(
       reviews
-        .map((r) => r.vendor_profiles?.business_name || null)
+        .map((r) => r.vendor_profiles?.business_name || r.vendor_name || null)
         .filter((v): v is string => !!v)
     )
   ).sort()
+
+  // Build vendor -> services summaries (for drilldown UI)
+  const vendorSummaries = vendorOptions.map((vendorName) => {
+    const vendorReviews = reviews.filter((review) => {
+      const vrVendorName =
+        review.vendor_profiles?.business_name || review.vendor_name || null
+      return vrVendorName === vendorName
+    })
+
+    const vendorAvg =
+      vendorReviews.length > 0
+        ? vendorReviews.reduce((sum, r) => sum + r.rating, 0) / vendorReviews.length
+        : 0
+
+    const serviceNames = Array.from(
+      new Set(
+        vendorReviews
+          .map(
+            (r) =>
+              r.services?.name ||
+              r.service_name ||
+              null
+          )
+          .filter((s): s is string => !!s)
+      )
+    ).sort()
+
+    const services = serviceNames.map((serviceName) => {
+      const serviceReviews = vendorReviews.filter((r) => {
+        const rServiceName = r.services?.name || r.service_name || null
+        return rServiceName === serviceName
+      })
+      const serviceAvg =
+        serviceReviews.length > 0
+          ? serviceReviews.reduce((sum, r) => sum + r.rating, 0) / serviceReviews.length
+          : 0
+      return {
+        name: serviceName,
+        averageRating: serviceAvg,
+        reviewCount: serviceReviews.length,
+      }
+    })
+
+    return {
+      name: vendorName,
+      averageRating: vendorAvg,
+      reviewCount: vendorReviews.length,
+      services,
+    }
+  })
 
   const overallAvgRating = reviews.length > 0 
     ? (reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length).toFixed(1)
@@ -277,18 +344,13 @@ export default function ReviewsPage() {
 
             <div className="flex items-center gap-2">
               <span className="text-sm text-gray-600">Vendor</span>
-              <select
-                className="h-10 rounded-md border border-input bg-background px-3 text-sm"
-                value={vendorFilter}
-                onChange={(e) => setVendorFilter(e.target.value)}
+              <Button
+                variant="outline"
+                className="h-10 px-3 text-sm"
+                onClick={() => setShowVendorBrowser((prev) => !prev)}
               >
-                <option value="all">All vendors</option>
-                {vendorOptions.map((name) => (
-                  <option key={name} value={name}>
-                    {name}
-                  </option>
-                ))}
-              </select>
+                {vendorFilter === 'all' ? 'All vendors' : vendorFilter}
+              </Button>
             </div>
 
             <label className="flex items-center gap-2 text-sm text-gray-700">
@@ -303,6 +365,101 @@ export default function ReviewsPage() {
           </div>
         </div>
       </div>
+
+      {/* Vendor → Service drilldown browser */}
+      {showVendorBrowser && vendorSummaries.length > 0 && (
+        <div className="bg-white p-4 rounded-lg border border-gray-200">
+          <div className="flex flex-col md:flex-row gap-6">
+            {/* Vendors list */}
+            <div className="md:w-1/3 space-y-2">
+              <h3 className="text-sm font-semibold text-gray-700 mb-2">Vendors</h3>
+              <button
+                type="button"
+                className={`w-full text-left px-3 py-2 rounded-md text-sm ${
+                  vendorFilter === 'all'
+                    ? 'bg-blue-50 text-blue-700 border border-blue-200'
+                    : 'hover:bg-gray-50 text-gray-700 border border-transparent'
+                }`}
+                onClick={() => {
+                  setVendorFilter('all')
+                  setSelectedServiceName(null)
+                }}
+              >
+                All vendors
+              </button>
+              {vendorSummaries.map((vendor) => (
+                <button
+                  key={vendor.name}
+                  type="button"
+                  className={`w-full text-left px-3 py-2 rounded-md text-sm border ${
+                    vendorFilter === vendor.name
+                      ? 'bg-blue-50 text-blue-700 border-blue-300'
+                      : 'bg-white text-gray-700 hover:bg-gray-50 border-gray-200'
+                  }`}
+                  onClick={() => {
+                    setVendorFilter(vendor.name)
+                    setSelectedServiceName(null)
+                  }}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="font-medium">{vendor.name}</span>
+                    <span className="text-xs text-gray-500">
+                      {vendor.averageRating.toFixed(1)}★ ({vendor.reviewCount})
+                    </span>
+                  </div>
+                </button>
+              ))}
+            </div>
+
+            {/* Services for selected vendor */}
+            <div className="md:flex-1">
+              <h3 className="text-sm font-semibold text-gray-700 mb-2">
+                {vendorFilter === 'all' ? 'Services (all vendors)' : `Services for ${vendorFilter}`}
+              </h3>
+              <div className="space-y-2">
+                {(vendorFilter === 'all'
+                  ? vendorSummaries.flatMap((vendor) =>
+                      vendor.services.map((service) => ({
+                        ...service,
+                        vendorName: vendor.name,
+                      }))
+                    )
+                  : vendorSummaries
+                      .find((v) => v.name === vendorFilter)
+                      ?.services.map((service) => ({
+                        ...service,
+                        vendorName: vendorFilter,
+                      })) || []
+                ).map((service) => (
+                  <button
+                    key={`${service.vendorName}-${service.name}`}
+                    type="button"
+                    className={`w-full text-left px-3 py-2 rounded-md text-sm border ${
+                      selectedServiceName === service.name
+                        ? 'bg-green-50 text-green-700 border-green-300'
+                        : 'bg-white text-gray-700 hover:bg-gray-50 border-gray-200'
+                    }`}
+                    onClick={() => setSelectedServiceName(service.name)}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <span className="font-medium">{service.name}</span>
+                        <span className="ml-2 text-xs text-gray-500">
+                          ({service.vendorName})
+                        </span>
+                      </div>
+                      <span className="text-xs text-gray-500">
+                        {service.averageRating.toFixed(1)}★ ({service.reviewCount})
+                      </span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )
+      }
 
       {/* Reviews List */}
       <div className="bg-white rounded-lg border border-gray-200">
@@ -336,8 +493,14 @@ export default function ReviewsPage() {
                       </div>
                     </div>
                     <div className="text-sm text-gray-500 mb-2">
-                      Service: {review.services?.name || 'N/A'} • 
-                      Vendor: {review.vendor_profiles?.business_name || 'N/A'}
+                      Service:{' '}
+                      {review.services?.name ||
+                        review.service_name ||
+                        'N/A'}{' '}
+                      • Vendor:{' '}
+                      {review.vendor_profiles?.business_name ||
+                        review.vendor_name ||
+                        'N/A'}
                     </div>
                     {review.comment && (
                       <p className="text-gray-700">{review.comment}</p>

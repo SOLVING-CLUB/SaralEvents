@@ -430,6 +430,7 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
           children: [
             // Status Card
             Card(
@@ -466,6 +467,7 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
                         children: [
                           Text(
                             'Order Status',
@@ -524,12 +526,15 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
               icon: Icons.room_service,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
                     serviceName,
                     style: Theme.of(context).textTheme.titleLarge?.copyWith(
                       fontWeight: FontWeight.bold,
                     ),
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
                   ),
                   if (serviceDescription != null && serviceDescription.isNotEmpty) ...[
                     const SizedBox(height: 8),
@@ -538,16 +543,22 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                         color: Colors.grey[700],
                       ),
+                      maxLines: 5,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ],
                   const SizedBox(height: 16),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(
-                        'Total Amount',
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: Colors.grey[700],
+                      Flexible(
+                        child: Text(
+                          'Total Amount',
+                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: Colors.grey[700],
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
                       Text(
@@ -571,6 +582,7 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
               icon: Icons.person,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   _buildInfoRow('Name', customerName),
                   if (customerEmail != null && customerEmail.isNotEmpty)
@@ -589,6 +601,7 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
               icon: Icons.receipt_long,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   _buildCopyableInfoRow('Booking ID', bookingId),
                   if (orderId != null && orderId.isNotEmpty)
@@ -606,6 +619,7 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
                 icon: Icons.location_on,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     const SizedBox(height: 8),
                     InkWell(
@@ -628,6 +642,7 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisSize: MainAxisSize.min,
                                 children: [
                                   const Text(
                                     'View Location on Maps',
@@ -666,6 +681,7 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
               icon: Icons.event,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   _buildInfoRow('Date', _formatDate(bookingDate)),
                   _buildInfoRow('Time', _formatTime(bookingTime)),
@@ -685,6 +701,7 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
                 title: 'Payment Milestones',
                 icon: Icons.payment,
                 child: Column(
+                  mainAxisSize: MainAxisSize.min,
                   children: paymentMilestones.asMap().entries.map((entry) {
                     final milestone = entry.value as Map<String, dynamic>;
                     final milestoneType = milestone['milestone_type'] as String? ?? '';
@@ -753,9 +770,11 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
               _buildSection(
                 title: 'Notes',
                 icon: Icons.note,
-                child: Text(
+                child:                 Text(
                   notes,
                   style: Theme.of(context).textTheme.bodyMedium,
+                  maxLines: 10,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
             ],
@@ -1060,6 +1079,7 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
           children: [
             Row(
               children: [
@@ -1102,6 +1122,8 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                 fontWeight: FontWeight.w500,
               ),
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
             ),
           ),
         ],
@@ -1165,15 +1187,17 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
       context: context,
       barrierDismissible: false,
       builder: (context) => AlertDialog(
-        title: const Row(
+        title: Row(
           children: [
-            Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 28),
-            SizedBox(width: 12),
-            Expanded(child: Text('Cancel Booking?')),
+            const Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 28),
+            const SizedBox(width: 12),
+            Expanded(child: Text('Cancel Booking?', maxLines: 2, overflow: TextOverflow.ellipsis)),
           ],
         ),
-        content: const Text(
+        content: Text(
           'Are you sure you want to cancel this booking? This action will trigger a full refund to the customer.',
+          maxLines: 5,
+          overflow: TextOverflow.ellipsis,
         ),
         actions: [
           TextButton(
@@ -1200,11 +1224,11 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
       context: context,
       barrierDismissible: false,
       builder: (context) => AlertDialog(
-        title: const Row(
+        title: Row(
           children: [
-            Icon(Icons.error_outline, color: Colors.red, size: 28),
-            SizedBox(width: 12),
-            Expanded(child: Text('Final Confirmation')),
+            const Icon(Icons.error_outline, color: Colors.red, size: 28),
+            const SizedBox(width: 12),
+            Expanded(child: Text('Final Confirmation', maxLines: 2, overflow: TextOverflow.ellipsis)),
           ],
         ),
         content: SingleChildScrollView(
@@ -1212,9 +1236,11 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
+              Text(
                 'This action cannot be undone. Are you absolutely sure you want to cancel this booking?',
-                style: TextStyle(fontWeight: FontWeight.bold),
+                style: const TextStyle(fontWeight: FontWeight.bold),
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
               ),
               const SizedBox(height: 16),
               

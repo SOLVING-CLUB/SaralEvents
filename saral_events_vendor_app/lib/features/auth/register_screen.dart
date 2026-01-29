@@ -85,9 +85,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       mainAxisAlignment: MainAxisAlignment.end,
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Create Account', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800, color: Colors.black87)),
+                        Text('Create Account', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800, color: Colors.black87), maxLines: 2, overflow: TextOverflow.ellipsis),
                         const SizedBox(height: 6),
-                        Text('Start your minis storefront in minutes', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.black87)),
+                        Text('Start your minis storefront in minutes', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.black87), maxLines: 2, overflow: TextOverflow.ellipsis),
                       ],
                     ),
                   ),
@@ -170,13 +170,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       ),
                       const SizedBox(height: 12),
                       Row(
-                        children: const [
-                          Expanded(child: Divider()),
+                        children: [
+                          const Expanded(child: Divider()),
                           Padding(
-                            padding: EdgeInsets.symmetric(horizontal: 8.0),
-                            child: Text('or continue with'),
+                            padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                            child: Text('or continue with', maxLines: 1, overflow: TextOverflow.ellipsis),
                           ),
-                          Expanded(child: Divider()),
+                          const Expanded(child: Divider()),
                         ],
                       ),
                       const SizedBox(height: 12),
@@ -209,7 +209,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             children: [
                               SvgPicture.asset('assets/icons/google_logo.svg', width: 18, height: 18),
                               const SizedBox(width: 8),
-                              const Text('Continue with Google'),
+                              Flexible(child: Text('Continue with Google', maxLines: 1, overflow: TextOverflow.ellipsis)),
                             ],
                           ),
                         ),
@@ -218,7 +218,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          const Text('Already have an account? '),
+                          Flexible(child: Text('Already have an account? ', maxLines: 1, overflow: TextOverflow.ellipsis)),
                           TextButton(
                             onPressed: () => context.go('/auth/login'),
                             child: const Text('Login'),

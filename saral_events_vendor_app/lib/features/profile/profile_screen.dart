@@ -21,7 +21,7 @@ class ProfileScreen extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           Center(
-            child: Text('Vendor', style: Theme.of(context).textTheme.titleMedium),
+            child: Text('Vendor', style: Theme.of(context).textTheme.titleMedium, maxLines: 1, overflow: TextOverflow.ellipsis),
           ),
           const SizedBox(height: 24),
           ListTile(

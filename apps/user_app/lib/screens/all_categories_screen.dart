@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../core/theme/color_tokens.dart';
 import 'catalog_screen.dart';
 
 class AllCategoriesScreen extends StatelessWidget {
@@ -47,7 +48,7 @@ class AllCategoriesScreen extends StatelessWidget {
             fontSize: 24,
           ),
         ),
-        backgroundColor: Colors.white,
+        backgroundColor: ColorTokens.bgApp(context),
         elevation: 0,
       ),
       body: ListView.builder(

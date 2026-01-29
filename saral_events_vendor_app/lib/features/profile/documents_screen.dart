@@ -5,7 +5,6 @@ import '../vendor_setup/vendor_service.dart';
 import '../vendor_setup/vendor_models.dart';
 import '../../core/theme/app_theme.dart';
 import 'package:flutter/foundation.dart';
-import 'package:photo_view/photo_view.dart';
 import 'package:pdfx/pdfx.dart';
 import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
@@ -88,7 +87,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
                       backgroundColor: isPdf ? Colors.red.shade50 : Colors.green.shade50,
                       child: Icon(isPdf ? Icons.picture_as_pdf : Icons.image, color: isPdf ? Colors.red.shade400 : Colors.green.shade400),
                     ),
-                    title: Text(d.documentType, style: const TextStyle(fontWeight: FontWeight.w600)),
+                    title: Text(d.documentType, style: const TextStyle(fontWeight: FontWeight.w600), maxLines: 2, overflow: TextOverflow.ellipsis),
                     subtitle: Text(d.fileName, maxLines: 1, overflow: TextOverflow.ellipsis),
                     trailing: IconButton(
                       icon: const Icon(Icons.visibility, color: Colors.black),
@@ -136,7 +135,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
                     Icon(isPdf ? Icons.picture_as_pdf : Icons.image, color: AppColors.primary),
                     const SizedBox(width: 12),
                     Expanded(
-                      child: Text(doc.fileName, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w600)),
+                      child: Text(doc.fileName, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w600)),
                     ),
                     IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close))
                   ],

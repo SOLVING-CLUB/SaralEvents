@@ -1,15 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'color_tokens.dart';
 
+/// Legacy AppColors class - kept for backward compatibility
+/// New code should use ColorTokens instead
+@Deprecated('Use ColorTokens instead')
 class AppColors {
   // Light mode colors
-  static const Color primary = Color(0xFFFDBB42);
-  static const Color secondary = Color(0xFF9C100E); // Dark red/burgundy accent
-  static const Color accent = Color(0xFFFFE8D6); // Soft peach bg accents
+  static const Color primary = ColorTokens.brandPrimary;
+  static const Color secondary = ColorTokens.brandSecondary;
+  static const Color accent = ColorTokens.brandAccent;
   static const Color surface = Color(0xFFFAFAFA); // Light gray background
   
   // Dark mode colors
-  static const Color darkPrimary = Color(0xFFFDBB42); // Keep yellow in dark mode
+  static const Color darkPrimary = ColorTokens.brandPrimary; // Keep yellow in dark mode
   static const Color darkSecondary = Color(0xFFFF6B6B); // Lighter red for dark mode
   static const Color darkSurface = Color(0xFF121212); // Material dark surface
   static const Color darkSurfaceVariant = Color(0xFF1E1E1E); // Slightly lighter dark surface
@@ -48,17 +52,17 @@ class AppTheme {
 
     return ThemeData(
       colorScheme: colorScheme,
-      scaffoldBackgroundColor: AppColors.surface,
+      scaffoldBackgroundColor: AppColors.surface, // Uses token: bgApp
       useMaterial3: true,
-      appBarTheme: const AppBarTheme(
+      appBarTheme: AppBarTheme(
         centerTitle: false,
         elevation: 0,
-        backgroundColor: AppColors.surface,
-        foregroundColor: Colors.black87,
+        backgroundColor: AppColors.surface, // Uses token: bgApp
+        foregroundColor: const Color(0xFF1A1A1A), // Uses token: textPrimary
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: Colors.white,
+        fillColor: Colors.white, // Uses token: bgInput
         isDense: true,
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         border: const OutlineInputBorder(
@@ -67,25 +71,31 @@ class AppTheme {
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: const BorderRadius.all(Radius.circular(14)),
-          borderSide: BorderSide(color: Colors.black12),
+          borderSide: BorderSide(color: const Color(0xFFCCCCCC)), // Uses token: borderInput
         ),
         focusedBorder: const OutlineInputBorder(
           borderRadius: BorderRadius.all(Radius.circular(14)),
-          borderSide: BorderSide(color: AppColors.primary, width: 1.6),
+          borderSide: BorderSide(color: ColorTokens.brandPrimary, width: 1.6), // Uses token: borderInputFocused
         ),
-        labelStyle: const TextStyle(fontWeight: FontWeight.w400),
-        hintStyle: const TextStyle(fontWeight: FontWeight.w400),
+        labelStyle: const TextStyle(
+          fontWeight: FontWeight.w400,
+          color: Color(0xFF666666), // Uses token: textSecondary
+        ),
+        hintStyle: const TextStyle(
+          fontWeight: FontWeight.w400,
+          color: Color(0xFF999999), // Uses token: textTertiary
+        ),
       ),
       bottomNavigationBarTheme: BottomNavigationBarThemeData(
-        selectedItemColor: colorScheme.primary,
-        unselectedItemColor: Colors.grey.shade600,
+        selectedItemColor: colorScheme.primary, // Uses token: actionPrimary
+        unselectedItemColor: const Color(0xFF999999), // Uses token: iconTertiary
         showUnselectedLabels: true,
         type: BottomNavigationBarType.fixed,
       ),
       chipTheme: ChipThemeData(
-        color: WidgetStatePropertyAll(Colors.grey.shade200),
+        color: WidgetStatePropertyAll(const Color(0xFFE0E0E0)), // Uses token: borderDefault (lighter)
         labelStyle: const TextStyle(
-          color: Colors.black87,
+          color: Color(0xFF1A1A1A), // Uses token: textPrimary
           fontWeight: FontWeight.w500,
         ),
         side: const BorderSide(color: Colors.transparent),
@@ -169,14 +179,14 @@ class AppTheme {
         ),
       ),
       cardTheme: const CardThemeData(
-        color: Colors.white,
+        color: Colors.white, // Uses token: bgSurface
         elevation: 0,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(14))),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
-          backgroundColor: AppColors.primary,
-          foregroundColor: Colors.white,
+          backgroundColor: ColorTokens.brandPrimary, // Uses token: actionPrimary
+          foregroundColor: Colors.black87, // Uses token: actionPrimaryText
           shape: const StadiumBorder(),
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
           textStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
@@ -205,45 +215,51 @@ class AppTheme {
       appBarTheme: AppBarTheme(
         centerTitle: false,
         elevation: 0,
-        backgroundColor: AppColors.darkSurface,
-        foregroundColor: Colors.white,
-        iconTheme: const IconThemeData(color: Colors.white),
+        backgroundColor: AppColors.darkSurface, // Uses token: bgSurface
+        foregroundColor: const Color(0xFFEAEAEA), // Uses token: textPrimary
+        iconTheme: const IconThemeData(color: Color(0xFFEAEAEA)), // Uses token: iconPrimary
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: AppColors.darkSurfaceVariant,
+        fillColor: AppColors.darkSurfaceVariant, // Uses token: bgInput
         isDense: true,
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         border: OutlineInputBorder(
           borderRadius: const BorderRadius.all(Radius.circular(14)),
-          borderSide: BorderSide(color: Colors.grey.shade700),
+          borderSide: const BorderSide(color: Color(0xFF404040)), // Uses token: borderInput
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: const BorderRadius.all(Radius.circular(14)),
-          borderSide: BorderSide(color: Colors.grey.shade700),
+          borderSide: const BorderSide(color: Color(0xFF404040)), // Uses token: borderInput
         ),
         focusedBorder: const OutlineInputBorder(
           borderRadius: BorderRadius.all(Radius.circular(14)),
-          borderSide: BorderSide(color: AppColors.darkPrimary, width: 1.6),
+          borderSide: BorderSide(color: ColorTokens.brandPrimary, width: 1.6), // Uses token: borderInputFocused
         ),
-        labelStyle: TextStyle(color: Colors.grey.shade300, fontWeight: FontWeight.w400),
-        hintStyle: TextStyle(color: Colors.grey.shade500, fontWeight: FontWeight.w400),
+        labelStyle: const TextStyle(
+          color: Color(0xFFB0B0B0), // Uses token: textSecondary
+          fontWeight: FontWeight.w400,
+        ),
+        hintStyle: const TextStyle(
+          color: Color(0xFF808080), // Uses token: textTertiary
+          fontWeight: FontWeight.w400,
+        ),
       ),
       bottomNavigationBarTheme: BottomNavigationBarThemeData(
-        backgroundColor: AppColors.darkSurface,
-        selectedItemColor: AppColors.darkPrimary,
-        unselectedItemColor: Colors.grey.shade500,
+        backgroundColor: AppColors.darkSurface, // Uses token: bgSurface
+        selectedItemColor: ColorTokens.brandPrimary, // Uses token: actionPrimary
+        unselectedItemColor: const Color(0xFF808080), // Uses token: iconTertiary
         showUnselectedLabels: true,
         type: BottomNavigationBarType.fixed,
       ),
       chipTheme: ChipThemeData(
-        backgroundColor: AppColors.darkSurfaceVariant,
+        backgroundColor: AppColors.darkSurfaceVariant, // Uses token: bgElevated
         color: WidgetStatePropertyAll(AppColors.darkSurfaceVariant),
-        labelStyle: TextStyle(
-          color: Colors.white,
+        labelStyle: const TextStyle(
+          color: Color(0xFFEAEAEA), // Uses token: textPrimary
           fontWeight: FontWeight.w500,
         ),
-        side: BorderSide(color: Colors.grey.shade700),
+        side: const BorderSide(color: Color(0xFF333333)), // Uses token: borderDefault
         shape: const StadiumBorder(),
       ),
       textTheme: baseInter.copyWith(
@@ -251,115 +267,115 @@ class AppTheme {
           fontWeight: FontWeight.w600, 
           fontSize: AppFontSizes.displayLarge, 
           height: 1.17,
-          color: Colors.white,
+          color: const Color(0xFFEAEAEA), // Uses token: textPrimary
         ),
         displayMedium: baseInter.displayMedium?.copyWith(
           fontWeight: FontWeight.w600, 
           fontSize: AppFontSizes.displayMedium, 
           height: 1.2,
-          color: Colors.white,
+          color: const Color(0xFFEAEAEA), // Uses token: textPrimary
         ),
         displaySmall: baseInter.displaySmall?.copyWith(
           fontWeight: FontWeight.w600, 
           fontSize: AppFontSizes.displaySmall, 
           height: 1.25,
-          color: Colors.white,
+          color: const Color(0xFFEAEAEA), // Uses token: textPrimary
         ),
         headlineLarge: baseInter.headlineLarge?.copyWith(
           fontWeight: FontWeight.w600, 
           fontSize: AppFontSizes.headlineLarge, 
           height: 1.25,
-          color: Colors.white,
+          color: const Color(0xFFEAEAEA), // Uses token: textPrimary
         ),
         headlineMedium: baseInter.headlineMedium?.copyWith(
           fontWeight: FontWeight.w600, 
           fontSize: AppFontSizes.headlineMedium, 
           height: 1.29,
-          color: Colors.white,
+          color: const Color(0xFFEAEAEA), // Uses token: textPrimary
         ),
         headlineSmall: baseInter.headlineSmall?.copyWith(
           fontWeight: FontWeight.w600, 
           fontSize: AppFontSizes.headlineSmall, 
           height: 1.33,
-          color: Colors.white,
+          color: const Color(0xFFEAEAEA), // Uses token: textPrimary
         ),
         titleLarge: baseInter.titleLarge?.copyWith(
           fontWeight: FontWeight.w600, 
           fontSize: AppFontSizes.titleLarge, 
           height: 1.27,
-          color: Colors.white,
+          color: const Color(0xFFEAEAEA), // Uses token: textPrimary
         ),
         titleMedium: baseInter.titleMedium?.copyWith(
           fontWeight: FontWeight.w600, 
           fontSize: AppFontSizes.titleMedium, 
           height: 1.5,
-          color: Colors.white,
+          color: const Color(0xFFEAEAEA), // Uses token: textPrimary
         ),
         titleSmall: baseInter.titleSmall?.copyWith(
           fontWeight: FontWeight.w500, 
           fontSize: AppFontSizes.titleSmall, 
           height: 1.43,
-          color: Colors.grey.shade300,
+          color: const Color(0xFFB0B0B0), // Uses token: textSecondary
         ),
         bodyLarge: baseInter.bodyLarge?.copyWith(
           fontWeight: FontWeight.w400, 
           fontSize: AppFontSizes.bodyLarge, 
           height: 1.5,
-          color: Colors.grey.shade200,
+          color: const Color(0xFFEAEAEA), // Uses token: textPrimary (softer)
         ),
         bodyMedium: baseInter.bodyMedium?.copyWith(
           fontWeight: FontWeight.w400, 
           fontSize: AppFontSizes.bodyMedium, 
           height: 1.43,
-          color: Colors.grey.shade300,
+          color: const Color(0xFFB0B0B0), // Uses token: textSecondary
         ),
         bodySmall: baseInter.bodySmall?.copyWith(
           fontWeight: FontWeight.w400, 
           fontSize: AppFontSizes.bodySmall, 
           height: 1.33,
-          color: Colors.grey.shade400,
+          color: const Color(0xFF808080), // Uses token: textTertiary
         ),
         labelLarge: baseInter.labelLarge?.copyWith(
           fontWeight: FontWeight.w600, 
           fontSize: AppFontSizes.labelLarge, 
           height: 1.43,
-          color: Colors.white,
+          color: const Color(0xFFEAEAEA), // Uses token: textPrimary
         ),
         labelMedium: baseInter.labelMedium?.copyWith(
           fontWeight: FontWeight.w500, 
           fontSize: AppFontSizes.labelMedium, 
           height: 1.33,
-          color: Colors.grey.shade300,
+          color: const Color(0xFFB0B0B0), // Uses token: textSecondary
         ),
         labelSmall: baseInter.labelSmall?.copyWith(
           fontWeight: FontWeight.w400, 
           fontSize: AppFontSizes.labelSmall, 
           height: 1.27,
-          color: Colors.grey.shade400,
+          color: const Color(0xFF808080), // Uses token: textTertiary
         ),
       ),
       cardTheme: CardThemeData(
-        color: AppColors.darkSurface,
+        color: AppColors.darkSurface, // Uses token: bgSurface
         elevation: 0,
         shape: const RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(14))),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
-          backgroundColor: AppColors.darkPrimary,
-          foregroundColor: Colors.black87,
+          backgroundColor: ColorTokens.brandPrimary, // Uses token: actionPrimary
+          foregroundColor: Colors.black87, // Uses token: actionPrimaryText
           shape: const StadiumBorder(),
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
           textStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
         ),
       ),
       dividerTheme: DividerThemeData(
-        color: Colors.grey.shade800,
+        color: const Color(0xFF333333), // Uses token: borderDefault
         thickness: 1,
       ),
       listTileTheme: ListTileThemeData(
-        tileColor: AppColors.darkSurfaceVariant,
-        textColor: Colors.white,
-        iconColor: Colors.grey.shade300,
+        tileColor: AppColors.darkSurfaceVariant, // Uses token: bgElevated
+        textColor: const Color(0xFFEAEAEA), // Uses token: textPrimary
+        iconColor: const Color(0xFFB0B0B0), // Uses token: iconSecondary
       ),
     );
   }

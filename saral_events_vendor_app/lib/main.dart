@@ -4,7 +4,6 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'app.dart';
 import 'core/supabase/supabase_config.dart';
-import 'services/push_notification_service.dart';
 
 // Top-level background message handler (must be top-level)
 @pragma('vm:entry-point')

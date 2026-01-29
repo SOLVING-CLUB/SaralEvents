@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../models/event_models.dart';
+import '../core/theme/color_tokens.dart';
 import '../screens/catalog_screen.dart';
 import '../utils/category_mapping_helper.dart';
 
@@ -89,7 +90,7 @@ class _EventCategoriesScreenState extends State<EventCategoriesScreen> {
     }
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: ColorTokens.bgApp(context),
       body: SafeArea(
         child: Column(
           children: [
@@ -107,7 +108,7 @@ class _EventCategoriesScreenState extends State<EventCategoriesScreen> {
                   '${_filteredCategories.length} ${_filteredCategories.length == 1 ? 'category' : 'categories'} found for "$_searchQuery"',
                   style: TextStyle(
                     fontSize: 14,
-                    color: Colors.grey.shade600,
+                    color: ColorTokens.textSecondary(context),
                     fontWeight: FontWeight.w500,
                   ),
                 ),
@@ -150,13 +151,13 @@ class _EventCategoriesScreenState extends State<EventCategoriesScreen> {
             child: Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: Colors.grey.shade100,
+                color: ColorTokens.bgSurface(context),
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: const Icon(
+              child: Icon(
                 Icons.arrow_back,
                 size: 20,
-                color: Colors.black87,
+                color: ColorTokens.iconPrimary(context),
               ),
             ),
           ),
@@ -167,10 +168,10 @@ class _EventCategoriesScreenState extends State<EventCategoriesScreen> {
               children: [
                 Text(
                   widget.eventType.name,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 24,
                     fontWeight: FontWeight.w700,
-                    color: Colors.black87,
+                    color: ColorTokens.textPrimary(context),
                   ),
                 ),
                 const SizedBox(height: 2),
@@ -178,7 +179,7 @@ class _EventCategoriesScreenState extends State<EventCategoriesScreen> {
                   'Explore vendor\'s section',
                   style: TextStyle(
                     fontSize: 14,
-                    color: Colors.grey.shade600,
+                    color: ColorTokens.textSecondary(context),
                     fontWeight: FontWeight.w500,
                   ),
                 ),
@@ -196,16 +197,16 @@ class _EventCategoriesScreenState extends State<EventCategoriesScreen> {
       child: Container(
         height: 50,
         decoration: BoxDecoration(
-          color: Colors.grey.shade50,
+          color: ColorTokens.bgInput(context),
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.grey.shade200),
+          border: Border.all(color: ColorTokens.borderInput(context)),
         ),
         child: TextField(
           controller: _searchController,
           decoration: InputDecoration(
             hintText: 'Search categories...',
-            hintStyle: TextStyle(color: Colors.grey.shade500),
-            prefixIcon: Icon(Icons.search, color: Colors.grey.shade500),
+            hintStyle: TextStyle(color: ColorTokens.textTertiary(context)),
+            prefixIcon: Icon(Icons.search, color: ColorTokens.iconTertiary(context)),
             suffixIcon: _searchQuery.isNotEmpty
                 ? GestureDetector(
                     onTap: _clearSearch,
@@ -213,12 +214,12 @@ class _EventCategoriesScreenState extends State<EventCategoriesScreen> {
                       margin: const EdgeInsets.all(8),
                       padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
-                        color: Colors.grey.shade200,
+                        color: ColorTokens.bgSurface(context),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Icon(
                         Icons.clear,
-                        color: Colors.grey.shade600,
+                        color: ColorTokens.iconSecondary(context),
                         size: 18,
                       ),
                     ),
@@ -227,12 +228,12 @@ class _EventCategoriesScreenState extends State<EventCategoriesScreen> {
                     margin: const EdgeInsets.all(8),
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: Colors.grey.shade200,
+                      color: ColorTokens.bgSurface(context),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Icon(
                       Icons.tune,
-                      color: Colors.grey.shade600,
+                      color: ColorTokens.iconSecondary(context),
                       size: 18,
                     ),
                   ),
@@ -250,7 +251,7 @@ class _EventCategoriesScreenState extends State<EventCategoriesScreen> {
       child: Container(
         margin: const EdgeInsets.only(bottom: 16),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: ColorTokens.bgSurface(context),
           borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(

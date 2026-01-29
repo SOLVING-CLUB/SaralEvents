@@ -198,6 +198,52 @@ class ReviewService {
     }
   }
 
+  /// Get ratings for multiple services at once (batch fetch)
+  Future<Map<String, Map<String, dynamic>>> getBatchServiceRatings(List<String> serviceIds) async {
+    try {
+      if (serviceIds.isEmpty) {
+        return {};
+      }
+
+      final response = await _supabase
+          .from('service_reviews')
+          .select('service_id, rating')
+          .inFilter('service_id', serviceIds);
+
+      // Group ratings by service_id
+      final Map<String, List<int>> ratingsByService = {};
+      for (final review in response as List<dynamic>) {
+        final serviceId = review['service_id'].toString();
+        final rating = review['rating'] as int;
+        ratingsByService.putIfAbsent(serviceId, () => []).add(rating);
+      }
+
+      // Calculate stats for each service
+      final Map<String, Map<String, dynamic>> result = {};
+      for (final serviceId in serviceIds) {
+        final ratings = ratingsByService[serviceId] ?? [];
+        if (ratings.isEmpty) {
+          result[serviceId] = {'averageRating': 0.0, 'count': 0};
+        } else {
+          final averageRating = ratings.reduce((a, b) => a + b) / ratings.length;
+          result[serviceId] = {
+            'averageRating': averageRating,
+            'count': ratings.length,
+          };
+        }
+      }
+
+      return result;
+    } catch (e) {
+      // Return empty map with zero ratings for all services on error
+      final Map<String, Map<String, dynamic>> result = {};
+      for (final serviceId in serviceIds) {
+        result[serviceId] = {'averageRating': 0.0, 'count': 0};
+      }
+      return result;
+    }
+  }
+
   /// Submit a new review
   Future<Review> submitReview({
     required int rating,
@@ -223,26 +269,28 @@ class ReviewService {
         throw Exception('You have already reviewed this service');
       }
 
-      // Get vendor_id and names from service if not provided
+      // Get vendor_id and names from service to denormalize into service_reviews
       String? finalVendorId = vendorId;
       String? reviewServiceName;
       String? reviewVendorName;
-      if (finalVendorId == null) {
-        final serviceResponse = await _supabase
-            .from('services')
-            .select('vendor_id, name, vendor_profiles(business_name)')
-            .eq('id', serviceId)
-            .maybeSingle();
-        finalVendorId = serviceResponse?['vendor_id']?.toString();
-        // Capture service and vendor names for denormalized storage
-        reviewServiceName = serviceResponse?['name'] as String?;
-        final vp = serviceResponse?['vendor_profiles'];
-        if (vp is Map) {
-          reviewVendorName = vp['business_name'] as String?;
-        } else if (vp is List && vp.isNotEmpty) {
-          reviewVendorName = vp[0]['business_name'] as String?;
-        }
+
+      final serviceResponse = await _supabase
+          .from('services')
+          .select('vendor_id, name, vendor_profiles(business_name)')
+          .eq('id', serviceId)
+          .maybeSingle();
+
+      // Always capture names from the service row
+      reviewServiceName = serviceResponse?['name'] as String?;
+      final vp = serviceResponse?['vendor_profiles'];
+      if (vp is Map) {
+        reviewVendorName = vp['business_name'] as String?;
+      } else if (vp is List && vp.isNotEmpty) {
+        reviewVendorName = vp[0]['business_name'] as String?;
       }
+
+      // If caller didn't pass vendorId, fall back to the one from services
+      finalVendorId ??= serviceResponse?['vendor_id']?.toString();
 
       // Fetch the user's full name from profile tables (first_name + last_name / full_name)
       String? userName;

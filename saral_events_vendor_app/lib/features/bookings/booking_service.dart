@@ -124,7 +124,7 @@ class BookingService {
             if (profile != null) {
               final String firstName = (profile['first_name'] ?? '').toString();
               final String lastName = (profile['last_name'] ?? '').toString();
-              final String fullName = (firstName + ' ' + lastName).trim();
+              final String fullName = ('$firstName $lastName').trim();
               booking['customer_name'] = fullName.isEmpty ? 'Customer' : fullName;
               booking['customer_email'] = (profile['email'] ?? '');
               booking['customer_phone'] = (profile['phone_number'] ?? '');

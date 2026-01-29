@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:provider/provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:go_router/go_router.dart';
@@ -14,6 +13,7 @@ import 'core/widgets/permission_manager.dart';
 import 'screens/app_link_handler.dart';
 import 'checkout/checkout_state.dart';
 import 'core/services/address_storage.dart';
+import 'core/services/location_session_manager.dart';
 import 'services/push_notification_service.dart';
 import 'screens/order_status_screen.dart';
 
@@ -46,10 +46,9 @@ Future<void> main() async {
     anonKey: supabaseAnonKey,
   );
 
-  // Reset location check flag on app startup
-  // This ensures the bottom sheet only shows once per app session
-  final prefs = await SharedPreferences.getInstance();
-  await prefs.setBool('location_checked_this_session', false);
+  // Reset location session flags on app startup (cold start)
+  // This ensures proper location handling on each app launch
+  await LocationSessionManager.resetSessionFlags();
   
   // Clear temporary location on app start (session-only locations reset)
   // Saved addresses remain intact

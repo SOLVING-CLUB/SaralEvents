@@ -74,6 +74,8 @@ export default function SupportPage() {
   const [categoryFilter, setCategoryFilter] = useState<string>('all')
   const [selectedTicket, setSelectedTicket] = useState<SupportTicket | null>(null)
   const [showTicketModal, setShowTicketModal] = useState(false)
+  const [statusUpdateMessage, setStatusUpdateMessage] = useState('')
+  const [pendingStatus, setPendingStatus] = useState<string | null>(null)
   
   // FAQs state
   const [faqs, setFaqs] = useState<FAQ[]>([])
@@ -199,20 +201,89 @@ export default function SupportPage() {
     setFaqsLoading(false)
   }
 
-  // Update Ticket Status
-  async function updateTicketStatus(ticketId: string, newStatus: string) {
+  // Update Ticket Status (and send notification message - message is required)
+  async function updateTicketStatus(ticket: SupportTicket, newStatus: string, message: string) {
+    const trimmedMessage = message?.trim()
+    if (!trimmedMessage) {
+      alert('Please enter a message to send to the user/vendor before updating the status.')
+      return
+    }
+
     const { error } = await supabase
       .from('support_tickets')
       .update({ status: newStatus, updated_at: new Date().toISOString() })
-      .eq('id', ticketId)
+      .eq('id', ticket.id)
     
-    if (!error) {
-      setTickets(prev => prev.map(t => 
-        t.id === ticketId ? { ...t, status: newStatus } : t
-      ))
-      if (selectedTicket?.id === ticketId) {
-        setSelectedTicket(prev => prev ? { ...prev, status: newStatus } : null)
+    if (error) {
+      console.error('Error updating ticket status:', error)
+      alert(`Error updating ticket status: ${error.message}`)
+      return
+    }
+
+    // Update local state
+    setTickets(prev => prev.map(t => 
+      t.id === ticket.id ? { ...t, status: newStatus } : t
+    ))
+    if (selectedTicket?.id === ticket.id) {
+      setSelectedTicket(prev => prev ? { ...prev, status: newStatus } : null)
+      setStatusUpdateMessage('')
+      setPendingStatus(null)
+    }
+
+    try {
+      // Determine target user and app type (user or vendor)
+      let targetUserId: string | null = null
+      let appTypes: string[] = []
+
+      if (ticket.user_id) {
+        // Ticket created by user app customer
+        targetUserId = ticket.user_id
+        appTypes = ['user_app']
+      } else if (ticket.vendor_id) {
+        // Ticket linked to a vendor – fetch vendor's auth user_id
+        const { data: vendorProfile, error: vendorError } = await supabase
+          .from('vendor_profiles')
+          .select('user_id')
+          .eq('id', ticket.vendor_id)
+          .maybeSingle()
+
+        if (vendorError) {
+          console.error('Error fetching vendor profile for notification:', vendorError)
+        }
+
+        if (vendorProfile?.user_id) {
+          targetUserId = vendorProfile.user_id
+          appTypes = ['vendor_app']
+        }
       }
+
+      if (!targetUserId || appTypes.length === 0) {
+        // Nothing to notify (e.g. missing user/vendor mapping)
+        return
+      }
+
+      const title = `Support ticket ${newStatus.replace('_', ' ')}`
+      const notificationData: any = {
+        type: 'support_ticket_update',
+        ticket_id: ticket.id,
+        status: newStatus,
+      }
+
+      const { error: fnError } = await supabase.functions.invoke('send-push-notification', {
+        body: {
+          userId: targetUserId,
+          title,
+          body: trimmedMessage,
+          data: notificationData,
+          appTypes,
+        },
+      })
+
+      if (fnError) {
+        console.error('Error sending support ticket notification:', fnError)
+      }
+    } catch (err) {
+      console.error('Unexpected error sending support ticket notification:', err)
     }
   }
 
@@ -588,6 +659,8 @@ export default function SupportPage() {
                               <button
                                 onClick={() => {
                                   setSelectedTicket(ticket)
+                                  setStatusUpdateMessage('')
+                                  setPendingStatus(null)
                                   setShowTicketModal(true)
                                 }}
                                 className="p-1 text-blue-600 hover:bg-blue-50 rounded"
@@ -595,15 +668,6 @@ export default function SupportPage() {
                               >
                                 <Eye className="h-4 w-4" />
                               </button>
-                              <select
-                                className="text-xs border rounded px-2 py-1 hidden sm:block"
-                                value={ticket.status}
-                                onChange={(e) => updateTicketStatus(ticket.id, e.target.value)}
-                              >
-                                {STATUSES.map(s => (
-                                  <option key={s} value={s}>{s.replace('_', ' ')}</option>
-                                ))}
-                              </select>
                             </div>
                           </td>
                         </tr>
@@ -782,6 +846,8 @@ export default function SupportPage() {
                 onClick={() => {
                   setShowTicketModal(false)
                   setSelectedTicket(null)
+                  setPendingStatus(null)
+                  setStatusUpdateMessage('')
                 }}
                 className="text-gray-400 hover:text-gray-600"
               >
@@ -880,20 +946,76 @@ export default function SupportPage() {
                 </Button>
               </div>
               
-              <div className="flex items-center gap-4 pt-4 border-t border-gray-200">
-                <label className="text-sm font-medium text-gray-700">Update Status:</label>
-                <select
-                  className="border rounded px-3 py-2 text-sm"
-                  value={selectedTicket.status}
-                  onChange={(e) => {
-                    updateTicketStatus(selectedTicket.id, e.target.value)
-                    setSelectedTicket({ ...selectedTicket, status: e.target.value })
-                  }}
-                >
-                  {STATUSES.map(s => (
-                    <option key={s} value={s}>{s.replace('_', ' ')}</option>
-                  ))}
-                </select>
+              <div className="pt-4 border-t border-gray-200 space-y-3">
+                <div className="flex flex-wrap items-center gap-4">
+                  <label className="text-sm font-medium text-gray-700">Update Status:</label>
+                  <select
+                    className="border rounded px-3 py-2 text-sm"
+                    value={pendingStatus || selectedTicket.status}
+                    onChange={(e) => {
+                      const newStatus = e.target.value
+                      if (newStatus !== selectedTicket.status) {
+                        // Status changed - show message field and set pending status
+                        setPendingStatus(newStatus)
+                        setStatusUpdateMessage('')
+                      } else {
+                        // Same status selected - clear pending
+                        setPendingStatus(null)
+                        setStatusUpdateMessage('')
+                      }
+                    }}
+                  >
+                    {STATUSES.map(s => (
+                      <option key={s} value={s}>{s.replace('_', ' ')}</option>
+                    ))}
+                  </select>
+                </div>
+                {pendingStatus && pendingStatus !== selectedTicket.status && (
+                  <div>
+                    <label className="text-sm font-medium text-gray-700">
+                      Message to customer/vendor <span className="text-red-500">*</span>
+                    </label>
+                    <textarea
+                      className="mt-1 w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+                      rows={3}
+                      value={statusUpdateMessage}
+                      onChange={(e) => setStatusUpdateMessage(e.target.value)}
+                      placeholder="Type a message that will be sent as a notification when you update the status..."
+                      required
+                    />
+                    <p className="mt-1 text-xs text-gray-500">
+                      This message is required and will be sent as a notification to the {selectedTicket.user_id ? 'customer' : 'vendor'}.
+                    </p>
+                    <Button
+                      onClick={() => {
+                        if (!statusUpdateMessage.trim()) {
+                          alert('Please enter a message before updating the status.')
+                          return
+                        }
+                        updateTicketStatus(selectedTicket, pendingStatus, statusUpdateMessage)
+                      }}
+                      className="mt-2"
+                      disabled={!statusUpdateMessage.trim()}
+                    >
+                      Update Status & Send Notification
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setPendingStatus(null)
+                        setStatusUpdateMessage('')
+                      }}
+                      className="mt-2 ml-2"
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                )}
+                {!pendingStatus && (
+                  <p className="text-xs text-gray-500">
+                    Select a different status to send a notification message to the customer/vendor.
+                  </p>
+                )}
               </div>
             </div>
           </div>

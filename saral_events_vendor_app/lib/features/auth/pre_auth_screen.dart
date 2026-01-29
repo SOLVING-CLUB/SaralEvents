@@ -52,12 +52,16 @@ class PreAuthScreen extends StatelessWidget {
                     'Welcome to Saral Events',
                     textAlign: TextAlign.center,
                     style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                   ),
                   const SizedBox(height: 8),
                   Text(
                     'One Step for all your events',
                     textAlign: TextAlign.center,
                     style: theme.textTheme.bodyMedium?.copyWith(color: Colors.black87),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                   ),
                   const SizedBox(height: 28),
                   SizedBox(

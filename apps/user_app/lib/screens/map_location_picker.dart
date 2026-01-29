@@ -36,7 +36,7 @@ class _MapLocationPickerState extends State<MapLocationPicker>
   @override
   void initState() {
     super.initState();
-    _places = FlutterGooglePlacesSdk('AIzaSyBdMMV-ceWqcoVKE_8bzMS50VARGEqT5zI');
+    _places = FlutterGooglePlacesSdk('AIzaSyCmeZeTE1pOuawQecON6AOfhMvNYEl3NKs');
     _init();
   }
 

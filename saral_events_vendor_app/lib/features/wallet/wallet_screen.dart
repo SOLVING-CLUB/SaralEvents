@@ -739,12 +739,15 @@ class _PendingPaymentCard extends StatelessWidget {
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
                       milestoneLabel,
                       style: Theme.of(context).textTheme.titleSmall?.copyWith(
                         fontWeight: FontWeight.bold,
                       ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                     ),
                     const SizedBox(height: 4),
                     Text(
@@ -752,7 +755,7 @@ class _PendingPaymentCard extends StatelessWidget {
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: Colors.grey[600],
                       ),
-                      maxLines: 1,
+                      maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),
                     if (bookingDate != null) ...[
@@ -871,11 +874,15 @@ class _PaymentStructureCard extends StatelessWidget {
                     children: [
                       Icon(Icons.info_outline, size: 20, color: Colors.orange[700]),
                       const SizedBox(width: 8),
-                      Text(
-                        'Important: Completion Payment Commission',
-                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: Colors.orange[900],
+                      Expanded(
+                        child: Text(
+                          'Important: Completion Payment Commission',
+                          style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.orange[900],
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
                     ],
@@ -886,6 +893,8 @@ class _PaymentStructureCard extends StatelessWidget {
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: Colors.orange[900],
                     ),
+                    maxLines: 5,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ],
               ),
@@ -907,6 +916,8 @@ class _PaymentStructureCard extends StatelessWidget {
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: Colors.blue[900],
                       ),
+                      maxLines: 4,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                 ],
@@ -948,6 +959,7 @@ class _PaymentMilestoneItem extends StatelessWidget {
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
             children: [
               Row(
                 children: [
@@ -965,6 +977,8 @@ class _PaymentMilestoneItem extends StatelessWidget {
                       style: Theme.of(context).textTheme.titleSmall?.copyWith(
                         fontWeight: FontWeight.bold,
                       ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                 ],
@@ -975,6 +989,8 @@ class _PaymentMilestoneItem extends StatelessWidget {
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: Colors.grey[600],
                 ),
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
               ),
             ],
           ),
@@ -1049,6 +1065,8 @@ class _CancellationPoliciesCard extends StatelessWidget {
                         color: Colors.red[900],
                         fontWeight: FontWeight.w500,
                       ),
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                 ],
@@ -1094,6 +1112,8 @@ class _CategoryPolicyItem extends StatelessWidget {
                   style: Theme.of(context).textTheme.titleSmall?.copyWith(
                     fontWeight: FontWeight.bold,
                   ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                 ),
                 const SizedBox(height: 4),
                 Text(
@@ -1101,6 +1121,8 @@ class _CategoryPolicyItem extends StatelessWidget {
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: Colors.grey[700],
                   ),
+                  maxLines: 5,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ],
             ),
@@ -1176,6 +1198,8 @@ class _TransactionCard extends StatelessWidget {
                     style: Theme.of(context).textTheme.titleSmall?.copyWith(
                       fontWeight: FontWeight.bold,
                     ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                   ),
                   const SizedBox(height: 4),
                   Row(
@@ -1198,7 +1222,7 @@ class _TransactionCard extends StatelessWidget {
                         color: Colors.grey[600],
                         fontSize: 11,
                       ),
-                      maxLines: 1,
+                      maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),
                   ],
@@ -1346,11 +1370,13 @@ class _WithdrawalCard extends StatelessWidget {
                     Icon(Icons.error_outline, size: 16, color: Colors.red[700]),
                     const SizedBox(width: 8),
                     Expanded(
-                      child: Text(
+                      child:                       Text(
                         w.rejectionReason!,
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
                           color: Colors.red[900],
                         ),
+                        maxLines: 3,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
                   ],
@@ -1371,12 +1397,16 @@ class _WithdrawalCard extends StatelessWidget {
               Text(
                 '${w.bankSnapshot!['account_holder_name'] ?? 'N/A'}',
                 style: Theme.of(context).textTheme.bodyMedium,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
               ),
               Text(
                 '${w.bankSnapshot!['bank_name'] ?? 'N/A'} • ${w.bankSnapshot!['account_number']?.toString().substring(w.bankSnapshot!['account_number'].toString().length - 4) ?? '****'}',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: Colors.grey[600],
                 ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
               ),
             ],
           ],
