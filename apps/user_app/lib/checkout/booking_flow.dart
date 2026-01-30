@@ -293,7 +293,7 @@ class _TotalSummary extends StatelessWidget {
   Widget build(BuildContext context) {
     final checkoutState = context.watch<CheckoutState>();
     final items = checkoutState.items;
-    final total = checkoutState.totalPrice;
+    final total = checkoutState.totalAfterDiscount;
     
     return Card(
       color: Theme.of(context).colorScheme.primaryContainer,
@@ -978,7 +978,7 @@ class _PaymentSummaryScreenState extends State<PaymentSummaryScreen> {
                                 ),
                           ),
                           Text(
-                            '₹${checkoutState.totalPrice.toStringAsFixed(0)}',
+                            '₹${checkoutState.totalAfterDiscount.toStringAsFixed(0)}',
                             style: Theme.of(context).textTheme.titleLarge?.copyWith(
                                   fontWeight: FontWeight.bold,
                                 ),
@@ -1007,7 +1007,7 @@ class _PaymentSummaryScreenState extends State<PaymentSummaryScreen> {
                           _PaymentMilestoneRow(
                             label: 'Advance Payment',
                             percentage: 20,
-                            amount: checkoutState.totalPrice * 0.20,
+                            amount: checkoutState.totalAfterDiscount * 0.20,
                             description: 'To initiate booking',
                             icon: Icons.payment,
                           ),
@@ -1015,7 +1015,7 @@ class _PaymentSummaryScreenState extends State<PaymentSummaryScreen> {
                           _PaymentMilestoneRow(
                             label: 'Arrival Payment',
                             percentage: 50,
-                            amount: checkoutState.totalPrice * 0.50,
+                            amount: checkoutState.totalAfterDiscount * 0.50,
                             description: 'After vendor arrival confirmation',
                             icon: Icons.location_on,
                           ),
@@ -1023,7 +1023,7 @@ class _PaymentSummaryScreenState extends State<PaymentSummaryScreen> {
                           _PaymentMilestoneRow(
                             label: 'Completion Payment',
                             percentage: 30,
-                            amount: checkoutState.totalPrice * 0.30,
+                            amount: checkoutState.totalAfterDiscount * 0.30,
                             description: 'After setup completion confirmation',
                             icon: Icons.check_circle,
                           ),
@@ -1039,7 +1039,7 @@ class _PaymentSummaryScreenState extends State<PaymentSummaryScreen> {
                                     ),
                               ),
                               Text(
-                                '₹${checkoutState.totalPrice.toStringAsFixed(0)}',
+                                '₹${checkoutState.totalAfterDiscount.toStringAsFixed(0)}',
                                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
                                       fontWeight: FontWeight.bold,
                                       color: Theme.of(context).colorScheme.primary,
@@ -1121,7 +1121,7 @@ class _PaymentSummaryScreenState extends State<PaymentSummaryScreen> {
     final paymentService = PaymentService();
 
     debugPrint('💳 PaymentSummaryScreen: CheckoutState items: ${checkoutState.items.length}');
-    debugPrint('💳 PaymentSummaryScreen: Total price: ₹${checkoutState.totalPrice}');
+    debugPrint('💳 PaymentSummaryScreen: Total price: ₹${checkoutState.totalAfterDiscount}');
     debugPrint('💳 PaymentSummaryScreen: Billing details: ${checkoutState.billingDetails != null ? "Present" : "Missing"}');
 
     // Validate cart

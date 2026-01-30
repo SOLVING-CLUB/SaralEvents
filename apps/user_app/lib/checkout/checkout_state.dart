@@ -137,6 +137,58 @@ class CheckoutState extends ChangeNotifier {
 
   double get totalPrice => _items.fold(0.0, (sum, i) => sum + i.price);
 
+  /// Coupon applied at checkout (validated via RPC)
+  String? get appliedCouponCode => _appliedCouponCode;
+  String? get appliedCouponId => _appliedCouponId;
+  double get discountAmount => _discountAmount;
+  /// Total after discount (never below 0)
+  double get totalAfterDiscount => (totalPrice - _discountAmount).clamp(0.0, double.infinity);
+
+  String? _appliedCouponCode;
+  String? _appliedCouponId;
+  double _discountAmount = 0;
+
+  /// Validate and apply a coupon. Returns error message or null on success.
+  Future<String?> applyCoupon(String code, String? phone) async {
+    final codeTrim = code.trim();
+    if (codeTrim.isEmpty) return 'Enter a coupon code';
+    final total = totalPrice;
+    if (total <= 0) return 'Add items to cart first';
+    try {
+      final userId = Supabase.instance.client.auth.currentUser?.id;
+      if (userId == null) return 'Please sign in to use a coupon';
+      final serviceIds = _items.map((i) => i.id).toList();
+      final res = await Supabase.instance.client.rpc(
+        'validate_coupon',
+        params: {
+          'p_code': codeTrim,
+          'p_user_id': userId,
+          'p_phone': phone ?? '',
+          'p_order_total_rs': total,
+          'p_service_ids': serviceIds.isNotEmpty ? serviceIds : null,
+        },
+      );
+      if (res == null) return 'Invalid response';
+      final valid = res['valid'] as bool? ?? false;
+      final message = res['message'] as String? ?? 'Invalid coupon';
+      if (!valid) return message;
+      _appliedCouponCode = res['code'] as String? ?? codeTrim;
+      _appliedCouponId = res['coupon_id'] as String?;
+      _discountAmount = (res['discount_amount'] as num?)?.toDouble() ?? 0;
+      notifyListeners();
+      return null;
+    } catch (e) {
+      return 'Could not validate coupon';
+    }
+  }
+
+  void clearCoupon() {
+    _appliedCouponCode = null;
+    _appliedCouponId = null;
+    _discountAmount = 0;
+    notifyListeners();
+  }
+
   /// Initialize cart service and load cart from database
   Future<void> initialize() async {
     if (_isInitialized) return;
@@ -225,13 +277,16 @@ class CheckoutState extends ChangeNotifier {
     _billingDetails = null;
     _paymentMethod = null;
     _draftId = null;
+    _appliedCouponCode = null;
+    _appliedCouponId = null;
+    _discountAmount = 0;
     _isInitialized = false;
     notifyListeners();
   }
 
-  /// Returns a 3-length list representing amounts for each installment
+  /// Returns a 3-length list representing amounts for each installment (based on total after discount)
   List<double> get installmentBreakdown {
-    final total = totalPrice;
+    final total = totalAfterDiscount;
     if (total <= 0) return const [0, 0, 0];
     return _installmentPercentages
         .map((p) => (total * p))

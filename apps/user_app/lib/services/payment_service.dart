@@ -110,14 +110,19 @@ class PaymentService {
         }
       }
       
-      // Calculate advance payment (20% of total) for milestone-based payment
-      final advanceAmount = checkoutState.totalPrice * 0.20;
+      // Calculate advance payment (20% of total after discount) for milestone-based payment
+      final totalAfterDiscount = checkoutState.totalAfterDiscount;
+      final advanceAmount = totalAfterDiscount * 0.20;
       final amountPaise = (advanceAmount * 100).round();
       final receipt = 'ord_${DateTime.now().millisecondsSinceEpoch}';
       
       if (kDebugMode) {
         debugPrint('Processing payment:');
         debugPrint('Total Amount: ₹${checkoutState.totalPrice}');
+        if (checkoutState.discountAmount > 0) {
+          debugPrint('Discount: ₹${checkoutState.discountAmount}');
+          debugPrint('Total after discount: ₹$totalAfterDiscount');
+        }
         debugPrint('Advance Payment (20%): ₹${advanceAmount.toStringAsFixed(2)} ($amountPaise paise)');
         debugPrint('Items: ${checkoutState.items.length}');
         debugPrint('User: ${billingDetails.name} (${billingDetails.email})');
@@ -153,7 +158,7 @@ class PaymentService {
           'user_email': billingDetails.email,
           'user_phone': billingDetails.phone,
           'items_count': checkoutState.items.length.toString(),
-          'total_amount': checkoutState.totalPrice.toString(),
+          'total_amount': totalAfterDiscount.toString(),
           'advance_amount': advanceAmount.toString(),
           'payment_type': 'advance',
           'event_date': billingDetails.eventDate?.toIso8601String(),
@@ -221,7 +226,7 @@ class PaymentService {
       if (kDebugMode) {
         debugPrint('🚀 Opening Razorpay checkout...');
         debugPrint('   Order ID: ${order['id']}');
-        debugPrint('   Total Amount: ₹${checkoutState.totalPrice}');
+        debugPrint('   Total Amount: ₹$totalAfterDiscount');
         debugPrint('   Advance Payment (20%): ₹${advanceAmount.toStringAsFixed(2)} ($amountPaise paise)');
         debugPrint('   Razorpay initialized: ${_razorpayService.isInitialized}');
       }
@@ -229,7 +234,7 @@ class PaymentService {
       _razorpayService.openCheckout(
         amountInPaise: amountPaise,
         name: 'Saral Events',
-        description: 'Advance payment (20%) for ${checkoutState.items.length} item(s) - Total: ₹${checkoutState.totalPrice.toStringAsFixed(0)}',
+        description: 'Advance payment (20%) for ${checkoutState.items.length} item(s) - Total: ₹${totalAfterDiscount.toStringAsFixed(0)}',
         orderId: order['id'] as String,
         prefillName: billingDetails.name,
         prefillEmail: billingDetails.email,
@@ -238,7 +243,7 @@ class PaymentService {
           'app': 'saral_user',
           'user_id': user?.id ?? 'anonymous',
           'items_count': checkoutState.items.length.toString(),
-          'total_amount': checkoutState.totalPrice.toString(),
+          'total_amount': totalAfterDiscount.toString(),
           'advance_amount': advanceAmount.toString(),
           'payment_type': 'advance',
         },
@@ -337,31 +342,67 @@ class PaymentService {
               continue;
             }
             
+            // Apply coupon discount to first booking only
+            final isFirstItem = i == 0;
+            final couponId = checkoutState.appliedCouponId;
+            final orderDiscount = checkoutState.discountAmount;
+            double bookingAmount = item.price;
+            double bookingDiscount = 0;
+            if (isFirstItem && couponId != null && orderDiscount > 0) {
+              bookingDiscount = orderDiscount < item.price ? orderDiscount : item.price;
+              bookingAmount = item.price - bookingDiscount;
+            }
+            
             // Create booking for this service
             if (kDebugMode) {
               debugPrint('💳 PaymentService: Creating booking for service: ${item.title}');
               debugPrint('   serviceId: ${item.id}');
               debugPrint('   vendorId: ${serviceResult['vendor_id']}');
               debugPrint('   bookingDate: $bookingDate');
-              debugPrint('   amount: ${item.price}');
+              debugPrint('   amount: $bookingAmount');
+              if (bookingDiscount > 0) debugPrint('   discount: $bookingDiscount');
               debugPrint('   Expected status: pending');
               debugPrint('   Expected milestone_status: created');
             }
             
-            final success = await bookingService.createBooking(
+            final createdBookingId = await bookingService.createBooking(
               serviceId: item.id,
               vendorId: serviceResult['vendor_id'] as String,
               bookingDate: bookingDate,
               bookingTime: item.bookingTime,
-              amount: item.price,
+              amount: bookingAmount,
               notes: billing.messageToVendor,
               locationLink: item.locationLink,
+              couponId: isFirstItem ? couponId : null,
+              discountAmount: bookingDiscount,
             );
             
-            if (success) {
+            if (createdBookingId != null) {
               if (kDebugMode) {
                 debugPrint('✅ PaymentService: Booking created successfully for: ${item.title}');
                 debugPrint('   Verifying booking was created with correct status...');
+              }
+              
+              createdBookingIds.add(createdBookingId);
+              
+              // Record coupon redemption for first booking when coupon was applied
+              final userId = Supabase.instance.client.auth.currentUser?.id;
+              if (isFirstItem && couponId != null && userId != null && bookingDiscount > 0) {
+                try {
+                  await Supabase.instance.client.rpc(
+                    'record_coupon_redemption',
+                    params: {
+                      'p_coupon_id': couponId,
+                      'p_user_id': userId,
+                      'p_booking_id': createdBookingId,
+                      'p_phone': billing.phone,
+                      'p_discount_amount': bookingDiscount,
+                    },
+                  );
+                  if (kDebugMode) debugPrint('✅ Coupon redemption recorded for booking: $createdBookingId');
+                } catch (e) {
+                  if (kDebugMode) debugPrint('⚠️ Failed to record coupon redemption: $e');
+                }
               }
               
               // Verify the booking was created with correct status
@@ -369,10 +410,7 @@ class PaymentService {
               final verifyResult = await Supabase.instance.client
                   .from('bookings')
                   .select('id, status, milestone_status')
-                  .eq('service_id', item.id)
-                  .eq('booking_date', bookingDate.toIso8601String().split('T')[0])
-                  .order('created_at', ascending: false)
-                  .limit(1)
+                  .eq('id', createdBookingId)
                   .maybeSingle();
               
               if (verifyResult != null && kDebugMode) {
@@ -386,44 +424,21 @@ class PaymentService {
                 }
               }
               
-              // Wait a moment for database to commit
-              await Future.delayed(const Duration(milliseconds: 300));
-              
-              // Get the created booking ID
-              final userId = Supabase.instance.client.auth.currentUser?.id;
-              if (userId != null) {
-                final bookingResult = await Supabase.instance.client
-                    .from('bookings')
-                    .select('id')
-                    .eq('user_id', userId)
-                    .eq('service_id', item.id)
-                    .eq('booking_date', bookingDate.toIso8601String().split('T')[0])
-                    .order('created_at', ascending: false)
-                    .limit(1)
-                    .maybeSingle();
-                
-                if (bookingResult != null) {
-                  final bookingId = bookingResult['id'] as String;
-                  createdBookingIds.add(bookingId);
-                  
-                  // Mark the advance milestone as paid for this booking
-                  final advanceMilestone = await milestoneService.getNextPendingMilestone(bookingId);
-                  
-                  if (advanceMilestone != null) {
-                    await milestoneService.markMilestonePaid(
-                      milestoneId: advanceMilestone.id,
-                      paymentId: paymentId,
-                      gatewayOrderId: responseData['orderId']?.toString(),
-                      gatewayPaymentId: paymentId,
-                    );
-                    if (kDebugMode) {
-                      debugPrint('✅ Advance milestone marked as paid for booking: $bookingId');
-                    }
-                  } else {
-                    if (kDebugMode) {
-                      debugPrint('⚠️ No advance milestone found for booking: $bookingId');
-                    }
-                  }
+              // Mark the advance milestone as paid for this booking
+              final advanceMilestone = await milestoneService.getNextPendingMilestone(createdBookingId);
+              if (advanceMilestone != null) {
+                await milestoneService.markMilestonePaid(
+                  milestoneId: advanceMilestone.id,
+                  paymentId: paymentId,
+                  gatewayOrderId: responseData['orderId']?.toString(),
+                  gatewayPaymentId: paymentId,
+                );
+                if (kDebugMode) {
+                  debugPrint('✅ Advance milestone marked as paid for booking: $createdBookingId');
+                }
+              } else {
+                if (kDebugMode) {
+                  debugPrint('⚠️ No advance milestone found for booking: $createdBookingId');
                 }
               }
             } else {
@@ -478,7 +493,7 @@ class PaymentService {
 
     // Store cart details before clearing (needed for success screen)
     // IMPORTANT: at this stage we only charge the advance (20%), not the full total.
-    final paidAmount = checkoutState.totalPrice * 0.20;
+    final paidAmount = checkoutState.totalAfterDiscount * 0.20;
     final paidItemsCount = checkoutState.items.length;
     
     // Get service details for notifications (before clearing cart)
@@ -728,7 +743,7 @@ class PaymentService {
     // Send user notification about payment failure
     if (userId != null) {
       try {
-        final amount = checkoutState.totalPrice;
+        final amount = checkoutState.totalAfterDiscount;
         
         if (kDebugMode) {
           debugPrint('📬 Sending user notification for payment failure...');

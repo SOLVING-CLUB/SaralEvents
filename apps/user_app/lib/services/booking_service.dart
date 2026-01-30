@@ -14,8 +14,8 @@ class BookingService {
     : _refundService = RefundService(_supabase),
       _availabilityService = AvailabilityService(_supabase);
 
-  // Create a new booking
-  Future<bool> createBooking({
+  // Create a new booking. Returns created booking id on success, null on failure.
+  Future<String?> createBooking({
     required String serviceId,
     required String vendorId,
     required DateTime bookingDate,
@@ -23,22 +23,24 @@ class BookingService {
     required double amount,
     String? notes,
     String? locationLink,
+    String? couponId,
+    double discountAmount = 0,
   }) async {
     try {
       final userId = _supabase.auth.currentUser?.id;
       if (userId == null) {
         print('Error: No authenticated user found');
-        return false;
+        return null;
       }
 
       // Validate inputs
       if (serviceId.isEmpty) {
         print('Error: Service ID is empty');
-        return false;
+        return null;
       }
       if (vendorId.isEmpty) {
         print('Error: Vendor ID is empty');
-        return false;
+        return null;
       }
 
       print('Creating booking with:');
@@ -53,7 +55,7 @@ class BookingService {
       // Verify user_id is not null
       if (userId.isEmpty) {
         print('ERROR: user_id is empty!');
-        return false;
+        return null;
       }
 
       // Optional safety check: verify that the vendor_id matches the service's vendor.
@@ -93,6 +95,8 @@ class BookingService {
         'status': 'pending', // Waiting for vendor acceptance
         'milestone_status': 'created', // Initial state - vendor must accept or reject
         'vendor_accepted_at': null, // Will be set when vendor accepts
+        if (couponId != null) 'coupon_id': couponId,
+        if (discountAmount > 0) 'discount_amount': discountAmount,
       };
 
       print('📋 BookingService: Creating booking with data:');
@@ -137,7 +141,7 @@ class BookingService {
           print('   Date: ${bookingDate.toIso8601String().split('T')[0]}');
           print('   Time: $timeStr');
           print('   Available slots: $availableSlots');
-          return false;
+          return null;
         }
         
         print('✅ Slot availability confirmed - proceeding with booking creation');
@@ -157,7 +161,7 @@ class BookingService {
           print('  1. RLS policy blocking insert');
           print('  2. Constraint violation (check status/milestone_status values)');
           print('  3. Database error');
-          return false;
+          return null;
         }
         
         print('✅ Booking insert successful, got ${result.length} row(s) back');
@@ -208,7 +212,7 @@ class BookingService {
           print('   → Check if all required fields are provided');
         }
         
-        return false;
+        return null;
       }
       
       final createdBooking = result.first;
@@ -236,7 +240,7 @@ class BookingService {
       // Verify user_id matches
       if (createdUserId != userId) {
         print('ERROR: Booking user_id mismatch! Created: $createdUserId, Expected: $userId');
-        return false;
+        return null;
       }
       
       // Verify we can read it back immediately
@@ -271,11 +275,11 @@ class BookingService {
       print('🗑️ Invalidated cache for: $cacheKey');
       print('🗑️ Invalidated all availability caches for service: $serviceId');
 
-      return true;
+      return createdBookingId;
     } catch (e) {
       print('Error creating booking: $e');
       print('Error details: ${e.toString()}');
-      return false;
+      return null;
     }
   }
 
@@ -336,7 +340,7 @@ class BookingService {
               locationLink: draft['location_link']?.toString(),
             );
             
-            if (success) {
+            if (success != null) {
               print('✅ Created booking from completed draft: ${draft['id']}');
             } else {
               print('❌ Failed to create booking from draft: ${draft['id']}');

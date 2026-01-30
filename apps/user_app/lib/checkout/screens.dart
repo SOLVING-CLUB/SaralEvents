@@ -15,6 +15,129 @@ ButtonStyle _primaryBtn(BuildContext context) => ElevatedButton.styleFrom(
   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
 );
 
+class _CouponSection extends StatefulWidget {
+  @override
+  State<_CouponSection> createState() => _CouponSectionState();
+}
+
+class _CouponSectionState extends State<_CouponSection> {
+  final _codeController = TextEditingController();
+  String? _error;
+  bool _applying = false;
+
+  @override
+  void dispose() {
+    _codeController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _apply(BuildContext context) async {
+    final state = context.read<CheckoutState>();
+    final code = _codeController.text.trim();
+    if (code.isEmpty) return;
+    setState(() {
+      _error = null;
+      _applying = true;
+    });
+    final err = await state.applyCoupon(code, state.billingDetails?.phone);
+    if (!mounted) return;
+    setState(() {
+      _applying = false;
+      _error = err;
+    });
+    if (err != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(err), backgroundColor: Theme.of(context).colorScheme.error),
+      );
+    } else {
+      _codeController.clear();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final state = context.watch<CheckoutState>();
+    final theme = Theme.of(context);
+    if (state.items.isEmpty) return const SizedBox.shrink();
+    if (state.appliedCouponCode != null) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: theme.colorScheme.primaryContainer.withOpacity(0.3),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: theme.colorScheme.primary.withOpacity(0.3)),
+          ),
+          child: Row(
+            children: [
+              Icon(Icons.local_offer, color: theme.colorScheme.primary, size: 20),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Coupon ${state.appliedCouponCode} applied (−₹${state.discountAmount.toStringAsFixed(0)})',
+                  style: TextStyle(fontWeight: FontWeight.w600, color: theme.colorScheme.onSurface),
+                ),
+              ),
+              TextButton(
+                onPressed: () => state.clearCoupon(),
+                child: const Text('Remove'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: theme.cardColor,
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(
+              color: theme.colorScheme.shadow.withOpacity(0.05),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Have a coupon?', style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _codeController,
+                    decoration: InputDecoration(
+                      hintText: 'Enter code',
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      errorText: _error,
+                    ),
+                    textCapitalization: TextCapitalization.characters,
+                    onSubmitted: (_) => _apply(context),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                ElevatedButton(
+                  onPressed: _applying ? null : () => _apply(context),
+                  style: _primaryBtn(context),
+                  child: _applying ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('Apply'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class CartPage extends StatelessWidget {
   final VoidCallback onNext;
   const CartPage({super.key, required this.onNext});
@@ -73,6 +196,7 @@ class CartPage extends StatelessWidget {
               ],
             ),
           ),
+          _CouponSection(),
           _userDetailsSummary(),
           Padding(
             padding: const EdgeInsets.all(16),
@@ -486,7 +610,16 @@ class CartPage extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
               ),
             ),
-            Text('Total: ₹${state.totalPrice.toStringAsFixed(0)}', style: const TextStyle(fontWeight: FontWeight.bold)),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                if (state.discountAmount > 0) ...[
+                  Text('Discount: -₹${state.discountAmount.toStringAsFixed(0)}', style: TextStyle(color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 2),
+                ],
+                Text('Total: ₹${state.totalAfterDiscount.toStringAsFixed(0)}', style: const TextStyle(fontWeight: FontWeight.bold)),
+              ],
+            ),
           ],
         ),
       );
@@ -584,7 +717,7 @@ class _PaymentDetailsPageState extends State<PaymentDetailsPage> {
 
   Future<void> _saveCurrentDetails() async {
     final formState = _billingFormKey.currentState;
-    if (formState == null || !formState.validateAndSave()) {
+    if (formState == null || formState.validateAndSave() != true) {
       return;
     }
 
@@ -670,7 +803,7 @@ class _PaymentDetailsPageState extends State<PaymentDetailsPage> {
           : ListView(
               padding: const EdgeInsets.all(16),
               children: [
-                InstallmentCard(installments: state.installmentBreakdown, total: state.totalPrice),
+                InstallmentCard(installments: state.installmentBreakdown, total: state.totalAfterDiscount),
                 const SizedBox(height: 16),
                 
                 // Saved Details Section
@@ -977,7 +1110,7 @@ class _PaymentDetailsPageState extends State<PaymentDetailsPage> {
                           final ok = formState.validateAndSave();
                           debugPrint('✅ Form validation result: $ok');
                           
-                          if (!ok) {
+                          if (ok != true) {
                             debugPrint('❌ Form validation failed');
                             if (mounted) {
                               ScaffoldMessenger.of(context).showSnackBar(
@@ -1047,7 +1180,7 @@ class _PaymentDetailsPageState extends State<PaymentDetailsPage> {
                           final ok = formState.validateAndSave();
                           debugPrint('✅ Form validation result: $ok');
                           
-                          if (!ok) {
+                          if (ok != true) {
                             debugPrint('❌ Form validation failed');
                             if (mounted) {
                               ScaffoldMessenger.of(context).showSnackBar(
@@ -1123,7 +1256,7 @@ class PaymentSummaryPage extends StatelessWidget {
                     ),
                 ],
                 const SizedBox(height: 12),
-                InstallmentCard(installments: state.installmentBreakdown, total: state.totalPrice, margin: EdgeInsets.zero),
+                InstallmentCard(installments: state.installmentBreakdown, total: state.totalAfterDiscount, margin: EdgeInsets.zero),
               ],
             ),
           ),
@@ -1197,7 +1330,7 @@ class _PaymentMethodPageState extends State<PaymentMethodPage> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          InstallmentCard(installments: state.installmentBreakdown, total: state.totalPrice),
+          InstallmentCard(installments: state.installmentBreakdown, total: state.totalAfterDiscount),
           PaymentMethodSelector(
             initial: state.paymentMethod,
             onChanged: (m) => setState(() => _method = m),

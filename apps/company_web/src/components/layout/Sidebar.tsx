@@ -19,6 +19,7 @@ import {
   Wallet,
   CreditCard,
   Bell,
+  TicketPercent,
   X
 } from 'lucide-react'
 
@@ -35,6 +36,7 @@ const navigation = [
   { name: 'Support Tickets', href: '/admin/dashboard/support', icon: HeadphonesIcon },
   { name: 'Campaigns', href: '/admin/dashboard/campaigns', icon: Bell },
   { name: 'Marketing & Promotions', href: '/admin/dashboard/marketing', icon: Megaphone },
+  { name: 'Coupons', href: '/admin/dashboard/coupons', icon: TicketPercent },
   { name: 'Analytics', href: '/admin/dashboard/analytics', icon: BarChart3 },
   { name: 'Access Control', href: '/admin/dashboard/access-control', icon: Shield },
 ]
