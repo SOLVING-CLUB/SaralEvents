@@ -59,6 +59,9 @@
 			<key>CFBundleURLSchemes</key>
 			<array>
 				<string>saralevents</string>
+				<!-- Google Sign-In: Reversed Client ID -->
+				<!-- Format: com.googleusercontent.apps.CLIENT_ID_REVERSED -->
+				<string>com.googleusercontent.apps.460598868043-tk6pnifpvu24b8b5pm1h5vdoin6vqhr3</string>
 			</array>
 		</dict>
 	</array>

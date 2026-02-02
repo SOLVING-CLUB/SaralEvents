@@ -36,7 +36,7 @@ AS $$
 DECLARE
   v_response JSONB;
   v_supabase_url TEXT;
-  v_service_role_key TEXT;
+  v_anon_key TEXT;  -- Changed from service_role_key to anon_key (works with pg_net to edge functions)
   v_request_id BIGINT;
 BEGIN
   -- IMPORTANT: Since ALTER DATABASE requires superuser (not available in Supabase),
@@ -45,7 +45,7 @@ BEGIN
   
   -- Try to get from settings first (if admin has set them)
   v_supabase_url := current_setting('app.supabase_url', true);
-  v_service_role_key := current_setting('app.supabase_service_role_key', true);
+  v_anon_key := current_setting('app.supabase_anon_key', true);
   
   -- If not set, use hardcoded values (already set with your project values)
   -- Your Supabase Project URL (from Dashboard > Settings > API > Project URL)
@@ -53,31 +53,33 @@ BEGIN
     v_supabase_url := 'https://hucsihwqsuvqvbnyapdn.supabase.co';
   END IF;
   
-  -- Your Service Role Key (from Dashboard > Settings > API > Secret keys > default)
-  IF v_service_role_key IS NULL THEN
-    v_service_role_key := 'sb_secret_QhWTQOnAO-SCeCWmWEQF6A_AAdf38pq';
+  -- Your Anon Key (from Dashboard > Settings > API > anon/public key)
+  -- NOTE: Using anon key instead of service role key because pg_net requests to edge functions work with anon key
+  IF v_anon_key IS NULL THEN
+    v_anon_key := 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh1Y3NpaHdxc3V2cXZibnlhcGRuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI0Nzk0ODYsImV4cCI6MjA2ODA1NTQ4Nn0.gSu1HE7eZ4n3biaM338wDF0L2m4Yc3xYyt2GtuPOr1w';
   END IF;
 
   -- Validate we have both values
-  IF v_supabase_url IS NULL OR v_service_role_key IS NULL OR 
-     v_supabase_url = '' OR v_service_role_key = '' THEN
-    RAISE WARNING 'Push notifications skipped: Supabase URL or Service Role Key not configured';
-    RAISE NOTICE '⚠️ NOTIFICATION ERROR: Please update send_push_notification function in automated_notification_triggers.sql with your Supabase URL and service role key.';
+  IF v_supabase_url IS NULL OR v_anon_key IS NULL OR 
+     v_supabase_url = '' OR v_anon_key = '' THEN
+    RAISE WARNING 'Push notifications skipped: Supabase URL or Anon Key not configured';
+    RAISE NOTICE '⚠️ NOTIFICATION ERROR: Please update send_push_notification function in automated_notification_triggers.sql with your Supabase URL and anon key.';
     RETURN jsonb_build_object(
       'success', false,
       'skipped', true,
       'reason', 'missing_config',
-      'error', 'Please update the function with your Supabase URL and service role key. See UPDATE_NOTIFICATION_CONFIG.sql for instructions.'
+      'error', 'Please update the function with your Supabase URL and anon key. See UPDATE_NOTIFICATION_CONFIG.sql for instructions.'
     );
   END IF;
 
   -- Use pg_net extension (Supabase's native and recommended method)
   -- pg_net.http_post returns a request ID (async operation) directly as BIGINT
+  -- NOTE: Using anon key because pg_net requests to edge functions work with anon key
   BEGIN
     v_request_id := net.http_post(
       url := v_supabase_url || '/functions/v1/send-push-notification',
       headers := jsonb_build_object(
-        'Authorization', 'Bearer ' || v_service_role_key,
+        'Authorization', 'Bearer ' || v_anon_key,
         'Content-Type', 'application/json'
       ),
       body := jsonb_build_object(
@@ -238,16 +240,22 @@ BEGIN
       ARRAY['user_app']::TEXT[]
     );
 
-    -- Notify vendor about status change (ONLY if vendor didn't perform the action)
-    -- Skip notifications for 'confirmed' and 'completed' as vendor performed these actions
-    IF v_vendor_user_id IS NOT NULL AND NEW.status NOT IN ('confirmed', 'completed') THEN
+    -- Notify vendor about status change (for all status changes)
+    -- FIXED: Now sends to vendor for all statuses including confirmed/completed
+    IF v_vendor_user_id IS NOT NULL THEN
       PERFORM send_push_notification(
         v_vendor_user_id,
         CASE NEW.status
+          WHEN 'confirmed' THEN 'Booking Confirmed by You'
+          WHEN 'completed' THEN 'Order Completed'
           WHEN 'cancelled' THEN 'Booking Cancelled'
           ELSE 'Booking Status Update'
         END,
         CASE NEW.status
+          WHEN 'confirmed' THEN 
+            COALESCE('You confirmed booking for ' || v_service_name, 'Booking confirmed')
+          WHEN 'completed' THEN 
+            COALESCE('Order for ' || v_service_name || ' has been completed', 'Order completed')
           WHEN 'cancelled' THEN 
             'A booking has been cancelled'
           ELSE 
