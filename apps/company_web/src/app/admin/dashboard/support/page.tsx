@@ -230,61 +230,10 @@ export default function SupportPage() {
       setPendingStatus(null)
     }
 
-    try {
-      // Determine target user and app type (user or vendor)
-      let targetUserId: string | null = null
-      let appTypes: string[] = []
-
-      if (ticket.user_id) {
-        // Ticket created by user app customer
-        targetUserId = ticket.user_id
-        appTypes = ['user_app']
-      } else if (ticket.vendor_id) {
-        // Ticket linked to a vendor – fetch vendor's auth user_id
-        const { data: vendorProfile, error: vendorError } = await supabase
-          .from('vendor_profiles')
-          .select('user_id')
-          .eq('id', ticket.vendor_id)
-          .maybeSingle()
-
-        if (vendorError) {
-          console.error('Error fetching vendor profile for notification:', vendorError)
-        }
-
-        if (vendorProfile?.user_id) {
-          targetUserId = vendorProfile.user_id
-          appTypes = ['vendor_app']
-        }
-      }
-
-      if (!targetUserId || appTypes.length === 0) {
-        // Nothing to notify (e.g. missing user/vendor mapping)
-        return
-      }
-
-      const title = `Support ticket ${newStatus.replace('_', ' ')}`
-      const notificationData: any = {
-        type: 'support_ticket_update',
-        ticket_id: ticket.id,
-        status: newStatus,
-      }
-
-      const { error: fnError } = await supabase.functions.invoke('send-push-notification', {
-        body: {
-          userId: targetUserId,
-          title,
-          body: trimmedMessage,
-          data: notificationData,
-          appTypes,
-        },
-      })
-
-      if (fnError) {
-        console.error('Error sending support ticket notification:', fnError)
-      }
-    } catch (err) {
-      console.error('Unexpected error sending support ticket notification:', err)
-    }
+    // NOTE: Support ticket update notifications are handled automatically by database trigger
+    // when support_tickets.status is updated
+    // This ensures consistent notification delivery
+    console.log('✅ Support ticket update notification will be sent automatically by database trigger')
   }
 
   // Update Ticket Admin Notes

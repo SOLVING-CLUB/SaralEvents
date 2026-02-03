@@ -1,9 +1,7 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../../services/notification_sender_service.dart';
 
 class BookingService {
   final SupabaseClient _supabase;
-  late final NotificationSenderService _notificationSender;
 
   BookingService(this._supabase);
 
@@ -189,28 +187,11 @@ class BookingService {
 
       print('Booking updated successfully: ${updateResult.first}');
 
-      // NOTE: Order completion notification is handled by database trigger
-      // (notify_booking_status_change) when status changes to 'completed'
-      // This avoids duplicates and ensures consistent notification delivery
+      // NOTE: Order completion notification is handled automatically by database trigger
+      // when booking status changes to 'completed'
+      // This ensures consistent notification delivery
       if (status == 'completed') {
-        print('✅ Order completion notification will be sent by database trigger');
-        
-        // Create order notification record
-        try {
-          final userId = bookingCheck['user_id'] as String?;
-          if (userId != null) {
-            await _supabase.from('order_notifications').insert({
-              'booking_id': bookingId,
-              'user_id': userId,
-              'notification_type': 'order_completed',
-              'title': 'Order Completed',
-              'message': 'Your order has been marked as completed by the vendor.',
-            });
-            print('✅ Order notification record created for completion');
-          }
-        } catch (e) {
-          print('Warning: Failed to create order notification record: $e');
-        }
+        print('✅ Order completion notification will be sent automatically by database trigger');
       }
 
       // Create status update record
@@ -268,22 +249,10 @@ class BookingService {
           })
           .eq('id', bookingId);
 
-      // NOTE: Booking acceptance notification is handled by database trigger
-      // (notify_booking_status_change) when status changes to 'confirmed'
-      // This avoids duplicates and ensures consistent notification delivery
-
-      // Create simple order notification for customer
-      try {
-        await _supabase.from('order_notifications').insert({
-          'booking_id': bookingId,
-          'user_id': booking['user_id'],
-          'notification_type': 'vendor_accepted',
-          'title': 'Order Confirmed',
-          'message': 'Your vendor has accepted the booking.',
-        });
-      } catch (e) {
-        print('Warning: failed to create order notification for acceptBooking: $e');
-      }
+      // NOTE: Booking acceptance notification is handled automatically by database trigger
+      // when booking status changes to 'confirmed'
+      // This ensures consistent notification delivery
+      print('✅ Booking acceptance notification will be sent automatically by database trigger');
 
       return true;
     } catch (e) {
@@ -316,35 +285,15 @@ class BookingService {
           })
           .eq('id', bookingId);
 
-      // Push notify customer (user_app only)
+      // Send notification via RPC function (handles both push and in-app notifications)
       try {
-        _notificationSender = NotificationSenderService(_supabase);
-        await _notificationSender.sendNotification(
-          userId: (booking['user_id'] as String),
-          title: 'Vendor Arrived',
-          body: 'Vendor marked arrival. Please confirm arrival and complete the 50% payment.',
-          appTypes: ['user_app'], // CRITICAL: Only send to user app, not vendor app
-          data: {
-            'type': 'booking_update',
-            'booking_id': bookingId,
-            'milestone_status': 'vendor_arrived',
-          },
-        );
-      } catch (e) {
-        print('Warning: failed to send push notification for markArrived: $e');
-      }
-
-      // Notify customer that vendor has arrived
-      try {
-        await _supabase.from('order_notifications').insert({
-          'booking_id': bookingId,
-          'user_id': booking['user_id'],
-          'notification_type': 'vendor_arrived',
-          'title': 'Vendor Arrived',
-          'message': 'Your vendor has marked arrival at the event location. Please confirm arrival in the app.',
+        await _supabase.rpc('notify_vendor_arrived', params: {
+          'p_booking_id': bookingId,
+          'p_order_id': null,
         });
+        print('✅ Vendor arrived notification sent via RPC');
       } catch (e) {
-        print('Warning: failed to create order notification for markArrived: $e');
+        print('Warning: failed to send notification for markArrived: $e');
       }
 
       return true;
@@ -416,35 +365,15 @@ class BookingService {
           })
           .eq('id', bookingId);
 
-      // Push notify customer (user_app only)
+      // Send notification via RPC function (handles both push and in-app notifications)
       try {
-        _notificationSender = NotificationSenderService(_supabase);
-        await _notificationSender.sendNotification(
-          userId: (booking['user_id'] as String),
-          title: 'Setup Completed',
-          body: 'Vendor marked setup completed. Please confirm setup and complete the final 30% payment.',
-          appTypes: ['user_app'], // CRITICAL: Only send to user app, not vendor app
-          data: {
-            'type': 'booking_update',
-            'booking_id': bookingId,
-            'milestone_status': 'setup_completed',
-          },
-        );
-      } catch (e) {
-        print('Warning: failed to send push notification for markSetupCompleted: $e');
-      }
-
-      // Notify customer that setup is completed
-      try {
-        await _supabase.from('order_notifications').insert({
-          'booking_id': bookingId,
-          'user_id': booking['user_id'],
-          'notification_type': 'setup_completed',
-          'title': 'Setup Completed',
-          'message': 'Your vendor has marked setup as completed. Please review and confirm in the app.',
+        await _supabase.rpc('notify_vendor_setup_completed', params: {
+          'p_booking_id': bookingId,
+          'p_order_id': null,
         });
+        print('✅ Setup completed notification sent via RPC');
       } catch (e) {
-        print('Warning: failed to create order notification for markSetupCompleted: $e');
+        print('Warning: failed to send notification for markSetupCompleted: $e');
       }
 
       return true;
@@ -514,31 +443,16 @@ class BookingService {
           })
           .eq('id', bookingId);
 
-      // Push notify customer (fetch booking user_id once)
+      // Send notification via RPC function (handles both push and in-app notifications)
       try {
-        final bookingRow = await _supabase
-            .from('bookings')
-            .select('user_id')
-            .eq('id', bookingId)
-            .maybeSingle();
-        final userId = bookingRow?['user_id'] as String?;
-        if (userId != null) {
-          _notificationSender = NotificationSenderService(_supabase);
-          await _notificationSender.sendNotification(
-            userId: userId,
-            title: 'Booking Cancelled',
-            body: 'Vendor cancelled this booking. Refund will be processed. ${reason ?? ''}'.trim(),
-            appTypes: ['user_app'], // CRITICAL: Only send to user app, not vendor app
-            data: {
-              'type': 'booking_update',
-              'booking_id': bookingId,
-              'status': 'cancelled',
-              'cancelled_by': 'vendor',
-            },
-          );
-        }
+        await _supabase.rpc('notify_vendor_cancelled_order', params: {
+          'p_booking_id': bookingId,
+          'p_order_id': null,
+          'p_reason': reason ?? 'Vendor cancellation',
+        });
+        print('✅ Vendor cancellation notification sent via RPC');
       } catch (e) {
-        print('Warning: failed to send push notification for cancelBookingAsVendor: $e');
+        print('Warning: failed to send notification for cancelBookingAsVendor: $e');
       }
 
       // Create status update record

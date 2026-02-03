@@ -41,7 +41,7 @@ class OrderNotification {
   });
 
   factory OrderNotification.fromMap(Map<String, dynamic> map) {
-    // Convert snake_case to camelCase for enum matching
+    // Convert event_code or notification type to camelCase for enum matching
     String snakeToCamel(String snake) {
       final parts = snake.split('_');
       if (parts.isEmpty) return snake;
@@ -51,22 +51,25 @@ class OrderNotification {
       }).join();
     }
 
-    final notificationTypeStr = map['notification_type'].toString();
+    // Support both old order_notifications table and new notifications table
+    final notificationTypeStr = map['notification_type']?.toString() ?? 
+                                map['metadata']?['type']?.toString() ?? 
+                                'bookingCreated';
     final camelCaseType = snakeToCamel(notificationTypeStr);
 
     return OrderNotification(
-      id: map['id'].toString(),
-      bookingId: map['booking_id'].toString(),
+      id: map['notification_id']?.toString() ?? map['id'].toString(),
+      bookingId: map['booking_id']?.toString() ?? '',
       orderId: map['order_id']?.toString(),
-      userId: map['user_id'].toString(),
+      userId: map['recipient_user_id']?.toString() ?? map['user_id'].toString(),
       type: OrderNotificationType.values.firstWhere(
         (e) => e.name == camelCaseType,
         orElse: () => OrderNotificationType.bookingCreated,
       ),
       title: map['title'] as String,
-      message: map['message'] as String,
-      isRead: map['is_read'] as bool? ?? false,
-      actionUrl: map['action_url']?.toString(),
+      message: map['body'] as String? ?? map['message'] as String,
+      isRead: map['read_at'] != null || (map['is_read'] as bool? ?? false),
+      actionUrl: map['metadata']?['deep_link']?.toString() ?? map['action_url']?.toString(),
       createdAt: DateTime.parse(map['created_at']),
     );
   }
@@ -77,15 +80,11 @@ class OrderNotificationService {
 
   OrderNotificationService(this._supabase);
 
-  /// Convert camelCase to snake_case for database
-  String _camelToSnake(String camel) {
-    return camel.replaceAllMapped(
-      RegExp(r'[A-Z]'),
-      (match) => '_${match.group(0)!.toLowerCase()}',
-    );
-  }
 
   /// Create a notification
+  /// NOTE: This method is deprecated. Notifications are now created automatically by database triggers.
+  /// This method is kept for backward compatibility but should not be used for new code.
+  @Deprecated('Use database triggers or RPC functions instead. Notifications are now handled automatically.')
   Future<bool> createNotification({
     required String bookingId,
     required String userId,
@@ -95,22 +94,10 @@ class OrderNotificationService {
     String? orderId,
     String? actionUrl,
   }) async {
-    try {
-      await _supabase.from('order_notifications').insert({
-        'booking_id': bookingId,
-        'order_id': orderId,
-        'user_id': userId,
-        'notification_type': _camelToSnake(type.name),
-        'title': title,
-        'message': message,
-        'action_url': actionUrl,
-        'is_read': false,
-      });
-      return true;
-    } catch (e) {
-      print('Error creating notification: $e');
-      return false;
-    }
+    // Notifications are now handled automatically by database triggers
+    // This method is kept for backward compatibility only
+    print('Warning: createNotification() is deprecated. Notifications are now handled automatically.');
+    return true;
   }
 
   /// Get unread notifications for user
@@ -119,11 +106,13 @@ class OrderNotificationService {
       final userId = _supabase.auth.currentUser?.id;
       if (userId == null) return [];
 
+      // Read from new notifications table
       final result = await _supabase
-          .from('order_notifications')
+          .from('notifications')
           .select('*')
-          .eq('user_id', userId)
-          .eq('is_read', false)
+          .eq('recipient_role', 'USER')
+          .eq('recipient_user_id', userId)
+          .isFilter('read_at', null)
           .order('created_at', ascending: false);
 
       return (result as List<dynamic>)
@@ -141,10 +130,12 @@ class OrderNotificationService {
       final userId = _supabase.auth.currentUser?.id;
       if (userId == null) return [];
 
+      // Read from new notifications table
       final result = await _supabase
-          .from('order_notifications')
+          .from('notifications')
           .select('*')
-          .eq('user_id', userId)
+          .eq('recipient_role', 'USER')
+          .eq('recipient_user_id', userId)
           .order('created_at', ascending: false)
           .limit(limit);
 
@@ -160,10 +151,11 @@ class OrderNotificationService {
   /// Mark notification as read
   Future<bool> markAsRead(String notificationId) async {
     try {
+      // Update new notifications table
       await _supabase
-          .from('order_notifications')
-          .update({'is_read': true})
-          .eq('id', notificationId);
+          .from('notifications')
+          .update({'read_at': DateTime.now().toIso8601String()})
+          .eq('notification_id', notificationId);
       return true;
     } catch (e) {
       print('Error marking notification as read: $e');
@@ -177,11 +169,13 @@ class OrderNotificationService {
       final userId = _supabase.auth.currentUser?.id;
       if (userId == null) return false;
 
+      // Update new notifications table
       await _supabase
-          .from('order_notifications')
-          .update({'is_read': true})
-          .eq('user_id', userId)
-          .eq('is_read', false);
+          .from('notifications')
+          .update({'read_at': DateTime.now().toIso8601String()})
+          .eq('recipient_role', 'USER')
+          .eq('recipient_user_id', userId)
+          .isFilter('read_at', null);
       return true;
     } catch (e) {
       print('Error marking all notifications as read: $e');
@@ -208,11 +202,12 @@ class OrderNotificationService {
       final userId = _supabase.auth.currentUser?.id;
       if (userId == null) return [];
 
-      // Get all notifications
+      // Get all notifications from new notifications table
       final result = await _supabase
-          .from('order_notifications')
+          .from('notifications')
           .select('*')
-          .eq('user_id', userId)
+          .eq('recipient_role', 'USER')
+          .eq('recipient_user_id', userId)
           .order('created_at', ascending: false)
           .limit(limit * 2); // Get more to filter
 
@@ -293,65 +288,17 @@ class OrderNotificationService {
   }
 
   /// Create milestone-specific notifications
+  /// NOTE: This method is deprecated. Notifications are now created automatically by database triggers.
+  @Deprecated('Use database triggers or RPC functions instead. Notifications are now handled automatically.')
   Future<void> notifyMilestoneUpdate({
     required String bookingId,
     required String userId,
     required String milestoneStatus,
     String? orderId,
   }) async {
-    String title;
-    String message;
-    OrderNotificationType type;
-
-    switch (milestoneStatus) {
-      case 'accepted':
-        title = 'Vendor Accepted Your Booking';
-        message = 'Great news! The vendor has accepted your booking request.';
-        type = OrderNotificationType.vendorAccepted;
-        break;
-      case 'vendor_traveling':
-        title = 'Vendor is On the Way';
-        message = 'The vendor has started traveling to your location.';
-        type = OrderNotificationType.vendorTraveling;
-        break;
-      case 'vendor_arrived':
-        title = 'Vendor Has Arrived';
-        message = 'The vendor has arrived at your location. Please confirm their arrival.';
-        type = OrderNotificationType.vendorArrived;
-        break;
-      case 'arrival_confirmed':
-        title = 'Arrival Confirmed';
-        message = 'You confirmed the vendor\'s arrival. Payment for 50% milestone is now due.';
-        type = OrderNotificationType.arrivalConfirmed;
-        break;
-      case 'setup_completed':
-        title = 'Setup Completed';
-        message = 'The vendor has completed the setup. Please confirm to proceed with final payment.';
-        type = OrderNotificationType.setupCompleted;
-        break;
-      case 'setup_confirmed':
-        title = 'Setup Confirmed';
-        message = 'You confirmed the setup completion. Final payment milestone will be processed.';
-        type = OrderNotificationType.setupConfirmed;
-        break;
-      case 'completed':
-        title = 'Order Completed';
-        message = 'Congratulations! Your order has been completed successfully.';
-        type = OrderNotificationType.bookingCompleted;
-        break;
-      default:
-        return;
-    }
-
-    await createNotification(
-      bookingId: bookingId,
-      userId: userId,
-      type: type,
-      title: title,
-      message: message,
-      orderId: orderId,
-      actionUrl: '/order-tracking/$bookingId',
-    );
+    // Notifications are now handled automatically by database triggers
+    // This method is kept for backward compatibility only
+    print('Warning: notifyMilestoneUpdate() is deprecated. Notifications are now handled automatically.');
   }
 }
 

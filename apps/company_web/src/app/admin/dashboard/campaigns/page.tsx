@@ -306,87 +306,31 @@ export default function CampaignsPage() {
         .update({ status: 'sending' })
         .eq('id', campaign.id)
 
-      // Get target user IDs based on audience and determine app type
-      let targetUserIds: string[] = []
-      let appTypes: string[] = [] // CRITICAL: Filter by app_type to prevent cross-app notifications
-      const userAppTypes = new Map<string, string[]>() // For specific_users: map userId to appTypes
+      // Send notifications via RPC function (handles bulk sending automatically)
+      const { data, error } = await supabase.rpc('notify_campaign_broadcast', {
+        p_campaign_id: campaign.id,
+      })
 
-      if (campaign.target_audience === 'all_users') {
-        const { data } = await supabase
-          .from('user_profiles')
-          .select('user_id')
-        targetUserIds = (data || []).map(u => u.user_id)
-        appTypes = ['user_app'] // CRITICAL: Only send to user app
-      } else if (campaign.target_audience === 'all_vendors') {
-        const { data } = await supabase
-          .from('vendor_profiles')
-          .select('user_id')
-        targetUserIds = (data || []).map(v => v.user_id).filter(Boolean)
-        appTypes = ['vendor_app'] // CRITICAL: Only send to vendor app
-      } else if (campaign.target_audience === 'specific_users') {
-        targetUserIds = campaign.target_user_ids || []
-        // For specific users, determine app type per user
-        // Check which users are vendors
-        const { data: vendorData } = await supabase
-          .from('vendor_profiles')
-          .select('user_id')
-          .in('user_id', targetUserIds)
-        const vendorUserIds = new Set((vendorData || []).map(v => v.user_id))
-        
-        // Store user-to-app-type mapping
-        targetUserIds.forEach(userId => {
-          if (vendorUserIds.has(userId)) {
-            userAppTypes.set(userId, ['vendor_app'])
-          } else {
-            userAppTypes.set(userId, ['user_app'])
-          }
-        })
-        
-        // For specific_users, we'll send with per-user appTypes below
-        // Set default for the loop (will be overridden per user)
-        appTypes = ['user_app', 'vendor_app']
+      if (error) {
+        console.error('Error calling notify_campaign_broadcast:', error)
+        throw error
       }
 
-      // Prepare notification data
-      const notificationData: any = {
-        type: 'campaign',
-        campaign_id: campaign.id,
-      }
+      // Get campaign stats from the notification system
+      // The RPC function returns notification counts, but we'll update campaign status
+      // based on the notification_events table
+      const { data: eventData } = await supabase
+        .from('notification_events')
+        .select('event_id')
+        .eq('event_code', 'CAMPAIGN_BROADCAST')
+        .eq('campaign_id', campaign.id)
+        .maybeSingle()
 
-      if (campaign.cta_url) {
-        notificationData.cta_url = campaign.cta_url
-        notificationData.cta_action = campaign.cta_action || 'open_url'
-      }
-
-      // Remove duplicate user IDs to prevent sending multiple notifications to the same user
-      const uniqueUserIds = [...new Set(targetUserIds)]
-      
-      // Send notifications via edge function
-      // CRITICAL: Pass appTypes to filter tokens by app_type
-      const results = await Promise.allSettled(
-        uniqueUserIds.map(async userId => {
-          // For specific_users, use per-user appTypes; otherwise use the audience appTypes
-          const userSpecificAppTypes = campaign.target_audience === 'specific_users' 
-            ? (userAppTypes.get(userId) || ['user_app']) // Default to user_app if not found
-            : appTypes
-          
-          const { data, error } = await supabase.functions.invoke('send-push-notification', {
-            body: {
-              userId,
-              title: campaign.title,
-              body: campaign.message,
-              data: notificationData,
-              imageUrl: campaign.image_url || undefined,
-              appTypes: userSpecificAppTypes, // CRITICAL: Filter by app_type to prevent cross-app notifications
-            },
-          })
-          if (error) throw error
-          return data
-        })
-      )
-
-      const successful = results.filter(r => r.status === 'fulfilled').length
-      const failed = results.filter(r => r.status === 'rejected').length
+      // Get count of notifications created for this campaign
+      const { count: notificationCount } = await supabase
+        .from('notifications')
+        .select('*', { count: 'exact', head: true })
+        .eq('event_id', eventData?.event_id || campaign.id)
 
       // Update campaign status
       await supabase
@@ -394,9 +338,9 @@ export default function CampaignsPage() {
         .update({
           status: 'sent',
           sent_at: new Date().toISOString(),
-          sent_count: successful,
-          failed_count: failed,
-          total_recipients: targetUserIds.length,
+          sent_count: notificationCount || 0,
+          failed_count: 0, // Failed count is tracked in notification_logs
+          total_recipients: notificationCount || 0,
         })
         .eq('id', campaign.id)
     } catch (err: any) {

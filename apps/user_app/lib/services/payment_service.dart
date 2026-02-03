@@ -10,7 +10,6 @@ import 'booking_service.dart';
 import 'booking_draft_service.dart';
 import 'payment_milestone_service.dart';
 import 'availability_service.dart';
-import 'notification_sender_service.dart';
 import '../core/cache/simple_cache.dart';
 
 /// Comprehensive payment service that handles the complete payment flow
@@ -276,11 +275,6 @@ class PaymentService {
       debugPrint('Response data: $responseData');
     }
 
-    // Get user ID for notifications
-    final user = Supabase.instance.client.auth.currentUser;
-    final userId = user?.id;
-    final notificationService = NotificationSenderService(Supabase.instance.client);
-
     // Mark order paid
     final orderService = OrderService(Supabase.instance.client);
     if (_currentOrderId != null) {
@@ -496,106 +490,13 @@ class PaymentService {
     final paidAmount = checkoutState.totalAfterDiscount * 0.20;
     final paidItemsCount = checkoutState.items.length;
     
-    // Get service details for notifications (before clearing cart)
-    String? vendorId;
-    String? serviceName;
-    DateTime? bookingDate;
-    String? bookingTime;
-    
-    // Try to get vendor and service info from draft or cart items
-    if (_currentDraftId != null) {
-      try {
-        final draftService = BookingDraftService(Supabase.instance.client);
-        final draft = await draftService.getDraft(_currentDraftId!);
-        if (draft != null) {
-          vendorId = draft['vendor_id'] as String?;
-          final serviceId = draft['service_id'] as String?;
-          if (serviceId != null) {
-            // Get service name
-            final serviceResult = await Supabase.instance.client
-                .from('services')
-                .select('name')
-                .eq('id', serviceId)
-                .maybeSingle();
-            if (serviceResult != null) {
-              serviceName = serviceResult['name'] as String?;
-            }
-          }
-          final bookingDateValue = draft['booking_date'] ?? draft['event_date'];
-          if (bookingDateValue != null) {
-            bookingDate = DateTime.parse(bookingDateValue as String);
-          }
-          bookingTime = draft['booking_time'] as String?;
-        }
-      } catch (e) {
-        if (kDebugMode) {
-          debugPrint('Error getting draft details for notification: $e');
-        }
-      }
-    }
-    
-    // Fallback: get from cart items if draft info not available
-    if (vendorId == null && checkoutState.items.isNotEmpty) {
-      try {
-        final item = checkoutState.items.first;
-        final serviceResult = await Supabase.instance.client
-            .from('services')
-            .select('vendor_id, name')
-            .eq('id', item.id)
-            .maybeSingle();
-        if (serviceResult != null) {
-          vendorId = serviceResult['vendor_id'] as String?;
-          serviceName = serviceResult['name'] as String?;
-        }
-        bookingDate = item.bookingDate;
-        bookingTime = item.bookingTime != null
-            ? '${item.bookingTime!.hour.toString().padLeft(2, '0')}:${item.bookingTime!.minute.toString().padLeft(2, '0')}'
-            : null;
-      } catch (e) {
-        if (kDebugMode) {
-          debugPrint('Error getting service details for notification: $e');
-        }
-      }
-    }
-    
-    // Send user notifications about payment success and order placement
-    // Note: Database trigger also sends payment notification, but we send more specific messages here
-    // The database trigger will be disabled to avoid duplicates (see disable_duplicate_notification_triggers.sql)
-    if (userId != null && _currentOrderId != null) {
-      try {
-        if (kDebugMode) {
-          debugPrint('📬 Sending user notifications for payment success...');
-          debugPrint('   User ID: $userId');
-          debugPrint('   Order ID: $_currentOrderId');
-          debugPrint('   Amount: ₹$paidAmount');
-        }
-        
-        // NOTE: Payment and order placement notifications are handled by database triggers
-        // to avoid duplicates. Database triggers will send:
-        // - Payment success notification (user_app) when payment_milestones status changes
-        // - Order placement notification (user_app) when booking is created
-        // - New order notification (vendor_app) when booking is created
-        if (kDebugMode) {
-          debugPrint('✅ Payment notifications will be sent by database triggers');
-        }
-      } catch (e, stackTrace) {
-        if (kDebugMode) {
-          debugPrint('❌ Error sending user notification: $e');
-          debugPrint('❌ Stack trace: $stackTrace');
-        }
-        // Don't fail payment flow if notification fails
-      }
-    } else {
-      if (kDebugMode) {
-        debugPrint('⚠️ Cannot send user notification: userId=${userId != null}, orderId=${_currentOrderId != null}');
-      }
-    }
-    
-    // NOTE: Vendor notification for new order is handled by database trigger
-    // when booking status changes to 'confirmed' (or when booking is created)
-    // This avoids duplicates and ensures consistent notification delivery
-    if (kDebugMode && vendorId != null) {
-      debugPrint('✅ Vendor notification will be sent by database trigger');
+    // NOTE: Payment and order placement notifications are handled automatically by database triggers
+    // Database triggers will send:
+    // - Payment success notification (user_app) when payment_milestones status changes to 'paid'
+    // - Payment success notification (vendor_app) when payment_milestones status changes to 'paid'
+    // - New order notification (vendor_app) when order is created
+    if (kDebugMode) {
+      debugPrint('✅ Payment notifications will be sent automatically by database triggers');
     }
     
     // Clear the cart after successful payment
@@ -724,11 +625,6 @@ class PaymentService {
       debugPrint('Error data: $errorData');
     }
 
-    // Get user ID for notifications
-    final user = Supabase.instance.client.auth.currentUser;
-    final userId = user?.id;
-    final notificationService = NotificationSenderService(Supabase.instance.client);
-
     // Mark order failed
     final orderService = OrderService(Supabase.instance.client);
     if (_currentOrderId != null) {
@@ -740,60 +636,11 @@ class PaymentService {
       );
     }
     
-    // Send user notification about payment failure
-    if (userId != null) {
-      try {
-        final amount = checkoutState.totalAfterDiscount;
-        
-        if (kDebugMode) {
-          debugPrint('📬 Sending user notification for payment failure...');
-          debugPrint('   User ID: $userId');
-          debugPrint('   Order ID: $_currentOrderId');
-          debugPrint('   Amount: ₹$amount');
-          debugPrint('   Error: $code - $message');
-        }
-        
-        await notificationService.sendPaymentNotification(
-          userId: userId,
-          orderId: _currentOrderId ?? 'unknown',
-          amount: amount,
-          isSuccess: false,
-        );
-        
-        if (kDebugMode) {
-          debugPrint('✅ Payment failure notification sent successfully');
-        }
-        
-        // Also send order failure notification
-        await notificationService.sendNotification(
-          userId: userId,
-          title: 'Payment Failed',
-          body: 'Your payment of ₹${amount.toStringAsFixed(2)} failed. Order was not placed. Please try again.',
-          appTypes: ['user_app'], // CRITICAL: Only send to user app
-          data: {
-            'type': 'payment_failed',
-            'order_id': _currentOrderId ?? 'unknown',
-            'error_code': code,
-            'error_message': message,
-            'amount': amount.toString(),
-          },
-        );
-        
-        if (kDebugMode) {
-          debugPrint('✅ Order failure notification sent successfully');
-          debugPrint('✅ All user notifications sent for payment failure');
-        }
-      } catch (e, stackTrace) {
-        if (kDebugMode) {
-          debugPrint('❌ Error sending user notification: $e');
-          debugPrint('❌ Stack trace: $stackTrace');
-        }
-        // Don't fail payment flow if notification fails
-      }
-    } else {
-      if (kDebugMode) {
-        debugPrint('⚠️ Cannot send user notification: userId is null');
-      }
+    // NOTE: Payment failure notifications are handled automatically by database triggers
+    // when payment_milestones status changes to 'failed'
+    // This ensures consistent notification delivery
+    if (kDebugMode) {
+      debugPrint('✅ Payment failure notifications will be sent automatically by database triggers');
     }
 
     // Show error screen
@@ -1060,44 +907,10 @@ class PaymentService {
             debugPrint('❌ Milestone payment failed: $code - $message');
           }
 
-          // Send push notification for milestone payment failure (only for failures, not success)
-          // Success notifications are handled by database trigger to avoid duplicates
-          final notificationService = NotificationSenderService(Supabase.instance.client);
-          try {
-            final milestoneLabel = milestoneType == 'arrival' ? 'Arrival Payment (50%)' : 'Completion Payment (30%)';
-            
-            if (kDebugMode) {
-              debugPrint('📬 Sending milestone payment failure notification...');
-              debugPrint('   Milestone Type: $milestoneType');
-              debugPrint('   Amount: ₹$milestoneAmount');
-              debugPrint('   Error: $code - $message');
-            }
-
-            await notificationService.sendNotification(
-              userId: user.id,
-              title: 'Payment Failed',
-              body: '$milestoneLabel of ₹${milestoneAmount.toStringAsFixed(2)} failed. Please try again.',
-              appTypes: ['user_app'], // CRITICAL: Only send to user app
-              data: {
-                'type': 'milestone_payment_failed',
-                'booking_id': bookingId,
-                'milestone_id': milestoneId,
-                'milestone_type': milestoneType,
-                'milestone_percentage': milestonePercentage.toString(),
-                'amount': milestoneAmount.toString(),
-                'error_code': code,
-                'error_message': message,
-              },
-            );
-
-            if (kDebugMode) {
-              debugPrint('✅ Milestone payment failure notification sent');
-            }
-          } catch (e) {
-            if (kDebugMode) {
-              debugPrint('❌ Error sending milestone payment failure notification: $e');
-            }
-            // Don't fail payment flow if notification fails
+          // NOTE: Milestone payment failure notifications are handled automatically by database triggers
+          // when payment_milestones status changes to 'failed'
+          if (kDebugMode) {
+            debugPrint('✅ Milestone payment failure notifications will be sent automatically by database triggers');
           }
 
           _showError(context, 'Payment failed: $message');
