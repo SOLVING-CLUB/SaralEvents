@@ -93,19 +93,6 @@ class PreAuthScreen extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 36),
-                  Center(
-                    child: TextButton(
-                      onPressed: () => context.go('/app'),
-                      child: Text(
-                        'Continue as a guest',
-                        style: TextStyle(
-                          color: Colors.black87,
-                          decoration: TextDecoration.underline,
-                          decorationColor: Colors.black54,
-                        ),
-                      ),
-                    ),
-                  ),
                   const SizedBox(height: 24),
                 ],
               ),
