@@ -178,7 +178,14 @@ class AppSession extends ChangeNotifier {
 
   void completeVendorSetup() {
     // After vendor submits setup, reload profile so UI can show latest status.
-    _checkVendorSetup();
+    // NOTE: kept for backward compatibility; prefer the async version below.
+    completeVendorSetupAsync();
+  }
+
+  Future<void> completeVendorSetupAsync() async {
+    // After vendor submits setup, reload profile so router redirects don't bounce back to setup
+    // while the profile refresh is still in-flight.
+    await _checkVendorSetup();
     notifyListeners();
   }
 

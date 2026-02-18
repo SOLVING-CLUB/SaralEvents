@@ -482,8 +482,9 @@ class _VendorSetupFlowState extends State<VendorSetupFlow> {
           ),
         );
 
-        // Let session re-check setup status in background
-        context.read<AppSession>().completeVendorSetup();
+        // Let session refresh setup status BEFORE navigating so go_router redirects don't bounce
+        // back to the first setup page while the refresh is still in-flight.
+        await context.read<AppSession>().completeVendorSetupAsync();
 
         // Navigate to approval pending screen
         context.go('/vendor/pending');

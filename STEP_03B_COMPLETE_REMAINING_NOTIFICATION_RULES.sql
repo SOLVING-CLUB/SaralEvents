@@ -776,7 +776,7 @@ BEGIN
       SELECT vp.id as vendor_id, vp.user_id as vendor_user_id
       INTO v_vendor_record
       FROM vendor_profiles vp
-      WHERE vp.id = p_payload->>'vendor_id'::UUID OR vp.user_id = p_actor_id;
+      WHERE vp.id = (p_payload->>'vendor_id')::UUID OR vp.user_id = p_actor_id;
       
       IF v_vendor_record IS NULL THEN
         RETURN jsonb_build_object('success', false, 'error', 'Vendor not found');
