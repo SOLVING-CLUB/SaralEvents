@@ -378,7 +378,7 @@ class _PaymentMethodSelectorState extends State<PaymentMethodSelector> {
 
   Widget _netBankingFields() {
     return DropdownButtonFormField<String>(
-      value: _bankName,
+      initialValue: _bankName,
       items: _banks.map((b) => DropdownMenuItem(value: b, child: Text(b))).toList(),
       onChanged: (v) {
         setState(() => _bankName = v);

@@ -107,7 +107,7 @@ class _WalletPaymentsScreenState extends State<WalletPaymentsScreen> {
                 const Text('Add payment method', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
                 const SizedBox(height: 16),
                 DropdownButtonFormField<String>(
-                  value: selectedType,
+                  initialValue: selectedType,
                   items: const [
                     DropdownMenuItem(value: 'upi', child: Text('UPI')),
                     DropdownMenuItem(value: 'card', child: Text('Card')),

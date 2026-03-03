@@ -1260,6 +1260,7 @@ class _SummaryRow extends StatelessWidget {
   const _SummaryRow({
     required this.label,
     required this.value,
+    this.isBold = false,
   });
 
   @override

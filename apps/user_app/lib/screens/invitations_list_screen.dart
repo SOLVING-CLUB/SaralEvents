@@ -269,7 +269,7 @@ class _InvitationsListScreenState extends State<InvitationsListScreen> {
                     Text('RSVP for ${item.title}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
                     const SizedBox(height: 16),
                     DropdownButtonFormField<String>(
-                      value: status,
+                      initialValue: status,
                       decoration: const InputDecoration(labelText: 'Your response'),
                       items: const [
                         DropdownMenuItem(value: 'yes', child: Text('Yes, I will attend')),

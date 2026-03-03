@@ -16,6 +16,7 @@ import '../../features/profile/documents_screen.dart';
 import '../../features/wallet/wallet_screen.dart';
 import '../../features/orders/order_details_screen.dart';
 import '../../features/help/help_support_screen.dart';
+import '../../features/profile/settings_screen.dart';
 
 class AppRouter {
   static GoRouter create(AppSession session) {
@@ -168,6 +169,7 @@ class AppRouter {
         GoRoute(path: '/app/documents', builder: (_, __) => const DocumentsScreen()),
         GoRoute(path: '/app/wallet', builder: (_, __) => const WalletScreen()),
         GoRoute(path: '/app/help', builder: (_, __) => const HelpSupportScreen()),
+        GoRoute(path: '/app/settings', builder: (_, __) => const SettingsScreen()),
         GoRoute(
           path: '/app/orders/:bookingId',
           builder: (context, state) {

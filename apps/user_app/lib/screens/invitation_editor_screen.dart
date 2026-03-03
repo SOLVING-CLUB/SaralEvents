@@ -150,7 +150,7 @@ class _InvitationEditorScreenState extends State<InvitationEditorScreen> {
             ),
             const SizedBox(height: 16),
             DropdownButtonFormField<InvitationVisibility>(
-              value: _visibility,
+              initialValue: _visibility,
               items: const [
                 DropdownMenuItem(value: InvitationVisibility.public, child: Text('Public (discoverable)')),
                 DropdownMenuItem(value: InvitationVisibility.unlisted, child: Text('Unlisted (shareable link)')),

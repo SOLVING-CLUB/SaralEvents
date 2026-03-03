@@ -592,7 +592,7 @@ class _BusinessDetailsStep extends StatelessWidget {
           
           // Category (Required)
           DropdownButtonFormField<String>(
-            value: category,
+            initialValue: category,
             items: categories.map((cat) => DropdownMenuItem(
               value: cat,
               child: Text(cat),

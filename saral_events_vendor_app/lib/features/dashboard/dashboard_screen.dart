@@ -4,6 +4,8 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/state/session.dart';
 import '../bookings/booking_service.dart';
+import '../services/select_service_availability_screen.dart';
+import '../services/services_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   final Function(int)? onNavigateToTab;
@@ -17,6 +19,7 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen> {
   late final BookingService _bookingService;
   Map<String, int> _bookingStats = {};
+  Map<String, num> _earningsSummary = const {'today': 0, 'month': 0, 'total': 0};
   bool _isLoading = true;
   bool _hasShownWelcomeCard = false;
 
@@ -48,9 +51,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Future<void> _loadStats() async {
     try {
       final stats = await _bookingService.getBookingStats();
+      final earnings = await _bookingService.getEarningsSummary();
       if (mounted) {
         setState(() {
           _bookingStats = stats;
+          _earningsSummary = earnings;
           _isLoading = false;
         });
       }
@@ -87,6 +92,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
             children: [
               // Welcome Section
               _buildWelcomeSection(),
+              const SizedBox(height: 24),
+
+              // Earnings summary
+              _buildEarningsSummary(),
               const SizedBox(height: 24),
               
               // Quick Stats
@@ -290,6 +299,187 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
+  Widget _buildEarningsSummary() {
+    final today = _earningsSummary['today'] ?? 0;
+    final month = _earningsSummary['month'] ?? 0;
+    final total = _earningsSummary['total'] ?? 0;
+
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+
+    String fmt(num value) => '₹${value.toStringAsFixed(0)}';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              'Business Overview',
+              style: textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.bold,
+                letterSpacing: 0.5,
+              ),
+            ),
+            TextButton(
+              onPressed: () {
+                // Future: Detailed Analytics
+              },
+              child: const Text('Details'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Container(
+          width: double.infinity,
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                colorScheme.primary,
+                colorScheme.primary.withRed((colorScheme.primary.red + 50).clamp(0, 255)),
+              ],
+            ),
+            borderRadius: BorderRadius.circular(24),
+            boxShadow: [
+              BoxShadow(
+                color: colorScheme.primary.withOpacity(0.35),
+                blurRadius: 20,
+                offset: const Offset(0, 10),
+              ),
+            ],
+          ),
+          child: Stack(
+            children: [
+              // Abstract background decoration
+              Positioned(
+                right: -20,
+                top: -20,
+                child: CircleAvatar(
+                  radius: 60,
+                  backgroundColor: Colors.white.withOpacity(0.08),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.all(24.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Icon(
+                            Icons.account_balance_wallet,
+                            color: Colors.white,
+                            size: 20,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        const Text(
+                          'Total Earnings',
+                          style: TextStyle(
+                            color: Colors.white70,
+                            fontWeight: FontWeight.w500,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      fmt(total),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 36,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -1,
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: Colors.white.withOpacity(0.1),
+                          width: 1,
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'Today',
+                                  style: TextStyle(
+                                    color: Colors.white60,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  fmt(today),
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 18,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Container(
+                            height: 30,
+                            width: 1,
+                            color: Colors.white24,
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'This Month',
+                                  style: TextStyle(
+                                    color: Colors.white60,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  fmt(month),
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 18,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildFeatureCards(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -402,22 +592,59 @@ class _DashboardScreenState extends State<DashboardScreen> {
           children: [
             Expanded(
               child: _ActionButton(
-                title: 'Add Service',
-                icon: Icons.add,
+                title: 'Add New Service',
+                icon: Icons.add_circle_outline,
                 onTap: () {
-                  // Navigate to catalog tab (index 3)
-                  widget.onNavigateToTab?.call(3);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const AddServicePage(),
+                      fullscreenDialog: true,
+                    ),
+                  );
                 },
               ),
             ),
             const SizedBox(width: 12),
             Expanded(
               child: _ActionButton(
-                title: 'View Orders',
-                icon: Icons.list_alt,
+                title: 'Update Availability',
+                icon: Icons.calendar_month_outlined,
                 onTap: () {
-                  // Navigate to orders tab (index 1)
-                  widget.onNavigateToTab?.call(1);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const SelectServiceAvailabilityScreen(),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: _ActionButton(
+                title: 'Respond to Chats',
+                icon: Icons.chat_outlined,
+                onTap: () {
+                  // Navigate to messages tab (index 2)
+                  widget.onNavigateToTab?.call(2);
+                },
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _ActionButton(
+                title: 'Boost Listing',
+                icon: Icons.rocket_launch_outlined,
+                subtitle: 'Future',
+                onTap: () {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Boost Listing coming soon!')),
+                  );
                 },
               ),
             ),
@@ -622,11 +849,13 @@ class _ActivityItem extends StatelessWidget {
 
 class _ActionButton extends StatelessWidget {
   final String title;
+  final String? subtitle;
   final IconData icon;
   final VoidCallback onTap;
 
   const _ActionButton({
     required this.title,
+    this.subtitle,
     required this.icon,
     required this.onTap,
   });
@@ -659,9 +888,22 @@ class _ActionButton extends StatelessWidget {
                 fontWeight: FontWeight.w600,
                 fontSize: 12,
               ),
+              textAlign: TextAlign.center,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
             ),
+            if (subtitle != null) ...[
+              const SizedBox(height: 2),
+              Text(
+                subtitle!,
+                style: TextStyle(
+                  color: Colors.white.withOpacity(0.8),
+                  fontSize: 10,
+                  fontWeight: FontWeight.w400,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ],
           ],
         ),
       ),

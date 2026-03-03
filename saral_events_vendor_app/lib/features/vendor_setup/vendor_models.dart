@@ -24,6 +24,17 @@ class VendorProfile {
   final String? approvalStatus;
   final String? approvalNotes;
   final String? profilePictureUrl;
+  final String? yearsOfExperience;
+  final String? teamSize;
+  final List<String>? serviceLocations;
+  final List<String>? languagesSpoken;
+  final String? advancePaymentPercentage;
+  final String? cancellationPolicy;
+  final String? refundRules;
+  final String? upiId;
+  final String? settlementCycle;
+  final double? rating;
+  final int? totalReviews;
 
   VendorProfile({
     this.id,
@@ -51,6 +62,17 @@ class VendorProfile {
     this.approvalStatus,
     this.approvalNotes,
     this.profilePictureUrl,
+    this.yearsOfExperience,
+    this.teamSize,
+    this.serviceLocations,
+    this.languagesSpoken,
+    this.advancePaymentPercentage,
+    this.cancellationPolicy,
+    this.refundRules,
+    this.upiId,
+    this.settlementCycle,
+    this.rating,
+    this.totalReviews,
   });
 
   VendorProfile copyWith({
@@ -76,6 +98,17 @@ class VendorProfile {
     String? approvalStatus,
     String? approvalNotes,
     String? profilePictureUrl,
+    String? yearsOfExperience,
+    String? teamSize,
+    List<String>? serviceLocations,
+    List<String>? languagesSpoken,
+    String? advancePaymentPercentage,
+    String? cancellationPolicy,
+    String? refundRules,
+    String? upiId,
+    String? settlementCycle,
+    double? rating,
+    int? totalReviews,
   }) {
     return VendorProfile(
       id: id,
@@ -103,6 +136,17 @@ class VendorProfile {
       approvalStatus: approvalStatus ?? this.approvalStatus,
       approvalNotes: approvalNotes ?? this.approvalNotes,
       profilePictureUrl: profilePictureUrl ?? this.profilePictureUrl,
+      yearsOfExperience: yearsOfExperience ?? this.yearsOfExperience,
+      teamSize: teamSize ?? this.teamSize,
+      serviceLocations: serviceLocations ?? this.serviceLocations,
+      languagesSpoken: languagesSpoken ?? this.languagesSpoken,
+      advancePaymentPercentage: advancePaymentPercentage ?? this.advancePaymentPercentage,
+      cancellationPolicy: cancellationPolicy ?? this.cancellationPolicy,
+      refundRules: refundRules ?? this.refundRules,
+      upiId: upiId ?? this.upiId,
+      settlementCycle: settlementCycle ?? this.settlementCycle,
+      rating: rating ?? this.rating,
+      totalReviews: totalReviews ?? this.totalReviews,
     );
   }
 
@@ -132,6 +176,17 @@ class VendorProfile {
       'approval_status': approvalStatus,
       'approval_notes': approvalNotes,
       'profile_picture_url': profilePictureUrl,
+      'years_of_experience': yearsOfExperience,
+      'team_size': teamSize,
+      'service_locations': serviceLocations,
+      'languages_spoken': languagesSpoken,
+      'advance_payment_percentage': advancePaymentPercentage,
+      'cancellation_policy': cancellationPolicy,
+      'refund_rules': refundRules,
+      'upi_id': upiId,
+      'settlement_cycle': settlementCycle,
+      'rating': rating,
+      'total_reviews': totalReviews,
     };
   }
 
@@ -162,6 +217,17 @@ class VendorProfile {
       approvalStatus: json['approval_status'],
       approvalNotes: json['approval_notes'],
       profilePictureUrl: json['profile_picture_url'],
+      yearsOfExperience: json['years_of_experience'],
+      teamSize: json['team_size'],
+      serviceLocations: json['service_locations'] != null ? List<String>.from(json['service_locations']) : null,
+      languagesSpoken: json['languages_spoken'] != null ? List<String>.from(json['languages_spoken']) : null,
+      advancePaymentPercentage: json['advance_payment_percentage'],
+      cancellationPolicy: json['cancellation_policy'],
+      refundRules: json['refund_rules'],
+      upiId: json['upi_id'],
+      settlementCycle: json['settlement_cycle'],
+      rating: (json['rating'] as num?)?.toDouble(),
+      totalReviews: json['total_reviews'],
     );
   }
 }

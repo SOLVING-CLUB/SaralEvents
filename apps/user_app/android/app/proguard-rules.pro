@@ -1,6 +1,11 @@
 # Keep annotations used by SDKs
 -keep class proguard.annotation.** { *; }
 
+# Ignore optional j2objc annotations referenced by some Google libraries.
+# We also add the j2objc-annotations dependency, but this keeps R8 quiet
+# even if those classes are not used in the final app.
+-dontwarn com.google.j2objc.annotations.**
+
 # Razorpay SDK recommended rules (defensive)
 -keep class com.razorpay.** { *; }
 -dontwarn com.razorpay.**

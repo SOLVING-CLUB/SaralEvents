@@ -542,7 +542,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
         ],
       ),
       child: DropdownButtonFormField<EventType>(
-        value: _selectedType,
+        initialValue: _selectedType,
         decoration: InputDecoration(
           labelText: 'Event Type',
           border: OutlineInputBorder(
@@ -664,7 +664,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
         ],
       ),
       child: DropdownButtonFormField<PaymentStatus>(
-        value: _paymentStatus,
+        initialValue: _paymentStatus,
         decoration: InputDecoration(
           labelText: 'Payment Status',
           border: OutlineInputBorder(

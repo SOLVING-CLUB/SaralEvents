@@ -231,6 +231,8 @@ class ServiceService {
                 ?.map((url) => MediaItem(url: url, type: MediaType.image))
                 .toList() ?? [],
         enabled: row['is_active'] ?? true, // Map the is_active field to enabled
+        rating: row['rating']?.toDouble() ?? 0.0,
+        reviewCount: row['review_count'] ?? 0,
       )).toList();
     } catch (e) {
       print('Error getting services: $e');
@@ -389,6 +391,8 @@ class ServiceService {
                 ?.map((url) => MediaItem(url: url, type: MediaType.image))
                 .toList() ?? [],
         enabled: result['is_active'] ?? true, // Map the is_active field to enabled
+        rating: result['rating']?.toDouble() ?? 0.0,
+        reviewCount: result['review_count'] ?? 0,
       );
     } catch (e) {
       print('Error creating service: $e');
@@ -481,6 +485,8 @@ class ServiceService {
                 .toList() ?? [],
         enabled: row['is_active'] ?? true, // Map the is_active field to enabled
         isVisibleToUsers: row['is_visible_to_users'] ?? true,
+        rating: row['rating']?.toDouble() ?? 0.0,
+        reviewCount: row['review_count'] ?? 0,
       )).toList();
     } catch (e) {
       print('Error getting all services: $e');
@@ -512,6 +518,8 @@ class ServiceService {
                 .toList() ?? [],
         enabled: row['is_active'] ?? true, // Map the is_active field to enabled
         isVisibleToUsers: row['is_visible_to_users'] ?? true,
+        rating: row['rating']?.toDouble() ?? 0.0,
+        reviewCount: row['review_count'] ?? 0,
       )).toList();
     } catch (e) {
       print('Error getting all services with status: $e');
@@ -544,6 +552,8 @@ class ServiceService {
                 .toList() ?? [],
         enabled: row['is_active'] ?? true, // Map the is_active field to enabled
         isVisibleToUsers: row['is_visible_to_users'] ?? true,
+        rating: row['rating']?.toDouble() ?? 0.0,
+        reviewCount: row['review_count'] ?? 0,
       )).toList();
     } catch (e) {
       print('Error getting root services: $e');

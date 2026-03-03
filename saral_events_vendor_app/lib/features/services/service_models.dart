@@ -48,6 +48,9 @@ class ServiceItem {
   bool enabled;
   bool isVisibleToUsers;
 
+  double rating;
+  int reviewCount;
+
   ServiceItem({
     required this.id,
     this.categoryId,
@@ -58,6 +61,8 @@ class ServiceItem {
     required this.media,
     this.enabled = true,
     this.isVisibleToUsers = true,
+    this.rating = 0.0,
+    this.reviewCount = 0,
   });
 }
 

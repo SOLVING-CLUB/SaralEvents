@@ -118,7 +118,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   child: Padding(
                     padding: const EdgeInsets.all(16),
                     child: DropdownButtonFormField<String>(
-                      value: _language,
+                      initialValue: _language,
                       decoration: const InputDecoration(labelText: 'Preferred language'),
                       items: _languages
                           .map((lang) => DropdownMenuItem(

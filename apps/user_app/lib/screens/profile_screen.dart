@@ -171,7 +171,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     value ? ThemeMode.dark : ThemeMode.light,
                   );
                 },
-                activeColor: theme.colorScheme.primary,
+                activeThumbColor: theme.colorScheme.primary,
               ),
             ],
           ),

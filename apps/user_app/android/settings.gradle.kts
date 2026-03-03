@@ -18,7 +18,8 @@ pluginManagement {
 
 plugins {
     id("dev.flutter.flutter-plugin-loader") version "1.0.0"
-    id("com.android.application") version "8.7.3" apply false
+    // Bump Android Gradle Plugin to satisfy newer AndroidX dependencies (browser 1.9.0, activity 1.12.4, core-ktx 1.17.0, etc.)
+    id("com.android.application") version "8.9.1" apply false
     id("org.jetbrains.kotlin.android") version "2.1.0" apply false
 }
 

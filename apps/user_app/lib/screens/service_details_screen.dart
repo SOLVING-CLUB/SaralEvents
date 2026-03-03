@@ -33,6 +33,7 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen>
   
   List<ServiceItem> _similarServices = <ServiceItem>[];
   VendorProfile? _vendorProfile;
+  int? _vendorServicesCount;
   bool _isLoading = true;
   String? _error;
   int _currentImageIndex = 0;
@@ -116,18 +117,55 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen>
             .toList();
       }
 
-      // Load vendor profile (if needed - for now using existing data)
-      final vendorProfile = VendorProfile(
-        id: widget.service.vendorId,
-        businessName: widget.service.vendorName,
-        address: 'Hyderabad, Telangana', // This should come from database
-        category: 'Event Services',
-      );
+      // Load vendor profile from database so vendor tab shows real data
+      VendorProfile? vendorProfile;
+      try {
+        final row = await Supabase.instance.client
+            .from('vendor_profiles')
+            .select('id, business_name, address, category, phone_number, email, website, description')
+            .eq('id', widget.service.vendorId)
+            .maybeSingle();
+
+        if (row != null) {
+          vendorProfile = VendorProfile(
+            id: row['id'] as String,
+            businessName: row['business_name'] as String? ?? widget.service.vendorName,
+            address: row['address'] as String? ?? 'Address not available',
+            category: row['category'] as String? ?? (widget.service.vendorCategory ?? 'Event Services'),
+            phoneNumber: row['phone_number'] as String?,
+            email: row['email'] as String?,
+            website: row['website'] as String?,
+            description: row['description'] as String?,
+          );
+        }
+      } catch (_) {
+        // Fallback to basic info from the service item if vendor profile load fails
+        vendorProfile ??= VendorProfile(
+          id: widget.service.vendorId,
+          businessName: widget.service.vendorName,
+          address: 'Address not available',
+          category: widget.service.vendorCategory ?? 'Event Services',
+        );
+      }
+
+      // Count how many active services this vendor has (for Vendor tab stats)
+      int? vendorServicesCount;
+      try {
+        final resp = await Supabase.instance.client
+            .from('services')
+            .select('id')
+            .eq('vendor_id', widget.service.vendorId)
+            .eq('is_active', true);
+        vendorServicesCount = resp.length;
+            } catch (_) {
+        vendorServicesCount = null;
+      }
 
       if (mounted) {
         setState(() {
           _similarServices = similarServices;
           _vendorProfile = vendorProfile;
+          _vendorServicesCount = vendorServicesCount;
           _isLoading = false;
         });
       }
@@ -1020,14 +1058,24 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen>
           // Vendor Stats
           Row(
             children: [
+              if (_vendorServicesCount != null)
+                Expanded(
+                  child: _buildVendorStat('Services', '$_vendorServicesCount'),
+                ),
               Expanded(
-                child: _buildVendorStat('Services', '12+'),
-              ),
-              Expanded(
-                child: _buildVendorStat('Experience', '5+ years'),
-              ),
-              Expanded(
-                child: _buildVendorStat('Rating', '4.8'),
+                child: _buildVendorStat(
+                  'Rating',
+                  (() {
+                    final avgRating = (_ratingStats['averageRating'] as num?)?.toDouble() ??
+                        service.ratingAvg ??
+                        0.0;
+                    final reviewCount = (_ratingStats['count'] as int?) ??
+                        service.ratingCount ??
+                        0;
+                    if (reviewCount == 0) return 'N/A';
+                    return avgRating.toStringAsFixed(1);
+                  })(),
+                ),
               ),
             ],
           ),
@@ -1050,18 +1098,20 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen>
             _vendorProfile?.address ?? 'Hyderabad, Telangana',
             () => _openMap(service),
           ),
-          _buildContactItem(
-            Icons.phone,
-            'Phone',
-            '+91 98765 43210',
-            () => _contactVendor(service),
-          ),
-          _buildContactItem(
-            Icons.email,
-            'Email',
-            'contact@${service.vendorName.toLowerCase().replaceAll(' ', '')}.com',
-            () => _emailVendor(service),
-          ),
+          if (_vendorProfile?.phoneNumber != null)
+            _buildContactItem(
+              Icons.phone,
+              'Phone',
+              _vendorProfile!.phoneNumber!,
+              () => _contactVendor(service),
+            ),
+          if (_vendorProfile?.email != null)
+            _buildContactItem(
+              Icons.email,
+              'Email',
+              _vendorProfile!.email!,
+              () => _emailVendor(service),
+            ),
           
           const SizedBox(height: 24),
           

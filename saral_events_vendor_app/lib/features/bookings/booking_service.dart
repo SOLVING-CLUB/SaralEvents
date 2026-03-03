@@ -507,4 +507,55 @@ class BookingService {
       return {};
     }
   }
+
+  /// Get earnings summary for the vendor.
+  /// Returns a map with keys: 'today', 'month', 'total'.
+  Future<Map<String, num>> getEarningsSummary() async {
+    try {
+      final vendorId = await _getVendorId();
+      if (vendorId == null) {
+        return {'today': 0, 'month': 0, 'total': 0};
+      }
+
+      final now = DateTime.now();
+      final startOfToday = DateTime(now.year, now.month, now.day);
+      final startOfMonth = DateTime(now.year, now.month, 1);
+
+      final rows = await _supabase
+          .from('bookings')
+          .select('amount, booking_date, status')
+          .eq('vendor_id', vendorId)
+          .eq('status', 'completed');
+
+      num today = 0;
+      num month = 0;
+      num total = 0;
+
+      for (final row in rows) {
+        final amount = (row['amount'] ?? 0) as num;
+        final date = DateTime.tryParse(row['booking_date']?.toString() ?? '');
+        if (date == null) {
+          total += amount;
+          continue;
+        }
+
+        total += amount;
+        if (!date.isBefore(startOfToday)) {
+          today += amount;
+        }
+        if (!date.isBefore(startOfMonth)) {
+          month += amount;
+        }
+      }
+
+      return {
+        'today': today,
+        'month': month,
+        'total': total,
+      };
+    } catch (e) {
+      print('Error fetching earnings summary: $e');
+      return {'today': 0, 'month': 0, 'total': 0};
+    }
+  }
 }

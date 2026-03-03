@@ -182,7 +182,10 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
   Future<void> _launchPhone() async {
     final uri = Uri.parse('tel:+917731842453');
     if (await canLaunchUrl(uri)) {
-      await launchUrl(uri);
+      await launchUrl(
+        uri,
+        mode: LaunchMode.externalApplication,
+      );
     } else {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -193,10 +196,16 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
   }
 
   Future<void> _launchEmail() async {
-    final email = 'eventssaral@gmail.com';
-    final uri = Uri.parse('mailto:$email');
+    final email = 'eventssaral213@gmail.com';
+    final uri = Uri(
+      scheme: 'mailto',
+      path: email,
+    );
     if (await canLaunchUrl(uri)) {
-      await launchUrl(uri);
+      await launchUrl(
+        uri,
+        mode: LaunchMode.externalApplication,
+      );
     } else {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -207,7 +216,8 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
   }
 
   Future<void> _launchWebsite() async {
-    final uri = Uri.parse('https://saralevents.com/');
+    // Use the full web URL so it opens in the browser as expected
+    final uri = Uri.parse('https://www.saralevents.com/');
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
     } else {
@@ -261,7 +271,7 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
             _buildContactItem(
               icon: Icons.email,
               title: 'Email',
-              subtitle: 'eventssaral@gmail.com',
+                subtitle: 'eventssaral213@gmail.com',
               onTap: _launchEmail,
               color: Colors.blue,
             ),
@@ -508,8 +518,20 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
               const Text('Report an issue', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
               const SizedBox(height: 12),
               DropdownButtonFormField<String>(
-                value: _issueType,
-                decoration: const InputDecoration(labelText: 'Issue type'),
+                initialValue: _issueType,
+                decoration: InputDecoration(
+                  labelText: 'Issue type',
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: BorderSide(
+                      color: Theme.of(context).colorScheme.primary,
+                      width: 1.4,
+                    ),
+                  ),
+                ),
                 items: const [
                   DropdownMenuItem(value: 'general', child: Text('General inquiry')),
                   DropdownMenuItem(value: 'payment', child: Text('Payment issue')),
@@ -527,10 +549,34 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
               // Contact Number
               TextFormField(
                 controller: _contactNumberController,
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   labelText: 'Contact Number',
                   hintText: 'Your contact number for support',
-                  prefixIcon: Icon(Icons.phone),
+                  prefixIcon: const Icon(Icons.phone),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: BorderSide(
+                      color: Theme.of(context).colorScheme.primary,
+                      width: 1.4,
+                    ),
+                  ),
+                  errorBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: const BorderSide(
+                      color: Colors.red,
+                      width: 1.4,
+                    ),
+                  ),
+                  focusedErrorBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: const BorderSide(
+                      color: Colors.red,
+                      width: 1.4,
+                    ),
+                  ),
                 ),
                 keyboardType: TextInputType.phone,
                 validator: (value) {
@@ -553,15 +599,63 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
                       ? 'Enter Order ID (required for ${_issueType == 'payment' ? 'payment' : 'booking'} issues)'
                       : 'Enter Order ID if related to an order',
                   prefixIcon: const Icon(Icons.receipt_long),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: BorderSide(
+                      color: Theme.of(context).colorScheme.primary,
+                      width: 1.4,
+                    ),
+                  ),
+                  errorBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: const BorderSide(
+                      color: Colors.red,
+                      width: 1.4,
+                    ),
+                  ),
+                  focusedErrorBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: const BorderSide(
+                      color: Colors.red,
+                      width: 1.4,
+                    ),
+                  ),
                 ),
                 validator: _validateOrderId,
               ),
               const SizedBox(height: 12),
               TextFormField(
                 controller: _issueDescriptionController,
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   labelText: 'Describe the problem',
                   alignLabelWithHint: true,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: BorderSide(
+                      color: Theme.of(context).colorScheme.primary,
+                      width: 1.4,
+                    ),
+                  ),
+                  errorBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: const BorderSide(
+                      color: Colors.red,
+                      width: 1.4,
+                    ),
+                  ),
+                  focusedErrorBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: const BorderSide(
+                      color: Colors.red,
+                      width: 1.4,
+                    ),
+                  ),
                 ),
                 maxLines: 4,
                 validator: (value) {

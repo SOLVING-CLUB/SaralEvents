@@ -829,7 +829,7 @@ class _BudgetItemDialogState extends State<_BudgetItemDialog> {
                       
                       // Category
                       DropdownButtonFormField<String>(
-                        value: _commonCategories.contains(_categoryController.text) 
+                        initialValue: _commonCategories.contains(_categoryController.text) 
                             ? _categoryController.text 
                             : null,
                         decoration: const InputDecoration(
@@ -949,7 +949,7 @@ class _BudgetItemDialogState extends State<_BudgetItemDialog> {
                       
                       // Payment Status
                       DropdownButtonFormField<PaymentStatus>(
-                        value: _paymentStatus,
+                        initialValue: _paymentStatus,
                         decoration: const InputDecoration(
                           labelText: 'Payment Status',
                           border: OutlineInputBorder(),

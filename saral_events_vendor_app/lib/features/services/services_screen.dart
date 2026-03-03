@@ -380,7 +380,7 @@ class _ServicesScreenState extends State<ServicesScreen> with TickerProviderStat
       builder: (context) => AlertDialog(
         title: const Text('Move Services'),
         content: DropdownButtonFormField<String>(
-          value: targetId,
+          initialValue: targetId,
           items: [
             const DropdownMenuItem(value: 'root', child: Text('Root (No Category)')),
             ...filteredCategories.map((cat) => DropdownMenuItem(value: cat.id, child: Text(cat.name, maxLines: 1, overflow: TextOverflow.ellipsis))),
@@ -892,7 +892,7 @@ class _ServicesScreenState extends State<ServicesScreen> with TickerProviderStat
             Text('Move "${service.name}" to:', maxLines: 2, overflow: TextOverflow.ellipsis),
             const SizedBox(height: 16),
             DropdownButtonFormField<String>(
-              value: selectedCategoryId,
+              initialValue: selectedCategoryId,
               items: [
                 const DropdownMenuItem(
                   value: 'root',
@@ -1009,7 +1009,7 @@ class _ServicesScreenState extends State<ServicesScreen> with TickerProviderStat
   Future<void> _addService() async {
     final ServiceItem? created = await Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => _AddServicePage(
+        builder: (_) => AddServicePage(
           categoryId: _current.id == 'root' ? null : _current.id,
         ),
         fullscreenDialog: true,
@@ -1035,7 +1035,7 @@ class _ServicesScreenState extends State<ServicesScreen> with TickerProviderStat
 
   void _openEditService(ServiceItem item) {
     Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => _EditServicePage(item: item)),
+      MaterialPageRoute(builder: (_) => EditServicePage(item: item)),
     ).then((changed) async {
       if (changed == true) {
         await _forceRefreshServicesData();
@@ -1080,6 +1080,9 @@ class _ServicesScreenState extends State<ServicesScreen> with TickerProviderStat
         return true;
       },
       child: Scaffold(
+        // Match catalog background with app surface color so there is
+        // no odd grey block behind the list.
+        backgroundColor: Theme.of(context).colorScheme.surface,
         appBar: AppBar(
           title: Text(
             _selectionMode
@@ -1187,7 +1190,20 @@ class _ServiceCard extends StatefulWidget {
   final bool isSelected;
   final ValueChanged<bool?>? onSelectedChanged;
   final VoidCallback? onLongPressSelect;
-  const _ServiceCard({required this.item, required this.onOpen, this.onEdit, required this.onDelete, required this.onToggleEnabled, this.onOpenAvailability, this.onMove, this.selectionMode = false, this.isSelected = false, this.onSelectedChanged, this.onLongPressSelect});
+
+  const _ServiceCard({
+    required this.item,
+    required this.onOpen,
+    this.onEdit,
+    required this.onDelete,
+    required this.onToggleEnabled,
+    this.onOpenAvailability,
+    this.onMove,
+    this.selectionMode = false,
+    this.isSelected = false,
+    this.onSelectedChanged,
+    this.onLongPressSelect,
+  });
 
   @override
   State<_ServiceCard> createState() => _ServiceCardState();
@@ -1198,173 +1214,311 @@ class _ServiceCardState extends State<_ServiceCard> {
 
   @override
   Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final textTheme = theme.textTheme;
+
     return Card(
       elevation: 4,
-      shadowColor: Colors.black12,
-      color: Colors.white,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: const BorderSide(color: Colors.black26, width: 1.2),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(12.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
+      shadowColor: Colors.black.withOpacity(0.1),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Top section: Image and Badges
+          Stack(
+            children: [
+              // Service Image
+              _buildServiceImage(),
+              
+              // Selection Checkbox
+              if (widget.selectionMode)
+                Positioned(
+                  top: 12,
+                  left: 12,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      shape: BoxShape.circle,
+                      boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 4)],
+                    ),
+                    child: Checkbox(
+                      value: widget.isSelected,
+                      onChanged: widget.onSelectedChanged,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                    ),
+                  ),
+                ),
+
+              // Availability Badge
+              Positioned(
+                top: 12,
+                right: 12,
+                child: _buildStatusBadge(),
+              ),
+
+              // Rating Badge
+              Positioned(
+                bottom: 12,
+                left: 12,
+                child: _buildRatingBadge(),
+              ),
+            ],
+          ),
+
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (widget.selectionMode) ...[
-                  Checkbox(
-                    value: widget.isSelected,
-                    onChanged: widget.onSelectedChanged,
-                  ),
-                  const SizedBox(width: 4),
-                ],
-                Container(
-                  width: 64,
-                  height: 64,
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.secondary.withValues(alpha: 0.08),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Icon(Icons.image, color: Colors.black45),
+                // Name and Price Row
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        widget.item.name,
+                        style: textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 18,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    Text(
+                      '₹${widget.item.price.toStringAsFixed(0)}',
+                      style: textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                        color: colorScheme.primary,
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(widget.item.name, style: const TextStyle(fontWeight: FontWeight.w600), maxLines: 2, overflow: TextOverflow.ellipsis),
-                      const SizedBox(height: 4),
-                      Text('₹${widget.item.price}', style: const TextStyle(fontWeight: FontWeight.w700), maxLines: 1, overflow: TextOverflow.ellipsis),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Switch(
-                  value: widget.item.enabled,
-                  onChanged: (v) async {
-                    widget.onToggleEnabled(v);
-                  },
-                )
-              ],
-            ),
-            const SizedBox(height: 8),
-            if (widget.item.tags.isNotEmpty)
-              Wrap(
-                spacing: 6,
-                runSpacing: 6,
-                children: widget.item.tags
-                    .map((t) => Chip(label: Text(t, maxLines: 1, overflow: TextOverflow.ellipsis), materialTapTargetSize: MaterialTapTargetSize.shrinkWrap))
-                    .toList(),
-              ),
-            const SizedBox(height: 8),
-            GestureDetector(
-              onTap: () {
-                if (widget.selectionMode) {
-                  widget.onSelectedChanged?.call(!widget.isSelected);
-                } else {
-                  setState(() => _expanded = !_expanded);
-                }
-              },
-              onLongPress: widget.onLongPressSelect,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
+                
+                const SizedBox(height: 8),
+
+                // Description
+                GestureDetector(
+                  onTap: () => setState(() => _expanded = !_expanded),
+                  child: Text(
                     widget.item.description,
                     maxLines: _expanded ? null : 2,
                     overflow: _expanded ? TextOverflow.visible : TextOverflow.ellipsis,
-                    style: textTheme.bodyMedium,
+                    style: textTheme.bodySmall?.copyWith(color: Colors.grey[700]),
                   ),
-                  const SizedBox(height: 4),
-                  Text(_expanded ? 'Show Less' : 'Show More', style: TextStyle(color: Theme.of(context).colorScheme.primary)),
-                ],
-              ),
-            ),
-            const SizedBox(height: 8),
-            if (widget.item.media.isNotEmpty)
-              SizedBox(
-                height: 72,
-                child: ListView.separated(
-                  scrollDirection: Axis.horizontal,
-                  itemCount: widget.item.media.length,
-                  separatorBuilder: (_, __) => const SizedBox(width: 8),
-                  itemBuilder: (context, i) {
-                    final m = widget.item.media[i];
-                    return GestureDetector(
-                      onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => MediaGalleryPage(items: widget.item.media))),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(8),
-                        child: Container(
-                          width: 96,
-                          height: 72,
-                          color: Colors.grey[200],
-                          child: m.type == MediaType.image
-                              ? (m.url.startsWith('http') || kIsWeb
-                                  ? Image.network(m.url, fit: BoxFit.cover)
-                                  : Image.file(File(m.url), fit: BoxFit.cover))
-                              : const Icon(Icons.play_circle_fill, size: 32, color: Colors.black54),
+                ),
+
+                const SizedBox(height: 12),
+
+                // Tags
+                if (widget.item.tags.isNotEmpty)
+                  SizedBox(
+                    height: 28,
+                    child: ListView.separated(
+                      scrollDirection: Axis.horizontal,
+                      itemCount: widget.item.tags.length,
+                      separatorBuilder: (_, __) => const SizedBox(width: 8),
+                      itemBuilder: (context, i) => Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: colorScheme.secondaryContainer,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          widget.item.tags[i],
+                          style: textTheme.labelSmall?.copyWith(
+                            color: colorScheme.onSecondaryContainer,
+                          ),
                         ),
                       ),
-                    );
-                  },
-                ),
-              ),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              alignment: WrapAlignment.spaceBetween,
-              children: [
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    IconButton(
-                      tooltip: 'Delete',
-                      onPressed: widget.onDelete,
-                      icon: const _TrashIcon(color: Colors.redAccent),
                     ),
-                    if (widget.onMove != null) ...[
-                      IconButton(
-                        tooltip: 'Move Service',
-                        onPressed: widget.onMove,
-                        icon: const Icon(Icons.drag_handle, color: Colors.blue),
+                  ),
+
+                const SizedBox(height: 16),
+                const Divider(height: 1),
+                const SizedBox(height: 12),
+
+                // Bottom Action Row
+                Row(
+                  children: [
+                    // Edit Button
+                    TextButton.icon(
+                      onPressed: widget.onEdit ?? widget.onOpen,
+                      icon: const Icon(Icons.edit_outlined, size: 20),
+                      label: const Text('Edit'),
+                      style: TextButton.styleFrom(
+                        visualDensity: VisualDensity.compact,
+                        foregroundColor: colorScheme.primary,
                       ),
-                    ],
+                    ),
+
+                    // Availability Toggle (Pause/Resume)
+                    const Spacer(),
+                    Text(
+                      widget.item.enabled ? 'Active' : 'Paused',
+                      style: textTheme.labelSmall?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: widget.item.enabled ? Colors.green[700] : Colors.grey[600],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Switch(
+                      value: widget.item.enabled,
+                      onChanged: widget.onToggleEnabled,
+                      activeColor: Colors.green,
+                    ),
+                    
+                    // More/Delete Options
+                    _buildMoreButton(),
                   ],
                 ),
-                Flexible(
-                  child: SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        TextButton(onPressed: widget.onEdit ?? widget.onOpen, child: const Text('Edit')),
-                        if (widget.onOpenAvailability != null)
-                          TextButton(onPressed: widget.onOpenAvailability, child: const Text('Availability')),
-                        TextButton(
-                          onPressed: () async {
-                            final link = 'https://example.com/service/${widget.item.id}';
-                            await Clipboard.setData(ClipboardData(text: link));
-                            if (mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Link copied to clipboard')));
-                            }
-                          },
-                          child: const Text('Share'),
-                        ),
-                        FilledButton.tonal(onPressed: widget.onOpen, child: const Text('Open')),
-                      ],
-                    ),
-                  ),
-                ),
               ],
-            )
-          ],
-        ),
+            ),
+          ),
+        ],
       ),
+    );
+  }
+
+  Widget _buildServiceImage() {
+    final hasMedia = widget.item.media.isNotEmpty;
+    final firstMedia = hasMedia ? widget.item.media.first : null;
+
+    return AspectRatio(
+      aspectRatio: 16 / 9,
+      child: Container(
+        width: double.infinity,
+        decoration: BoxDecoration(color: Colors.grey[200]),
+        child: hasMedia
+            ? (firstMedia!.url.startsWith('http') || kIsWeb
+                ? Image.network(firstMedia.url, fit: BoxFit.cover)
+                : Image.file(File(firstMedia.url), fit: BoxFit.cover))
+            : const Center(child: Icon(Icons.image_outlined, size: 48, color: Colors.grey)),
+      ),
+    );
+  }
+
+  Widget _buildStatusBadge() {
+    final isActive = widget.item.enabled;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: isActive ? Colors.green.withOpacity(0.9) : Colors.orange.withOpacity(0.9),
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 4)],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            isActive ? Icons.check_circle : Icons.pause_circle_filled,
+            color: Colors.white,
+            size: 14,
+          ),
+          const SizedBox(width: 6),
+          Text(
+            isActive ? 'ACTIVE' : 'PAUSED',
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+              fontSize: 10,
+              letterSpacing: 0.5,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRatingBadge() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.9),
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 4)],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.star, color: Colors.amber, size: 16),
+          const SizedBox(width: 4),
+          Text(
+            widget.item.rating.toStringAsFixed(1),
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+          ),
+          if (widget.item.reviewCount > 0)
+            Text(
+              ' (${widget.item.reviewCount})',
+              style: TextStyle(color: Colors.grey[600], fontSize: 11),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMoreButton() {
+    return PopupMenuButton<String>(
+      icon: const Icon(Icons.more_vert, color: Colors.grey),
+      onSelected: (value) async {
+        switch (value) {
+          case 'availability':
+            widget.onOpenAvailability?.call();
+            break;
+          case 'move':
+            widget.onMove?.call();
+            break;
+          case 'share':
+            final link = 'https://saralevents.com/service/${widget.item.id}';
+            await Clipboard.setData(ClipboardData(text: link));
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Link copied to clipboard')),
+              );
+            }
+            break;
+          case 'delete':
+            widget.onDelete();
+            break;
+        }
+      },
+      itemBuilder: (context) => [
+        const PopupMenuItem(
+          value: 'availability',
+          child: ListTile(
+            leading: Icon(Icons.calendar_month),
+            title: Text('Availability'),
+            dense: true,
+          ),
+        ),
+        const PopupMenuItem(
+          value: 'move',
+          child: ListTile(
+            leading: Icon(Icons.drive_file_move),
+            title: Text('Move to Category'),
+            dense: true,
+          ),
+        ),
+        const PopupMenuItem(
+          value: 'share',
+          child: ListTile(
+            leading: Icon(Icons.share),
+            title: Text('Share Link'),
+            dense: true,
+          ),
+        ),
+        const PopupMenuDivider(),
+        const PopupMenuItem(
+          value: 'delete',
+          child: ListTile(
+            leading: Icon(Icons.delete_outline, color: Colors.red),
+            title: Text('Delete', style: TextStyle(color: Colors.red)),
+            dense: true,
+          ),
+        ),
+      ],
     );
   }
 }
@@ -1377,7 +1531,7 @@ class _ServiceCardWithCategory extends StatelessWidget {
   final VoidCallback onDelete;
   final ValueChanged<bool> onToggleEnabled;
   final ValueChanged<bool>? onToggleVisibility;
-  
+
   const _ServiceCardWithCategory({
     required this.item,
     required this.categoryName,
@@ -1390,142 +1544,231 @@ class _ServiceCardWithCategory extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final textTheme = theme.textTheme;
+
     return Card(
       elevation: 4,
-      shadowColor: Colors.black12,
-      color: Colors.white,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: const BorderSide(color: Colors.black26, width: 1.2),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(12.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
+      shadowColor: Colors.black.withOpacity(0.1),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Top section: Image and Badges
+          Stack(
+            children: [
+              // Service Image
+              _buildServiceImage(),
+
+              // Category Badge (Overlay on top-left)
+              Positioned(
+                top: 12,
+                left: 12,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.9),
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 4)],
+                  ),
+                  child: Text(
+                    categoryName,
+                    style: TextStyle(
+                      color: colorScheme.primary,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 10,
+                    ),
+                  ),
+                ),
+              ),
+
+              // Availability Badge
+              Positioned(
+                top: 12,
+                right: 12,
+                child: _buildStatusBadge(),
+              ),
+
+              // Rating Badge
+              Positioned(
+                bottom: 12,
+                left: 12,
+                child: _buildRatingBadge(),
+              ),
+            ],
+          ),
+
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Container(
-                  width: 64,
-                  height: 64,
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.secondary.withValues(alpha: 0.08),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Icon(Icons.image, color: Colors.black45),
+                // Name and Price Row
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        item.name,
+                        style: textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 18,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    Text(
+                      '₹${item.price.toStringAsFixed(0)}',
+                      style: textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                        color: colorScheme.primary,
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(item.name, style: const TextStyle(fontWeight: FontWeight.w600), maxLines: 2, overflow: TextOverflow.ellipsis),
-                      const SizedBox(height: 4),
-                      Text('₹${item.price}', style: const TextStyle(fontWeight: FontWeight.w700), maxLines: 1, overflow: TextOverflow.ellipsis),
-                      const SizedBox(height: 4),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: Colors.blue.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(12),
+
+                const SizedBox(height: 8),
+
+                // Description
+                Text(
+                  item.description,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: textTheme.bodySmall?.copyWith(color: Colors.grey[700]),
+                ),
+
+                const SizedBox(height: 16),
+                const Divider(height: 1),
+                const SizedBox(height: 12),
+
+                // Bottom Action Row
+                Row(
+                  children: [
+                    // Edit Button
+                    TextButton.icon(
+                      onPressed: onEdit ?? onOpen,
+                      icon: const Icon(Icons.edit_outlined, size: 20),
+                      label: const Text('Edit'),
+                      style: TextButton.styleFrom(
+                        visualDensity: VisualDensity.compact,
+                        foregroundColor: colorScheme.primary,
+                      ),
+                    ),
+
+                    const Spacer(),
+
+                    // Visibility Toggle (Eye icon)
+                    if (onToggleVisibility != null) ...[
+                      IconButton(
+                        onPressed: () => onToggleVisibility!( !item.isVisibleToUsers),
+                        icon: Icon(
+                          item.isVisibleToUsers ? Icons.visibility : Icons.visibility_off,
+                          size: 20,
+                          color: item.isVisibleToUsers ? Colors.green : Colors.grey,
                         ),
-                        child: Text(
-                          categoryName,
-                          style: TextStyle(
-                            color: Colors.blue[700],
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
+                        tooltip: 'Visibility to users',
                       ),
                     ],
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
+
+                    // Availability Toggle (Pause/Resume)
                     Switch(
                       value: item.enabled,
                       onChanged: onToggleEnabled,
+                      activeColor: Colors.green,
                     ),
-                    if (onToggleVisibility != null) ...[
-                      const SizedBox(height: 8),
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            item.isVisibleToUsers ? Icons.visibility : Icons.visibility_off,
-                            size: 16,
-                            color: item.isVisibleToUsers ? Colors.green : Colors.grey,
-                          ),
-                          const SizedBox(width: 4),
-                          Transform.scale(
-                            scale: 0.8,
-                            child: Switch(
-                              value: item.isVisibleToUsers,
-                              onChanged: onToggleVisibility,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ],
-                )
-              ],
-            ),
-            const SizedBox(height: 8),
-            if (item.tags.isNotEmpty)
-              Wrap(
-                spacing: 6,
-                runSpacing: 6,
-                children: item.tags
-                    .map((t) => Chip(label: Text(t, maxLines: 1, overflow: TextOverflow.ellipsis), materialTapTargetSize: MaterialTapTargetSize.shrinkWrap))
-                    .toList(),
-              ),
-            const SizedBox(height: 8),
-            Text(
-              item.description,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              alignment: WrapAlignment.spaceBetween,
-              children: [
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
+
+                    // Delete
                     IconButton(
-                      tooltip: 'Delete',
                       onPressed: onDelete,
-                      icon: const _TrashIcon(color: Colors.redAccent),
+                      icon: const Icon(Icons.delete_outline, color: Colors.grey, size: 20),
+                      tooltip: 'Delete',
                     ),
                   ],
                 ),
-                Flexible(
-                  child: SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        TextButton(onPressed: onEdit ?? onOpen, child: const Text('Edit')),
-                        FilledButton.tonal(onPressed: onOpen, child: const Text('Open')),
-                      ],
-                    ),
-                  ),
-                ),
               ],
-            )
-          ],
-        ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildServiceImage() {
+    final hasMedia = item.media.isNotEmpty;
+    final firstMedia = hasMedia ? item.media.first : null;
+
+    return AspectRatio(
+      aspectRatio: 16 / 9,
+      child: Container(
+        width: double.infinity,
+        decoration: BoxDecoration(color: Colors.grey[200]),
+        child: hasMedia
+            ? (firstMedia!.url.startsWith('http') || kIsWeb
+                ? Image.network(firstMedia.url, fit: BoxFit.cover)
+                : Image.file(File(firstMedia.url), fit: BoxFit.cover))
+            : const Center(child: Icon(Icons.image_outlined, size: 48, color: Colors.grey)),
+      ),
+    );
+  }
+
+  Widget _buildStatusBadge() {
+    final isActive = item.enabled;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: isActive ? Colors.green.withOpacity(0.9) : Colors.orange.withOpacity(0.9),
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 4)],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            isActive ? Icons.check_circle : Icons.pause_circle_filled,
+            color: Colors.white,
+            size: 14,
+          ),
+          const SizedBox(width: 6),
+          Text(
+            isActive ? 'ACTIVE' : 'PAUSED',
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+              fontSize: 10,
+              letterSpacing: 0.5,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRatingBadge() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.9),
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 4)],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.star, color: Colors.amber, size: 16),
+          const SizedBox(width: 4),
+          Text(
+            item.rating.toStringAsFixed(1),
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+          ),
+          if (item.reviewCount > 0)
+            Text(
+              ' (${item.reviewCount})',
+              style: TextStyle(color: Colors.grey[600], fontSize: 11),
+            ),
+        ],
       ),
     );
   }
@@ -1768,15 +2011,15 @@ class MediaGalleryPage extends StatelessWidget {
   }
 }
 
-class _EditServicePage extends StatefulWidget {
+class EditServicePage extends StatefulWidget {
   final ServiceItem item;
-  const _EditServicePage({required this.item});
+  const EditServicePage({required this.item});
 
   @override
-  State<_EditServicePage> createState() => _EditServicePageState();
+  State<EditServicePage> createState() => _EditServicePageState();
 }
 
-class _EditServicePageState extends State<_EditServicePage> {
+class _EditServicePageState extends State<EditServicePage> {
   final _formKey = GlobalKey<FormState>();
   late TextEditingController _priceCtrl;
   late TextEditingController _descCtrl;
@@ -1851,7 +2094,7 @@ class _EditServicePageState extends State<_EditServicePage> {
             TextField(controller: urlCtrl, decoration: const InputDecoration(labelText: 'URL')),
             const SizedBox(height: 8),
             DropdownButtonFormField<MediaType>(
-              value: selected,
+              initialValue: selected,
               items: const [
                 DropdownMenuItem(value: MediaType.image, child: Text('Image')),
                 DropdownMenuItem(value: MediaType.video, child: Text('Video')),
@@ -2068,12 +2311,11 @@ class _FolderLikeCard extends StatelessWidget {
       },
       onLongPress: onLongPressSelect,
       child: Card(
-        elevation: 4,
+        elevation: 2,
         shadowColor: Colors.black12,
         color: Colors.white,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
-          side: const BorderSide(color: Colors.black26, width: 1.2),
         ),
         child: Padding(
           padding: const EdgeInsets.all(12.0),
@@ -2123,18 +2365,18 @@ class _FolderLikeCard extends StatelessWidget {
   }
 }
 
-class _AddServicePage extends StatefulWidget {
+class AddServicePage extends StatefulWidget {
   final String? categoryId;
 
-  const _AddServicePage({
+  const AddServicePage({
     this.categoryId,
   });
 
   @override
-  State<_AddServicePage> createState() => _AddServicePageState();
+  State<AddServicePage> createState() => _AddServicePageState();
 }
 
-class _AddServicePageState extends State<_AddServicePage> {
+class _AddServicePageState extends State<AddServicePage> {
   final _formKey = GlobalKey<FormState>();
   final _nameCtrl = TextEditingController();
   final _priceCtrl = TextEditingController();
@@ -2289,7 +2531,7 @@ class _AddServicePageState extends State<_AddServicePage> {
             TextField(controller: urlCtrl, decoration: const InputDecoration(labelText: 'URL')),
             const SizedBox(height: 8),
             DropdownButtonFormField<MediaType>(
-              value: selected,
+              initialValue: selected,
               items: const [
                 DropdownMenuItem(value: MediaType.image, child: Text('Image')),
                 DropdownMenuItem(value: MediaType.video, child: Text('Video')),

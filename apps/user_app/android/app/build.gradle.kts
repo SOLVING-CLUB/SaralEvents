@@ -95,4 +95,7 @@ dependencies {
     // ProGuard annotations are already included by Razorpay SDK, no need to add separately
     // Core library desugaring for flutter_local_notifications
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.4")
+    // Provide missing j2objc annotations used transitively by Guava (and other Google libs)
+    // so that R8 does not fail with "Missing class com.google.j2objc.annotations.*".
+    implementation("com.google.j2objc:j2objc-annotations:2.8")
 }
