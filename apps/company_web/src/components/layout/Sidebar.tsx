@@ -3,13 +3,13 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
-import { 
-  LayoutDashboard, 
-  ShoppingBag, 
-  MessageSquare, 
-  Settings, 
-  Users, 
-  Store, 
+import {
+  LayoutDashboard,
+  ShoppingBag,
+  MessageSquare,
+  Settings,
+  Users,
+  Store,
   Megaphone,
   BarChart3,
   Star,
@@ -32,6 +32,7 @@ const navigation = [
   { name: 'Services', href: '/admin/dashboard/services', icon: Settings },
   { name: 'Vendors', href: '/admin/dashboard/vendors', icon: Store },
   { name: 'Users', href: '/admin/dashboard/users', icon: Users },
+  { name: 'Deletion Requests', href: '/admin/dashboard/deletion-requests', icon: XCircle },
   { name: 'Reviews & Feedback', href: '/admin/dashboard/reviews', icon: Star },
   { name: 'Support Tickets', href: '/admin/dashboard/support', icon: HeadphonesIcon },
   { name: 'Campaigns', href: '/admin/dashboard/campaigns', icon: Bell },
@@ -61,12 +62,12 @@ export function Sidebar({ onClose }: SidebarProps) {
           <X className="h-5 w-5" />
         </button>
       </div>
-      
+
       <nav className="mt-6 px-4 pb-6">
         <ul className="space-y-1">
           {navigation.map((item) => {
             // For Dashboard, only match exactly; for others, match subpaths too
-            const isActive = item.href === '/admin/dashboard' 
+            const isActive = item.href === '/admin/dashboard'
               ? pathname === '/admin/dashboard'
               : pathname === item.href || pathname?.startsWith(item.href + '/')
             return (

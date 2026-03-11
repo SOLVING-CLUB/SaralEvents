@@ -218,6 +218,7 @@ class ServiceService {
           .from('services')
           .select()
           .eq('category_id', categoryId)
+          .eq('is_draft', false)
           .order('created_at', ascending: false);
 
       return result.map((row) => ServiceItem(
@@ -231,6 +232,7 @@ class ServiceService {
                 ?.map((url) => MediaItem(url: url, type: MediaType.image))
                 .toList() ?? [],
         enabled: row['is_active'] ?? true, // Map the is_active field to enabled
+        isDraft: row['is_draft'] ?? false,
         rating: row['rating']?.toDouble() ?? 0.0,
         reviewCount: row['review_count'] ?? 0,
       )).toList();
@@ -348,6 +350,7 @@ class ServiceService {
     Map<String, dynamic>? features,
     List<String>? policies,
     bool isActive = true,
+    bool isDraft = false,
   }) async {
     try {
       final vendorId = await _getVendorId();
@@ -364,6 +367,7 @@ class ServiceService {
         'description': description,
         'media_urls': mediaUrls,
         'is_active': isActive,
+        'is_draft': isDraft,
         'category': vendorCategory,
         'capacity_min': capacityMin,
         'capacity_max': capacityMax,
@@ -391,6 +395,7 @@ class ServiceService {
                 ?.map((url) => MediaItem(url: url, type: MediaType.image))
                 .toList() ?? [],
         enabled: result['is_active'] ?? true, // Map the is_active field to enabled
+        isDraft: result['is_draft'] ?? false,
         rating: result['rating']?.toDouble() ?? 0.0,
         reviewCount: result['review_count'] ?? 0,
       );
@@ -471,6 +476,7 @@ class ServiceService {
           .select()
           .eq('vendor_id', vendorId)
           .eq('is_active', true)
+          .eq('is_draft', false)
           .order('created_at', ascending: false);
 
       return result.map((row) => ServiceItem(
@@ -485,6 +491,7 @@ class ServiceService {
                 .toList() ?? [],
         enabled: row['is_active'] ?? true, // Map the is_active field to enabled
         isVisibleToUsers: row['is_visible_to_users'] ?? true,
+        isDraft: row['is_draft'] ?? false,
         rating: row['rating']?.toDouble() ?? 0.0,
         reviewCount: row['review_count'] ?? 0,
       )).toList();
@@ -504,6 +511,7 @@ class ServiceService {
           .from('services')
           .select()
           .eq('vendor_id', vendorId)
+          .eq('is_draft', false)
           .order('created_at', ascending: false);
 
       return result.map((row) => ServiceItem(
@@ -518,6 +526,7 @@ class ServiceService {
                 .toList() ?? [],
         enabled: row['is_active'] ?? true, // Map the is_active field to enabled
         isVisibleToUsers: row['is_visible_to_users'] ?? true,
+        isDraft: row['is_draft'] ?? false,
         rating: row['rating']?.toDouble() ?? 0.0,
         reviewCount: row['review_count'] ?? 0,
       )).toList();
@@ -538,6 +547,7 @@ class ServiceService {
           .select()
           .eq('vendor_id', vendorId)
           .filter('category_id', 'is', null)
+          .eq('is_draft', false)
           .order('created_at', ascending: false);
 
       return result.map((row) => ServiceItem(
@@ -552,11 +562,47 @@ class ServiceService {
                 .toList() ?? [],
         enabled: row['is_active'] ?? true, // Map the is_active field to enabled
         isVisibleToUsers: row['is_visible_to_users'] ?? true,
+        isDraft: row['is_draft'] ?? false,
         rating: row['rating']?.toDouble() ?? 0.0,
         reviewCount: row['review_count'] ?? 0,
       )).toList();
     } catch (e) {
       print('Error getting root services: $e');
+      return [];
+    }
+  }
+
+  // Get only draft services
+  Future<List<ServiceItem>> getDraftServices() async {
+    try {
+      final vendorId = await _getVendorId();
+      if (vendorId == null) return [];
+
+      final result = await _supabase
+          .from('services')
+          .select()
+          .eq('vendor_id', vendorId)
+          .eq('is_draft', true)
+          .order('created_at', ascending: false);
+
+      return result.map((row) => ServiceItem(
+        id: row['id'],
+        categoryId: row['category_id'],
+        name: row['name'],
+        price: row['price']?.toDouble() ?? 0.0,
+        tags: List<String>.from(row['tags'] ?? []),
+        description: row['description'] ?? '',
+        media: (row['media_urls'] as List<dynamic>?)
+                ?.map((url) => MediaItem(url: url, type: MediaType.image))
+                .toList() ?? [],
+        enabled: row['is_active'] ?? true,
+        isVisibleToUsers: row['is_visible_to_users'] ?? true,
+        isDraft: row['is_draft'] ?? true,
+        rating: row['rating']?.toDouble() ?? 0.0,
+        reviewCount: row['review_count'] ?? 0,
+      )).toList();
+    } catch (e) {
+      print('Error getting draft services: $e');
       return [];
     }
   }

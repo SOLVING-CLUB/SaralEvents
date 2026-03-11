@@ -321,4 +321,29 @@ class VendorService {
       throw Exception('Failed to upload profile picture: $e');
     }
   }
+
+  // Submit account deletion request
+  Future<void> submitDeletionRequest({
+    required String vendorId,
+    required String reason,
+    String? suggestions,
+  }) async {
+    try {
+      final userId = _supabase.auth.currentUser?.id;
+      if (userId == null) throw Exception('User not authenticated');
+
+      await _supabase.from('account_deletion_requests').insert({
+        'vendor_id': vendorId,
+        'user_id': userId,
+        'reason': reason,
+        'suggestions': suggestions,
+        'status': 'pending',
+        'created_at': DateTime.now().toIso8601String(),
+      });
+    } catch (e) {
+      print('Error submitting deletion request: $e');
+      throw Exception('Failed to submit deletion request: $e');
+    }
+  }
 }
+

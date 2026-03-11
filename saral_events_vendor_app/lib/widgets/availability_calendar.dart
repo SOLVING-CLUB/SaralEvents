@@ -47,6 +47,8 @@ class _AvailabilityCalendarState extends State<AvailabilityCalendar> {
   final Map<DateTime, ServiceAvailabilityOverride> _overrides = <DateTime, ServiceAvailabilityOverride>{};
   DayStatus? _activePaintStatus; // When selected, tapping days applies this status directly
   DateTime? _selectedForDetails; // for view mode details
+  final Set<DateTime> _selectedDates = <DateTime>{};
+  bool _selectionMode = false;
 
   @override
   void initState() {
@@ -197,6 +199,31 @@ class _AvailabilityCalendarState extends State<AvailabilityCalendar> {
           await widget.availabilityService.upsertOverride(widget.serviceId!, newVal);
         }
         break;
+    }
+  }
+
+  Future<void> _applyBulkStatus(DayStatus status) async {
+    if (_selectedDates.isEmpty) return;
+
+    setState(() => _loading = true);
+    try {
+      final List<DateTime> dates = _selectedDates.toList();
+      for (final day in dates) {
+        await _applyStatus(day, status);
+      }
+      setState(() {
+        _selectedDates.clear();
+        _selectionMode = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Updated availability for ${dates.length} days')),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error updating bulk availability: $e'), backgroundColor: Colors.red),
+      );
+    } finally {
+      if (mounted) setState(() => _loading = false);
     }
   }
 
@@ -699,14 +726,29 @@ class _AvailabilityCalendarState extends State<AvailabilityCalendar> {
       final day = DateTime(_visibleMonth.year, _visibleMonth.month, d);
       final status = _statusFor(day);
       final isPast = _isPastDate(day);
+      final isSelected = _selectedDates.contains(day);
       items.add(_StatusDayTile(
         day: day,
         status: status,
+        isSelected: isSelected,
+        selectionMode: _selectionMode,
         onTap: () async {
           // Prevent editing past dates
           if (isPast) {
             return;
           }
+
+          if (_selectionMode) {
+            setState(() {
+              if (isSelected) {
+                _selectedDates.remove(day);
+              } else {
+                _selectedDates.add(day);
+              }
+            });
+            return;
+          }
+
           if (widget.isViewMode) {
             if (status != null) setState(() => _selectedForDetails = day);
             return;
@@ -717,7 +759,16 @@ class _AvailabilityCalendarState extends State<AvailabilityCalendar> {
             await _promptStatusAndTimes(context, day);
           }
         },
-        onLongPress: isPast ? null : () => _openDayEditor(context, day),
+        onLongPress: isPast ? null : () {
+          if (!_selectionMode) {
+            setState(() {
+              _selectionMode = true;
+              _selectedDates.add(day);
+            });
+          } else {
+            _openDayEditor(context, day);
+          }
+        },
       ));
     }
 
@@ -730,8 +781,17 @@ class _AvailabilityCalendarState extends State<AvailabilityCalendar> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Flexible(child: Text(monthLabel, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700), maxLines: 1, overflow: TextOverflow.ellipsis)),
-              Row(
+               Row(
                 children: [
+                  if (!widget.isViewMode)
+                    IconButton(
+                      icon: Icon(_selectionMode ? Icons.check_circle : Icons.checklist),
+                      onPressed: () => setState(() {
+                        _selectionMode = !_selectionMode;
+                        if (!_selectionMode) _selectedDates.clear();
+                      }),
+                      color: _selectionMode ? Theme.of(context).colorScheme.primary : null,
+                    ),
                   IconButton(icon: const Icon(Icons.chevron_left), onPressed: _loading ? null : () => _changeMonth(-1)),
                   IconButton(icon: const Icon(Icons.chevron_right), onPressed: _loading ? null : () => _changeMonth(1)),
                 ],
@@ -769,6 +829,17 @@ class _AvailabilityCalendarState extends State<AvailabilityCalendar> {
           const SizedBox(height: 12),
           _PartialDetailsCard(overrideFor: _currentFor(_selectedForDetails!)),
         ],
+        if (_selectionMode && _selectedDates.isNotEmpty) ...[
+          const SizedBox(height: 16),
+          _BulkActionPanel(
+            count: _selectedDates.length,
+            onSetStatus: _applyBulkStatus,
+            onCancel: () => setState(() {
+              _selectionMode = false;
+              _selectedDates.clear();
+            }),
+          ),
+        ],
         const SizedBox(height: 12),
         const SizedBox(height: 12),
         _Legend(),
@@ -780,10 +851,19 @@ class _AvailabilityCalendarState extends State<AvailabilityCalendar> {
 class _StatusDayTile extends StatelessWidget {
   final DateTime day;
   final DayStatus? status;
+  final bool isSelected;
+  final bool selectionMode;
   final VoidCallback onTap;
   final VoidCallback? onLongPress;
 
-  const _StatusDayTile({required this.day, required this.status, required this.onTap, this.onLongPress});
+  const _StatusDayTile({
+    required this.day,
+    required this.status,
+    required this.onTap,
+    this.onLongPress,
+    this.isSelected = false,
+    this.selectionMode = false,
+  });
 
   Color? _statusColor(BuildContext context) {
     if (status == null) return null;
@@ -806,10 +886,24 @@ class _StatusDayTile extends StatelessWidget {
       borderRadius: BorderRadius.circular(12),
       child: Container(
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: isSelected ? Theme.of(context).colorScheme.secondaryContainer : Colors.white,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: (color ?? Colors.black12).withOpacity(color == null ? 0.1 : 0.25)),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 4, offset: const Offset(0, 1))],
+          border: Border.all(
+            color: isSelected 
+                ? Theme.of(context).colorScheme.primary 
+                : (color ?? Colors.black12).withOpacity(color == null ? 0.1 : 0.25),
+            width: isSelected ? 2 : 1,
+          ),
+          boxShadow: [
+            if (isSelected)
+              BoxShadow(
+                color: Theme.of(context).colorScheme.primary.withOpacity(0.2),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              )
+            else
+              BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 4, offset: const Offset(0, 1))
+          ],
         ),
         alignment: Alignment.center,
         child: Container(
@@ -849,6 +943,75 @@ class _Legend extends StatelessWidget {
           ],
         ),
       ],
+    );
+  }
+}
+
+class _BulkActionPanel extends StatelessWidget {
+  final int count;
+  final Function(DayStatus) onSetStatus;
+  final VoidCallback onCancel;
+
+  const _BulkActionPanel({
+    required this.count,
+    required this.onSetStatus,
+    required this.onCancel,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.primaryContainer.withOpacity(0.4),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: theme.colorScheme.primary.withOpacity(0.2)),
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Icon(Icons.checklist, color: theme.colorScheme.primary),
+              const SizedBox(width: 12),
+              Text(
+                '$count dates selected',
+                style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
+              ),
+              const Spacer(),
+              TextButton(onPressed: onCancel, child: const Text('Cancel')),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: () => onSetStatus(DayStatus.available),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.green[700],
+                    side: BorderSide(color: Colors.green[200]!),
+                    backgroundColor: Colors.green[50],
+                  ),
+                  child: const Text('Available'),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: () => onSetStatus(DayStatus.booked),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.red[700],
+                    side: BorderSide(color: Colors.red[200]!),
+                    backgroundColor: Colors.red[50],
+                  ),
+                  child: const Text('Booked'),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }

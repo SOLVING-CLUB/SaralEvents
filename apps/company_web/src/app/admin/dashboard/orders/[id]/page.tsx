@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
-import { 
+import {
   ArrowLeft,
   RefreshCw,
   CheckCircle,
@@ -111,7 +111,7 @@ export default function OrderDetailsPage() {
   async function loadBookingDetails() {
     setLoading(true)
     setError(null)
-    
+
     try {
       // First, get the booking with related data
       const { data: bookingData, error: bookingErr } = await supabase
@@ -154,7 +154,7 @@ export default function OrderDetailsPage() {
           .select('user_id, first_name, last_name, email, phone_number')
           .eq('user_id', bookingData.user_id)
           .maybeSingle()
-        
+
         userProfile = userData
       }
 
@@ -289,7 +289,7 @@ export default function OrderDetailsPage() {
     )
   }
 
-  const customerName = booking.user_profiles 
+  const customerName = booking.user_profiles
     ? `${booking.user_profiles.first_name || ''} ${booking.user_profiles.last_name || ''}`.trim() || 'Customer'
     : 'Customer'
 
@@ -311,365 +311,322 @@ export default function OrderDetailsPage() {
     return sum
   }, 0) || 0
 
+  const isConfirmed = booking.status === 'confirmed' || booking.status === 'completed' || booking.status.includes('vendor_') || booking.status.includes('setup_')
+  const isPending = booking.status === 'pending'
+  const isCompleted = booking.status === 'completed'
+
+  const maskInfo = (info: string | null) => {
+    if (!info) return 'N/A'
+    if (isPending) {
+      if (info.includes('@')) {
+        const [user, domain] = info.split('@')
+        return `${user[0]}${'*'.repeat(user.length - 1)}@${domain}`
+      }
+      return `${info.slice(0, 3)}${'*'.repeat(info.length - 3)}`
+    }
+    return info
+  }
+
+  // Financial Calculations
+  const grossAmount = Number(booking.amount)
+  const commission = grossAmount * COMMISSION_RATE
+  const gstOnCommission = commission * 0.18 // 18% GST on platform fee
+  const gatewayFee = grossAmount * PAYMENT_GATEWAY_FEE_RATE
+  const netPayout = grossAmount - commission - gstOnCommission - gatewayFee
+
+  // Timeline Progress
+  const hasAdvancePaid = !!booking.payment_milestones?.some(m => m.milestone_type === 'advance' && (m.status === 'paid' || m.status === 'held_in_escrow' || m.status === 'released'))
+
   return (
-    <div className="p-6 space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
+    <div className="p-6 space-y-6 max-w-7xl mx-auto">
+      {/* Header & Common Actions */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center gap-4">
           <Button variant="outline" onClick={() => router.back()}>
             <ArrowLeft className="h-4 w-4 mr-2" />
             Back
           </Button>
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Order Details</h1>
-            <p className="text-sm text-gray-600 font-mono">{booking.id}</p>
+            <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+              Order #{booking.id.slice(0, 8)}
+              <span className={`text-xs px-2 py-0.5 rounded-full border ${getStatusColor(booking.status)}`}>
+                {booking.status.toUpperCase()}
+              </span>
+            </h1>
+            <p className="text-sm text-gray-500">Placed on {formatDate(booking.created_at)}</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={loadBookingDetails} disabled={loading}>
-            <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-            Refresh
+          {isPending && (
+            <>
+              <Button onClick={() => { setNewStatus('confirmed'); setIsEditingStatus(true); }} className="bg-green-600 hover:bg-green-700">Accept Order</Button>
+              <Button variant="destructive" onClick={() => { setNewStatus('cancelled'); setIsEditingStatus(true); }}>Reject</Button>
+            </>
+          )}
+          {isConfirmed && !isCompleted && (
+            <>
+              <Button variant="outline" onClick={() => alert('Contacting customer: ' + customerName)}>Contact Customer</Button>
+              <Button onClick={() => { setNewStatus('completed'); setIsEditingStatus(true); }}>Mark Completed</Button>
+            </>
+          )}
+          {isCompleted && (
+            <>
+              <Button variant="outline">View Review</Button>
+              <Button variant="outline">Download Invoice</Button>
+            </>
+          )}
+          <Button variant="ghost" size="sm" onClick={loadBookingDetails} disabled={loading}>
+            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
           </Button>
         </div>
       </div>
 
-      {/* Status Card */}
-      <div className={`bg-white rounded-lg border-2 p-6 ${getStatusColor(booking.status)}`}>
-        <div className="flex items-center justify-between">
-          <div>
-            <div className="flex items-center gap-3 mb-2">
-              <h2 className="text-xl font-bold">Order Status</h2>
-              {!isEditingStatus && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setIsEditingStatus(true)}
-                >
-                  <Edit className="h-3 w-3 mr-1" />
-                  Edit
-                </Button>
-              )}
-            </div>
-            {isEditingStatus ? (
-              <div className="space-y-3 mt-4">
-                <select
-                  className="w-full h-10 rounded-md border border-input bg-white px-3 text-sm"
-                  value={newStatus}
-                  onChange={(e) => setNewStatus(e.target.value)}
-                >
-                  <option value="pending">Pending</option>
-                  <option value="confirmed">Confirmed</option>
-                  <option value="vendor_traveling">Vendor Traveling</option>
-                  <option value="vendor_arrived">Vendor Arrived</option>
-                  <option value="arrival_confirmed">Arrival Confirmed</option>
-                  <option value="setup_completed">Setup Completed</option>
-                  <option value="setup_confirmed">Setup Confirmed</option>
-                  <option value="completed">Completed</option>
-                  <option value="cancelled">Cancelled</option>
-                </select>
-                <Input
-                  placeholder="Add a note (optional)"
-                  value={statusNote}
-                  onChange={(e) => setStatusNote(e.target.value)}
-                />
-                <div className="flex gap-2">
-                  <Button onClick={updateBookingStatus} disabled={saving}>
-                    <Save className="h-3 w-3 mr-1" />
-                    {saving ? 'Saving...' : 'Save'}
-                  </Button>
-                  <Button variant="outline" onClick={() => {
-                    setIsEditingStatus(false)
-                    setNewStatus(booking.status)
-                    setStatusNote('')
-                  }}>
-                    <X className="h-3 w-3 mr-1" />
-                    Cancel
-                  </Button>
-                </div>
-              </div>
-            ) : (
-              <p className="text-lg font-semibold">{booking.status.toUpperCase()}</p>
-            )}
-          </div>
-          <div className="text-right">
-            <p className="text-sm opacity-75">Total Amount</p>
-            <p className="text-3xl font-bold">₹{Number(booking.amount).toFixed(2)}</p>
-          </div>
-        </div>
-      </div>
-
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left Column - Main Info */}
+        {/* Left Column: Details & Breakdown */}
         <div className="lg:col-span-2 space-y-6">
-          {/* Service Information */}
-          <div className="bg-white rounded-lg border p-6">
-            <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
-              <FileText className="h-5 w-5" />
-              Service Information
-            </h3>
-            <div className="space-y-3">
-              <div>
-                <p className="text-sm text-gray-600">Service Name</p>
-                <p className="font-semibold">{booking.services?.name || 'N/A'}</p>
-              </div>
-              {booking.services?.categories?.name && (
-                <div>
-                  <p className="text-sm text-gray-600">Category</p>
-                  <p className="font-semibold">{booking.services.categories.name}</p>
-                </div>
-              )}
-              {booking.services?.description && (
-                <div>
-                  <p className="text-sm text-gray-600">Description</p>
-                  <p className="text-sm">{booking.services.description}</p>
-                </div>
-              )}
-              <div>
-                <p className="text-sm text-gray-600">Service Price</p>
-                <p className="font-semibold">₹{Number(booking.services?.price || 0).toFixed(2)}</p>
-              </div>
-            </div>
-          </div>
 
-          {/* Customer Information */}
-          <div className="bg-white rounded-lg border p-6">
-            <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
-              <User className="h-5 w-5" />
-              Customer Information
-            </h3>
-            <div className="space-y-3">
-              <div>
-                <p className="text-sm text-gray-600">Name</p>
-                <p className="font-semibold">{customerName}</p>
-              </div>
-              {booking.user_profiles?.email && (
-                <div>
-                  <p className="text-sm text-gray-600">Email</p>
-                  <p className="text-sm">{booking.user_profiles.email}</p>
-                </div>
-              )}
-              {booking.user_profiles?.phone_number && (
-                <div>
-                  <p className="text-sm text-gray-600">Phone</p>
-                  <p className="text-sm">{booking.user_profiles.phone_number}</p>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Vendor Information */}
-          <div className="bg-white rounded-lg border p-6">
-            <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
-              <Store className="h-5 w-5" />
-              Vendor Information
-            </h3>
-            <div className="space-y-3">
-              <div>
-                <p className="text-sm text-gray-600">Business Name</p>
-                <p className="font-semibold">{booking.vendor_profiles?.business_name || 'N/A'}</p>
-              </div>
-              {booking.vendor_profiles?.email && (
-                <div>
-                  <p className="text-sm text-gray-600">Email</p>
-                  <p className="text-sm">{booking.vendor_profiles.email}</p>
-                </div>
-              )}
-              {booking.vendor_profiles?.phone_number && (
-                <div>
-                  <p className="text-sm text-gray-600">Phone</p>
-                  <p className="text-sm">{booking.vendor_profiles.phone_number}</p>
-                </div>
-              )}
-              {booking.vendor_profiles?.address && (
-                <div>
-                  <p className="text-sm text-gray-600">Address</p>
-                  <p className="text-sm">{booking.vendor_profiles.address}</p>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Payment Milestones */}
-          <div className="bg-white rounded-lg border p-6">
-            <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
-              <CreditCard className="h-5 w-5" />
-              Payment Milestones
-            </h3>
-            <div className="space-y-4">
-              {booking.payment_milestones?.map((milestone) => {
-                const grossAmount = Number(milestone.amount)
-                const commissionAmount = grossAmount * COMMISSION_RATE
-                const gatewayFee = grossAmount * PAYMENT_GATEWAY_FEE_RATE
-                const vendorAmount = grossAmount - commissionAmount - gatewayFee
-                const escrowTxn = milestone.escrow_transactions?.[0]
-                const isReleased = milestone.status === 'released'
-
-                return (
-                  <div key={milestone.id} className="border rounded-lg p-4">
-                    <div className="flex items-center justify-between mb-3">
-                      <div>
-                        <p className="font-semibold">{getMilestoneLabel(milestone.milestone_type)}</p>
-                        <p className="text-sm text-gray-600">{milestone.percentage}% of total</p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-lg font-bold text-green-600">₹{grossAmount.toFixed(2)}</p>
-                        <span className={`px-2 py-1 rounded text-xs ${getStatusColor(milestone.status)}`}>
-                          {milestone.status.replace('_', ' ').toUpperCase()}
-                        </span>
-                      </div>
-                    </div>
-                    {isReleased && escrowTxn && (
-                      <div className="mt-3 pt-3 border-t space-y-1 text-sm">
-                        <div className="flex justify-between">
-                          <span className="text-gray-600">Gross Amount:</span>
-                          <span className="font-medium">₹{grossAmount.toFixed(2)}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-gray-600">Commission ({COMMISSION_RATE * 100}%):</span>
-                          <span className="font-medium text-red-600">-₹{escrowTxn.commission_amount.toFixed(2)}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-gray-600">Gateway Fee ({PAYMENT_GATEWAY_FEE_RATE * 100}%):</span>
-                          <span className="font-medium text-red-600">-₹{gatewayFee.toFixed(2)}</span>
-                        </div>
-                        <div className="flex justify-between font-bold pt-2 border-t">
-                          <span>Vendor Receives:</span>
-                          <span className="text-green-600">₹{escrowTxn.vendor_amount.toFixed(2)}</span>
-                        </div>
-                        {escrowTxn.admin_verified_at && (
-                          <p className="text-xs text-gray-500 mt-2">
-                            Released: {formatDate(escrowTxn.admin_verified_at)}
-                          </p>
-                        )}
-                      </div>
-                    )}
-                    {milestone.escrow_held_at && !isReleased && (
-                      <p className="text-xs text-gray-500 mt-2">
-                        Held in escrow since: {formatDate(milestone.escrow_held_at)}
-                      </p>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-        </div>
-
-        {/* Right Column - Timeline & Summary */}
-        <div className="space-y-6">
-          {/* Order Timeline */}
-          <div className="bg-white rounded-lg border p-6">
-            <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
-              <Clock className="h-5 w-5" />
-              Order Timeline
-            </h3>
-            <div className="space-y-4">
-              <TimelineItem
-                label="Order Created"
+          {/* High-Level Order Timeline */}
+          <div className="bg-white rounded-xl border p-6 shadow-sm">
+            <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-6">Order Journey</h3>
+            <div className="relative flex justify-between items-start">
+              <TimelineStep
+                label="Booking Requested"
                 date={booking.created_at}
                 active={true}
+                icon={FileText}
               />
-              <TimelineItem
-                label="Vendor Accepted"
+              <TimelineStep
+                label="Vendor Confirmed"
                 date={booking.vendor_accepted_at}
                 active={!!booking.vendor_accepted_at}
+                icon={CheckCircle}
               />
-              <TimelineItem
-                label="Vendor Traveling"
-                date={booking.vendor_traveling_at}
-                active={!!booking.vendor_traveling_at}
+              <TimelineStep
+                label="Payment Received"
+                date={hasAdvancePaid ? booking.created_at : null}
+                active={hasAdvancePaid}
+                icon={CreditCard}
               />
-              <TimelineItem
-                label="Vendor Arrived"
-                date={booking.vendor_arrived_at}
-                active={!!booking.vendor_arrived_at}
-              />
-              <TimelineItem
-                label="Arrival Confirmed"
-                date={booking.arrival_confirmed_at}
-                active={!!booking.arrival_confirmed_at}
-              />
-              <TimelineItem
-                label="Setup Completed"
-                date={booking.setup_completed_at}
-                active={!!booking.setup_completed_at}
-              />
-              <TimelineItem
-                label="Setup Confirmed"
-                date={booking.setup_confirmed_at}
-                active={!!booking.setup_confirmed_at}
-              />
-              <TimelineItem
-                label="Order Completed"
+              <TimelineStep
+                label="Service Completed"
                 date={booking.completed_at}
                 active={!!booking.completed_at}
+                icon={CheckCircle}
               />
             </div>
           </div>
 
-          {/* Payment Summary */}
-          <div className="bg-white rounded-lg border p-6">
-            <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
-              <DollarSign className="h-5 w-5" />
-              Payment Summary
-            </h3>
-            <div className="space-y-2 text-sm">
-              <div className="flex justify-between">
-                <span className="text-gray-600">Total Booking Amount:</span>
-                <span className="font-semibold">₹{Number(booking.amount).toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-600">Total Commission:</span>
-                <span className="font-semibold text-red-600">₹{totalCommission.toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-600">Total Gateway Fees:</span>
-                <span className="font-semibold text-red-600">₹{totalGatewayFee.toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between pt-2 border-t font-bold">
-                <span>Total Released to Vendor:</span>
-                <span className="text-green-600">₹{totalReleased.toFixed(2)}</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Event Details */}
-          <div className="bg-white rounded-lg border p-6">
-            <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
-              <Calendar className="h-5 w-5" />
-              Event Details
-            </h3>
-            <div className="space-y-3">
-              <div>
-                <p className="text-sm text-gray-600">Booking Date</p>
-                <p className="font-semibold">{new Date(booking.booking_date).toLocaleDateString('en-IN', {
-                  year: 'numeric',
-                  month: 'long',
-                  day: 'numeric'
-                })}</p>
-              </div>
-              {booking.booking_time && (
-                <div>
-                  <p className="text-sm text-gray-600">Booking Time</p>
-                  <p className="font-semibold">{booking.booking_time}</p>
+          {/* Customer & Event Snapshot */}
+          <div className="bg-white rounded-xl border p-6 shadow-sm">
+            <h3 className="text-lg font-bold mb-4">Customer & Event Snapshot</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-4">
+                <div className="flex items-start gap-3">
+                  <User className="h-5 w-5 text-blue-500 mt-0.5" />
+                  <div>
+                    <p className="text-xs text-gray-500 uppercase font-bold">Customer</p>
+                    <p className="font-semibold text-gray-900">{customerName}</p>
+                    <div className="mt-1 space-y-0.5">
+                      <p className="text-sm text-gray-600 truncate">{maskInfo(booking.user_profiles?.email || 'N/A')}</p>
+                      <p className="text-sm text-gray-600">{maskInfo(booking.user_profiles?.phone_number || 'N/A')}</p>
+                    </div>
+                  </div>
                 </div>
-              )}
+                <div className="flex items-start gap-3">
+                  <Calendar className="h-5 w-5 text-orange-500 mt-0.5" />
+                  <div>
+                    <p className="text-xs text-gray-500 uppercase font-bold">Date & Time</p>
+                    <p className="font-semibold text-gray-900">{new Date(booking.booking_date).toLocaleDateString()} at {booking.booking_time || 'TBD'}</p>
+                  </div>
+                </div>
+              </div>
+              <div className="space-y-4">
+                <div className="flex items-start gap-3">
+                  <MapPin className="h-5 w-5 text-red-500 mt-0.5" />
+                  <div>
+                    <p className="text-xs text-gray-500 uppercase font-bold">Event Location</p>
+                    <p className="font-semibold text-gray-900 leading-tight">
+                      {booking.vendor_profiles?.address || 'To be shared after confirmation'}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3">
+                  <FileText className="h-5 w-5 text-gray-500 mt-0.5" />
+                  <div>
+                    <p className="text-xs text-gray-500 uppercase font-bold">Event Type</p>
+                    <p className="font-semibold text-gray-900">{booking.services?.categories?.name || 'General Event'}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+            {isPending && (
+              <div className="mt-4 p-3 bg-blue-50 border border-blue-100 rounded-lg flex items-center gap-2">
+                <AlertCircle className="h-4 w-4 text-blue-600" />
+                <p className="text-xs text-blue-700">Contact details and exact location are masked until order is confirmed.</p>
+              </div>
+            )}
+          </div>
+
+          {/* Service & Payments Info (Existing logic refined) */}
+          <div className="bg-white rounded-xl border overflow-hidden shadow-sm">
+            <div className="p-6 border-b bg-gray-50/50">
+              <h3 className="font-bold flex items-center gap-2">
+                <FileText className="h-5 w-5 text-gray-400" />
+                Service & Payment Milestones
+              </h3>
+            </div>
+            <div className="p-6 space-y-4">
+              <div className="flex justify-between items-center p-3 border rounded-lg bg-gray-50">
+                <div>
+                  <p className="font-bold text-gray-900">{booking.services?.name}</p>
+                  <p className="text-xs text-gray-600">Base Price</p>
+                </div>
+                <p className="text-xl font-bold">₹{Number(booking.services?.price || 0).toLocaleString()}</p>
+              </div>
+              <div className="space-y-3">
+                {booking.payment_milestones?.map(m => (
+                  <div key={m.id} className="flex justify-between items-center text-sm p-2 bg-white border-b last:border-0">
+                    <div className="flex items-center gap-2">
+                      <div className={`h-2 w-2 rounded-full ${m.status === 'released' ? 'bg-green-500' : 'bg-gray-300'}`} />
+                      <span className="capitalize">{getMilestoneLabel(m.milestone_type)} ({m.percentage}%)</span>
+                    </div>
+                    <div className="text-right">
+                      <span className="font-semibold">₹{Number(m.amount).toLocaleString()}</span>
+                      <p className={`text-[10px] font-bold uppercase ${m.status === 'released' ? 'text-green-600' : 'text-gray-400'}`}>
+                        {m.status.replace('_', ' ')}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Right Column: Earnings Summary & Policies */}
+        <div className="space-y-6">
+          {/* Earnings Breakdown */}
+          <div className="bg-gray-900 rounded-2xl p-6 text-white shadow-xl relative overflow-hidden">
+            <div className="absolute top-0 right-0 p-4 opacity-10">
+              <DollarSign className="h-16 w-16" />
+            </div>
+            <h3 className="text-lg font-bold mb-6 flex items-center gap-2">
+              <BarChart3 className="h-5 w-5 text-blue-400" />
+              Earnings Breakdown
+            </h3>
+            <div className="space-y-4">
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-400">Total Charged</span>
+                <span className="font-bold">₹{grossAmount.toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-400">Platform Commission (15%)</span>
+                <span className="text-red-400">-₹{commission.toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-400">GST on Commission (18%)</span>
+                <span className="text-red-400">-₹{gstOnCommission.toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-400">Gateway Fees (2%)</span>
+                <span className="text-red-400">-₹{gatewayFee.toLocaleString()}</span>
+              </div>
+              <div className="pt-4 border-t border-gray-800 flex justify-between items-end">
+                <div>
+                  <p className="text-xs text-gray-400 font-bold uppercase">Net Payout to Vendor</p>
+                  <p className="text-3xl font-bold text-green-400">₹{netPayout.toLocaleString()}</p>
+                </div>
+                <div className="text-right text-[10px] text-gray-500 italic">
+                  *Auto-calculated based on current slabs
+                </div>
+              </div>
             </div>
           </div>
 
-          {/* Notes */}
-          {booking.notes && (
-            <div className="bg-white rounded-lg border p-6">
-              <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
-                <FileText className="h-5 w-5" />
-                Notes
-              </h3>
-              <p className="text-sm text-gray-700 whitespace-pre-wrap">{booking.notes}</p>
+          {/* Cancellation & Refund Info */}
+          <div className="bg-white rounded-xl border p-6 shadow-sm">
+            <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
+              <AlertCircle className="h-5 w-5 text-red-500" />
+              Cancellation & Refunds
+            </h3>
+            <div className="space-y-4">
+              <div className="p-3 bg-red-50 rounded-lg border border-red-100">
+                <p className="text-xs font-bold text-red-800 uppercase mb-1">Cancellation Policy</p>
+                <p className="text-sm text-red-900 leading-relaxed">
+                  Full refund if cancelled before 48 hours of event. 50% refund after that.
+                </p>
+              </div>
+              <div className="text-sm text-gray-600 space-y-2">
+                <p className="font-semibold text-gray-900">Responsibility:</p>
+                <ul className="list-disc ml-4 space-y-1">
+                  <li>Vendor responsible for full refund if rejected after acceptance.</li>
+                  <li>Platform fee is non-refundable for confirmed booking cancellations.</li>
+                </ul>
+              </div>
             </div>
-          )}
+          </div>
         </div>
       </div>
+
+      {/* Hidden Status Editor */}
+      {isEditingStatus && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-xl p-6 w-full max-w-md shadow-2xl">
+            <h2 className="text-xl font-bold mb-4">Update Order Status to {newStatus.toUpperCase()}</h2>
+            <div className="space-y-4">
+              <Input
+                placeholder="Add a note (visible to admin logs)"
+                value={statusNote}
+                onChange={(e) => setStatusNote(e.target.value)}
+              />
+              <div className="flex gap-2">
+                <Button onClick={updateBookingStatus} disabled={saving} className="flex-1">
+                  {saving ? 'Processing...' : 'Confirm Change'}
+                </Button>
+                <Button variant="outline" onClick={() => setIsEditingStatus(false)} disabled={saving}>Cancel</Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
+  )
+}
+
+function TimelineStep({ label, date, active, icon: Icon }: { label: string; date: string | null; active: boolean; icon: any }) {
+  return (
+    <div className="flex flex-col items-center text-center gap-2 relative z-10 flex-1">
+      <div className={`h-10 w-10 rounded-full flex items-center justify-center border-2 transition-all duration-300 ${active ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-100' : 'bg-white border-gray-200 text-gray-300'
+        }`}>
+        <Icon className="h-5 w-5" />
+      </div>
+      <div className="space-y-0.5 px-2">
+        <p className={`text-[10px] font-bold uppercase tracking-tighter ${active ? 'text-blue-700' : 'text-gray-400'}`}>{label}</p>
+        {date && <p className="text-[10px] text-gray-500">{new Date(date).toLocaleDateString()}</p>}
+      </div>
+    </div>
+  )
+}
+
+function BarChart3(props: any) {
+  return (
+    <svg
+      {...props}
+      xmlns="http://www.w3.org/2000/svg"
+      width="24"
+      height="24"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M3 3v18h18" />
+      <path d="M18 17V9" />
+      <path d="M13 17V5" />
+      <path d="M8 17v-3" />
+    </svg>
   )
 }
 

@@ -40,7 +40,7 @@ class _ServicesScreenState extends State<ServicesScreen> with TickerProviderStat
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 4, vsync: this);
     _tabController.addListener(() {
       if (_tabController.indexIsChanging) {
         setState(() {});
@@ -549,6 +549,10 @@ class _ServicesScreenState extends State<ServicesScreen> with TickerProviderStat
                   await _serviceService.toggleServiceVisibility(service.id, v);
                   _updateCachedServiceVisibility(service.id, v);
                 },
+                selectionMode: _selectionMode,
+                isSelected: _selectedServiceIds.contains(service.id),
+                onSelectedChanged: (_) => _toggleSelection(service),
+                onLongPressSelect: () => _startSelection(service),
               );
             },
           ),
@@ -642,6 +646,71 @@ class _ServicesScreenState extends State<ServicesScreen> with TickerProviderStat
                   await _serviceService.toggleServiceVisibility(service.id, v);
                   _updateCachedServiceVisibility(service.id, v);
                 },
+                selectionMode: _selectionMode,
+                isSelected: _selectedServiceIds.contains(service.id),
+                onSelectedChanged: (_) => _toggleSelection(service),
+                onLongPressSelect: () => _startSelection(service),
+              );
+            },
+          ),
+        );
+      },
+    );
+  }
+
+  // Tab 4: Draft Services
+  Widget _buildDraftServicesTab() {
+    return FutureBuilder<List<ServiceItem>>(
+      future: _serviceService.getDraftServices(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        
+        if (snapshot.hasError) {
+          return Center(child: Text('Error: ${snapshot.error}'));
+        }
+        
+        final draftServices = snapshot.data ?? [];
+        final filteredDrafts = draftServices
+            .where((service) {
+              final query = _query.toLowerCase();
+              return query.isEmpty || service.name.toLowerCase().contains(query);
+            })
+            .toList();
+        
+        if (filteredDrafts.isEmpty) {
+          return const Center(child: Text('No draft services'));
+        }
+        
+        return RefreshIndicator(
+          onRefresh: _forceRefreshServicesData,
+          child: ListView.separated(
+            itemCount: filteredDrafts.length,
+            separatorBuilder: (_, __) => const SizedBox(height: 10),
+            itemBuilder: (context, index) {
+              final service = filteredDrafts[index];
+              
+              return _ServiceCard(
+                item: service,
+                onOpen: () => _openService(service),
+                onEdit: () => _openEditService(service),
+                onDelete: () => _deleteService(service),
+                onToggleEnabled: (v) async {
+                  await _serviceService.toggleServiceStatus(service.id, v);
+                  _updateCachedServiceStatus(service.id, v);
+                },
+                onOpenAvailability: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => ServiceDetailsPage(item: service),
+                    ),
+                  );
+                },
+                selectionMode: _selectionMode,
+                isSelected: _selectedServiceIds.contains(service.id),
+                onSelectedChanged: (_) => _toggleSelection(service),
+                onLongPressSelect: () => _startSelection(service),
               );
             },
           ),
@@ -1120,6 +1189,7 @@ class _ServicesScreenState extends State<ServicesScreen> with TickerProviderStat
               Tab(text: 'All'),
               Tab(text: 'Available'),
               Tab(text: 'Unavailable'),
+              Tab(text: 'Draft'),
             ],
             onTap: (index) {
               setState(() {});
@@ -1147,6 +1217,8 @@ class _ServicesScreenState extends State<ServicesScreen> with TickerProviderStat
                     _buildAvailableServicesTab(),
                     // Tab 3: Unavailable Services
                     _buildUnavailableServicesTab(),
+                    // Tab 4: Draft Services
+                    _buildDraftServicesTab(),
                   ],
                 ),
               ),
@@ -1218,166 +1290,170 @@ class _ServiceCardState extends State<_ServiceCard> {
     final colorScheme = theme.colorScheme;
     final textTheme = theme.textTheme;
 
-    return Card(
-      elevation: 4,
-      shadowColor: Colors.black.withOpacity(0.1),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Top section: Image and Badges
-          Stack(
-            children: [
-              // Service Image
-              _buildServiceImage(),
-              
-              // Selection Checkbox
-              if (widget.selectionMode)
+    return InkWell(
+      onLongPress: widget.onLongPressSelect,
+      onTap: widget.selectionMode ? () => widget.onSelectedChanged?.call(!widget.isSelected) : widget.onOpen,
+      child: Card(
+        elevation: 4,
+        shadowColor: Colors.black.withOpacity(0.1),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Top section: Image and Badges
+            Stack(
+              children: [
+                // Service Image
+                _buildServiceImage(),
+                
+                // Selection Checkbox
+                if (widget.selectionMode)
+                  Positioned(
+                    top: 12,
+                    left: 12,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        shape: BoxShape.circle,
+                        boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 4)],
+                      ),
+                      child: Checkbox(
+                        value: widget.isSelected,
+                        onChanged: widget.onSelectedChanged,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                      ),
+                    ),
+                  ),
+
+                // Availability Badge
                 Positioned(
                   top: 12,
+                  right: 12,
+                  child: _buildStatusBadge(),
+                ),
+
+                // Rating Badge
+                Positioned(
+                  bottom: 12,
                   left: 12,
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      shape: BoxShape.circle,
-                      boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 4)],
-                    ),
-                    child: Checkbox(
-                      value: widget.isSelected,
-                      onChanged: widget.onSelectedChanged,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-                    ),
-                  ),
+                  child: _buildRatingBadge(),
                 ),
+              ],
+            ),
 
-              // Availability Badge
-              Positioned(
-                top: 12,
-                right: 12,
-                child: _buildStatusBadge(),
-              ),
-
-              // Rating Badge
-              Positioned(
-                bottom: 12,
-                left: 12,
-                child: _buildRatingBadge(),
-              ),
-            ],
-          ),
-
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Name and Price Row
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Expanded(
-                      child: Text(
-                        widget.item.name,
-                        style: textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 18,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    Text(
-                      '₹${widget.item.price.toStringAsFixed(0)}',
-                      style: textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w800,
-                        color: colorScheme.primary,
-                      ),
-                    ),
-                  ],
-                ),
-                
-                const SizedBox(height: 8),
-
-                // Description
-                GestureDetector(
-                  onTap: () => setState(() => _expanded = !_expanded),
-                  child: Text(
-                    widget.item.description,
-                    maxLines: _expanded ? null : 2,
-                    overflow: _expanded ? TextOverflow.visible : TextOverflow.ellipsis,
-                    style: textTheme.bodySmall?.copyWith(color: Colors.grey[700]),
-                  ),
-                ),
-
-                const SizedBox(height: 12),
-
-                // Tags
-                if (widget.item.tags.isNotEmpty)
-                  SizedBox(
-                    height: 28,
-                    child: ListView.separated(
-                      scrollDirection: Axis.horizontal,
-                      itemCount: widget.item.tags.length,
-                      separatorBuilder: (_, __) => const SizedBox(width: 8),
-                      itemBuilder: (context, i) => Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: colorScheme.secondaryContainer,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Name and Price Row
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
                         child: Text(
-                          widget.item.tags[i],
-                          style: textTheme.labelSmall?.copyWith(
-                            color: colorScheme.onSecondaryContainer,
+                          widget.item.name,
+                          style: textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 18,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      Text(
+                        '₹${widget.item.price.toStringAsFixed(0)}',
+                        style: textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w800,
+                          color: colorScheme.primary,
+                        ),
+                      ),
+                    ],
+                  ),
+                  
+                  const SizedBox(height: 8),
+
+                  // Description
+                  GestureDetector(
+                    onTap: () => setState(() => _expanded = !_expanded),
+                    child: Text(
+                      widget.item.description,
+                      maxLines: _expanded ? null : 2,
+                      overflow: _expanded ? TextOverflow.visible : TextOverflow.ellipsis,
+                      style: textTheme.bodySmall?.copyWith(color: Colors.grey[700]),
+                    ),
+                  ),
+
+                  const SizedBox(height: 12),
+
+                  // Tags
+                  if (widget.item.tags.isNotEmpty)
+                    SizedBox(
+                      height: 28,
+                      child: ListView.separated(
+                        scrollDirection: Axis.horizontal,
+                        itemCount: widget.item.tags.length,
+                        separatorBuilder: (_, __) => const SizedBox(width: 8),
+                        itemBuilder: (context, i) => Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: colorScheme.secondaryContainer,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            widget.item.tags[i],
+                            style: textTheme.labelSmall?.copyWith(
+                              color: colorScheme.onSecondaryContainer,
+                            ),
                           ),
                         ),
                       ),
                     ),
+
+                  const SizedBox(height: 16),
+                  const Divider(height: 1),
+                  const SizedBox(height: 12),
+
+                  // Bottom Action Row
+                  Row(
+                    children: [
+                      // Edit Button
+                      TextButton.icon(
+                        onPressed: widget.onEdit ?? widget.onOpen,
+                        icon: const Icon(Icons.edit_outlined, size: 20),
+                        label: const Text('Edit'),
+                        style: TextButton.styleFrom(
+                          visualDensity: VisualDensity.compact,
+                          foregroundColor: colorScheme.primary,
+                        ),
+                      ),
+
+                      // Availability Toggle (Pause/Resume)
+                      const Spacer(),
+                      Text(
+                        widget.item.enabled ? 'Active' : 'Paused',
+                        style: textTheme.labelSmall?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: widget.item.enabled ? Colors.green[700] : Colors.grey[600],
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Switch(
+                        value: widget.item.enabled,
+                        onChanged: widget.item.isDraft ? null : widget.onToggleEnabled,
+                        activeThumbColor: Colors.green,
+                      ),
+                      
+                      // More/Delete Options
+                      _buildMoreButton(),
+                    ],
                   ),
-
-                const SizedBox(height: 16),
-                const Divider(height: 1),
-                const SizedBox(height: 12),
-
-                // Bottom Action Row
-                Row(
-                  children: [
-                    // Edit Button
-                    TextButton.icon(
-                      onPressed: widget.onEdit ?? widget.onOpen,
-                      icon: const Icon(Icons.edit_outlined, size: 20),
-                      label: const Text('Edit'),
-                      style: TextButton.styleFrom(
-                        visualDensity: VisualDensity.compact,
-                        foregroundColor: colorScheme.primary,
-                      ),
-                    ),
-
-                    // Availability Toggle (Pause/Resume)
-                    const Spacer(),
-                    Text(
-                      widget.item.enabled ? 'Active' : 'Paused',
-                      style: textTheme.labelSmall?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        color: widget.item.enabled ? Colors.green[700] : Colors.grey[600],
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Switch(
-                      value: widget.item.enabled,
-                      onChanged: widget.onToggleEnabled,
-                      activeColor: Colors.green,
-                    ),
-                    
-                    // More/Delete Options
-                    _buildMoreButton(),
-                  ],
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -1402,10 +1478,12 @@ class _ServiceCardState extends State<_ServiceCard> {
 
   Widget _buildStatusBadge() {
     final isActive = widget.item.enabled;
+    final isDraft = widget.item.isDraft;
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: isActive ? Colors.green.withOpacity(0.9) : Colors.orange.withOpacity(0.9),
+        color: isDraft ? Colors.grey[600] : (isActive ? Colors.green.withOpacity(0.9) : Colors.orange.withOpacity(0.9)),
         borderRadius: BorderRadius.circular(12),
         boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 4)],
       ),
@@ -1413,13 +1491,13 @@ class _ServiceCardState extends State<_ServiceCard> {
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(
-            isActive ? Icons.check_circle : Icons.pause_circle_filled,
+            isDraft ? Icons.edit_document : (isActive ? Icons.check_circle : Icons.pause_circle_filled),
             color: Colors.white,
             size: 14,
           ),
           const SizedBox(width: 6),
           Text(
-            isActive ? 'ACTIVE' : 'PAUSED',
+            isDraft ? 'DRAFT' : (isActive ? 'ACTIVE' : 'PAUSED'),
             style: const TextStyle(
               color: Colors.white,
               fontWeight: FontWeight.bold,
@@ -1531,6 +1609,10 @@ class _ServiceCardWithCategory extends StatelessWidget {
   final VoidCallback onDelete;
   final ValueChanged<bool> onToggleEnabled;
   final ValueChanged<bool>? onToggleVisibility;
+  final bool selectionMode;
+  final bool isSelected;
+  final ValueChanged<bool?>? onSelectedChanged;
+  final VoidCallback? onLongPressSelect;
 
   const _ServiceCardWithCategory({
     required this.item,
@@ -1540,6 +1622,10 @@ class _ServiceCardWithCategory extends StatelessWidget {
     required this.onDelete,
     required this.onToggleEnabled,
     this.onToggleVisibility,
+    this.selectionMode = false,
+    this.isSelected = false,
+    this.onSelectedChanged,
+    this.onLongPressSelect,
   });
 
   @override
@@ -1548,150 +1634,175 @@ class _ServiceCardWithCategory extends StatelessWidget {
     final colorScheme = theme.colorScheme;
     final textTheme = theme.textTheme;
 
-    return Card(
-      elevation: 4,
-      shadowColor: Colors.black.withOpacity(0.1),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Top section: Image and Badges
-          Stack(
-            children: [
-              // Service Image
-              _buildServiceImage(),
-
-              // Category Badge (Overlay on top-left)
-              Positioned(
-                top: 12,
-                left: 12,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.9),
-                    borderRadius: BorderRadius.circular(12),
-                    boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 4)],
-                  ),
-                  child: Text(
-                    categoryName,
-                    style: TextStyle(
-                      color: colorScheme.primary,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 10,
-                    ),
-                  ),
-                ),
-              ),
-
-              // Availability Badge
-              Positioned(
-                top: 12,
-                right: 12,
-                child: _buildStatusBadge(),
-              ),
-
-              // Rating Badge
-              Positioned(
-                bottom: 12,
-                left: 12,
-                child: _buildRatingBadge(),
-              ),
-            ],
-          ),
-
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+    return InkWell(
+      onLongPress: onLongPressSelect,
+      onTap: selectionMode ? () => onSelectedChanged?.call(!isSelected) : onOpen,
+      child: Card(
+        elevation: 4,
+        shadowColor: Colors.black.withOpacity(0.1),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Top section: Image and Badges
+            Stack(
               children: [
-                // Name and Price Row
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Expanded(
+                // Service Image
+                _buildServiceImage(),
+  
+                // Selection Checkbox
+                if (selectionMode)
+                  Positioned(
+                    top: 12,
+                    left: 12,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        shape: BoxShape.circle,
+                        boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 4)],
+                      ),
+                      child: Checkbox(
+                        value: isSelected,
+                        onChanged: onSelectedChanged,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                      ),
+                    ),
+                  ),
+  
+                // Category Badge (Overlay on top-left)
+                if (!selectionMode)
+                  Positioned(
+                    top: 12,
+                    left: 12,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.9),
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 4)],
+                      ),
                       child: Text(
-                        item.name,
-                        style: textTheme.titleMedium?.copyWith(
+                        categoryName,
+                        style: TextStyle(
+                          color: colorScheme.primary,
                           fontWeight: FontWeight.bold,
-                          fontSize: 18,
+                          fontSize: 10,
                         ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                    Text(
-                      '₹${item.price.toStringAsFixed(0)}',
-                      style: textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w800,
-                        color: colorScheme.primary,
-                      ),
-                    ),
-                  ],
+                  ),
+  
+                // Availability Badge
+                Positioned(
+                  top: 12,
+                  right: 12,
+                  child: _buildStatusBadge(),
                 ),
-
-                const SizedBox(height: 8),
-
-                // Description
-                Text(
-                  item.description,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: textTheme.bodySmall?.copyWith(color: Colors.grey[700]),
-                ),
-
-                const SizedBox(height: 16),
-                const Divider(height: 1),
-                const SizedBox(height: 12),
-
-                // Bottom Action Row
-                Row(
-                  children: [
-                    // Edit Button
-                    TextButton.icon(
-                      onPressed: onEdit ?? onOpen,
-                      icon: const Icon(Icons.edit_outlined, size: 20),
-                      label: const Text('Edit'),
-                      style: TextButton.styleFrom(
-                        visualDensity: VisualDensity.compact,
-                        foregroundColor: colorScheme.primary,
-                      ),
-                    ),
-
-                    const Spacer(),
-
-                    // Visibility Toggle (Eye icon)
-                    if (onToggleVisibility != null) ...[
-                      IconButton(
-                        onPressed: () => onToggleVisibility!( !item.isVisibleToUsers),
-                        icon: Icon(
-                          item.isVisibleToUsers ? Icons.visibility : Icons.visibility_off,
-                          size: 20,
-                          color: item.isVisibleToUsers ? Colors.green : Colors.grey,
-                        ),
-                        tooltip: 'Visibility to users',
-                      ),
-                    ],
-
-                    // Availability Toggle (Pause/Resume)
-                    Switch(
-                      value: item.enabled,
-                      onChanged: onToggleEnabled,
-                      activeColor: Colors.green,
-                    ),
-
-                    // Delete
-                    IconButton(
-                      onPressed: onDelete,
-                      icon: const Icon(Icons.delete_outline, color: Colors.grey, size: 20),
-                      tooltip: 'Delete',
-                    ),
-                  ],
+  
+                // Rating Badge
+                Positioned(
+                  bottom: 12,
+                  left: 12,
+                  child: _buildRatingBadge(),
                 ),
               ],
             ),
-          ),
-        ],
+  
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Name and Price Row
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          item.name,
+                          style: textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 18,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      Text(
+                        '₹${item.price.toStringAsFixed(0)}',
+                        style: textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w800,
+                          color: colorScheme.primary,
+                        ),
+                      ),
+                    ],
+                  ),
+  
+                  const SizedBox(height: 8),
+  
+                  // Description
+                  Text(
+                    item.description,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: textTheme.bodySmall?.copyWith(color: Colors.grey[700]),
+                  ),
+  
+                  const SizedBox(height: 16),
+                  const Divider(height: 1),
+                  const SizedBox(height: 12),
+  
+                  // Bottom Action Row
+                  Row(
+                    children: [
+                      // Edit Button
+                      TextButton.icon(
+                        onPressed: onEdit ?? onOpen,
+                        icon: const Icon(Icons.edit_outlined, size: 20),
+                        label: const Text('Edit'),
+                        style: TextButton.styleFrom(
+                          visualDensity: VisualDensity.compact,
+                          foregroundColor: colorScheme.primary,
+                        ),
+                      ),
+  
+                      const Spacer(),
+  
+                      // Visibility Toggle (Eye icon)
+                      if (onToggleVisibility != null) ...[
+                        IconButton(
+                          onPressed: () => onToggleVisibility!( !item.isVisibleToUsers),
+                          icon: Icon(
+                            item.isVisibleToUsers ? Icons.visibility : Icons.visibility_off,
+                            size: 20,
+                            color: item.isVisibleToUsers ? Colors.green : Colors.grey,
+                          ),
+                          tooltip: item.isVisibleToUsers ? 'Visible to users' : 'Hidden from users',
+                        ),
+                      ],
+  
+                      // Availability Toggle (Pause/Resume)
+                      Text(
+                        item.enabled ? 'Active' : 'Paused',
+                        style: textTheme.labelSmall?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: item.enabled ? Colors.green[700] : Colors.grey[600],
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Switch(
+                        value: item.enabled,
+                        onChanged: item.isDraft ? null : onToggleEnabled,
+                        activeThumbColor: Colors.green,
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -2013,7 +2124,7 @@ class MediaGalleryPage extends StatelessWidget {
 
 class EditServicePage extends StatefulWidget {
   final ServiceItem item;
-  const EditServicePage({required this.item});
+  const EditServicePage({super.key, required this.item});
 
   @override
   State<EditServicePage> createState() => _EditServicePageState();
@@ -2027,6 +2138,7 @@ class _EditServicePageState extends State<EditServicePage> {
   late List<String> _tags;
   late bool _enabled;
   late bool _isVisibleToUsers;
+  late bool _isDraft;
   final ServiceService _service = ServiceService();
   final List<MediaItem> _media = <MediaItem>[];
 
@@ -2039,6 +2151,7 @@ class _EditServicePageState extends State<EditServicePage> {
     _tags = List<String>.from(widget.item.tags);
     _enabled = widget.item.enabled;
     _isVisibleToUsers = widget.item.isVisibleToUsers;
+    _isDraft = widget.item.isDraft;
     _media.addAll(widget.item.media);
   }
 
@@ -2119,16 +2232,38 @@ class _EditServicePageState extends State<EditServicePage> {
     setState(() => _media.removeAt(index));
   }
 
-  Future<void> _save() async {
+  Future<void> _save({bool? isDraft}) async {
+    final bool draftStatus = isDraft ?? _isDraft;
+    
     if (!_formKey.currentState!.validate()) return;
+
+    if (!draftStatus) {
+      // Validate media requirements when publishing
+      final imageCount = _media.where((m) => m.type == MediaType.image).length;
+      final videoCount = _media.where((m) => m.type == MediaType.video).length;
+
+      if (imageCount < 2) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Please add at least 2 images to publish'), backgroundColor: Colors.red),
+        );
+        return;
+      }
+      if (videoCount < 2) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Please add at least 2 videos to publish'), backgroundColor: Colors.red),
+        );
+        return;
+      }
+    }
+
     final double? price = double.tryParse(_priceCtrl.text.trim());
     final updates = <String, dynamic>{
-      // title/name intentionally excluded
       'price': price,
       'description': _descCtrl.text.trim(),
       'tags': _tags,
-      'is_active': _enabled,
+      'is_active': draftStatus ? false : _enabled,
       'is_visible_to_users': _isVisibleToUsers,
+      'is_draft': draftStatus,
       'media_urls': _media.map((m) => m.url).toList(),
     };
     updates.removeWhere((k, v) => v == null);
@@ -2146,7 +2281,15 @@ class _EditServicePageState extends State<EditServicePage> {
       appBar: AppBar(
         title: Text(widget.item.name, maxLines: 1, overflow: TextOverflow.ellipsis),
         actions: [
-          TextButton(onPressed: _save, child: const Text('Save')),
+          if (_isDraft)
+            TextButton(
+              onPressed: () => _save(isDraft: false),
+              child: const Text('Publish'),
+            ),
+          TextButton(
+            onPressed: () => _save(),
+            child: const Text('Save'),
+          ),
         ],
       ),
       body: SingleChildScrollView(
@@ -2368,7 +2511,7 @@ class _FolderLikeCard extends StatelessWidget {
 class AddServicePage extends StatefulWidget {
   final String? categoryId;
 
-  const AddServicePage({
+  const AddServicePage({super.key, 
     this.categoryId,
   });
 
@@ -2614,51 +2757,53 @@ class _AddServicePageState extends State<AddServicePage> {
     return urls;
   }
 
-  Future<void> _save() async {
+  Future<void> _save({bool isDraft = false}) async {
     if (!_formKey.currentState!.validate()) return;
 
     // Validate media requirements
     final imageCount = _media.where((m) => m.type == MediaType.image).length;
     final videoCount = _media.where((m) => m.type == MediaType.video).length;
 
-    if (imageCount < 2) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please add at least 2 images (minimum 2 required)'),
-          backgroundColor: Colors.red,
-        ),
-      );
-      return;
-    }
+    if (!isDraft) {
+      if (imageCount < 2) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please add at least 2 images (minimum 2 required)'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
 
-    if (imageCount > 5) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Maximum 5 images allowed. Please remove ${imageCount - 5} image(s)'),
-          backgroundColor: Colors.red,
-        ),
-      );
-      return;
-    }
+      if (imageCount > 5) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Maximum 5 images allowed. Please remove ${imageCount - 5} image(s)'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
 
-    if (videoCount < 2) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please add at least 2 videos (minimum 2 required)'),
-          backgroundColor: Colors.red,
-        ),
-      );
-      return;
-    }
+      if (videoCount < 2) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please add at least 2 videos (minimum 2 required)'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
 
-    if (videoCount > 5) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Maximum 5 videos allowed. Please remove ${videoCount - 5} video(s)'),
-          backgroundColor: Colors.red,
-        ),
-      );
-      return;
+      if (videoCount > 5) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Maximum 5 videos allowed. Please remove ${videoCount - 5} video(s)'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
     }
 
     setState(() {
@@ -2698,7 +2843,8 @@ class _AddServicePageState extends State<AddServicePage> {
         suitedFor: _suitedFor.isEmpty ? null : _suitedFor,
         features: featuresMap,
         policies: _policies.isEmpty ? null : _policies,
-        isActive: _enabled,
+        isActive: isDraft ? false : _enabled,
+        isDraft: isDraft,
       );
 
       if (service != null) {
@@ -2751,14 +2897,18 @@ class _AddServicePageState extends State<AddServicePage> {
         title: const Text('Add Service'),
         actions: [
           TextButton(
-            onPressed: _isSaving ? null : _save,
+            onPressed: _isSaving ? null : () => _save(isDraft: true),
+            child: const Text('Save as Draft'),
+          ),
+          TextButton(
+            onPressed: _isSaving ? null : () => _save(isDraft: false),
             child: _isSaving
                 ? const SizedBox(
                     width: 16,
                     height: 16,
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
-                : const Text('Save'),
+                : const Text('Publish'),
           ),
         ],
       ),

@@ -12,6 +12,7 @@ class AppSession extends ChangeNotifier {
   bool _isPasswordRecovery = false;
   bool _isInitialized = false;
 
+  RealtimeChannel? _vendorRealtimeChannel;
   VendorProfile? _vendorProfile;
   VendorProfile? get vendorProfile => _vendorProfile;
 
@@ -21,33 +22,96 @@ class AppSession extends ChangeNotifier {
       print('AppSession: Auth state changed - ${event.event}');
       _isAuthenticated = event.session != null || Supabase.instance.client.auth.currentSession != null;
       print('AppSession: Authentication status: $_isAuthenticated');
+      
+      if (event.event == AuthChangeEvent.signedOut || event.event == AuthChangeEvent.userDeleted) {
+        _cleanupRealtime();
+        _isAuthenticated = false;
+        _isVendorSetupComplete = false;
+        _vendorProfile = null;
+      }
+
       if (event.event == AuthChangeEvent.passwordRecovery) {
         _isPasswordRecovery = true;
       }
-      await _checkVendorSetup();
+      
+      if (_isAuthenticated) {
+        await _checkVendorSetup();
+        _setupVendorRealtime();
+      } else {
+        _cleanupRealtime();
+      }
+      
       notifyListeners();
     });
     // Initialize vendor setup status on startup (e.g., hot restart, existing session)
     _init();
   }
 
+  void _setupVendorRealtime() {
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user == null) return;
+
+    _cleanupRealtime();
+
+    print('AppSession: Setting up realtime listener for vendor_profiles deletion for user: ${user.id}');
+    _vendorRealtimeChannel = Supabase.instance.client
+        .channel('vendor-deletion-monitor') // Use a fixed name for simpler debugging
+        .onPostgresChanges(
+          event: PostgresChangeEvent.delete,
+          schema: 'public',
+          table: 'vendor_profiles',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'user_id',
+            value: user.id,
+          ),
+          callback: (payload) async {
+            print('AppSession: RECEIVED DELETE EVENT via Realtime! Payload: $payload');
+            final prefs = await SharedPreferences.getInstance();
+            await prefs.remove('lastKnownVendorId');
+            await signOut();
+          },
+        );
+
+    _vendorRealtimeChannel!.subscribe((status, [error]) {
+      print('AppSession: Realtime subscription status: $status');
+      if (error != null) {
+        print('AppSession: Realtime Error: $error');
+      }
+    });
+  }
+
+  void _cleanupRealtime() {
+    if (_vendorRealtimeChannel != null) {
+      print('AppSession: Cleaning up realtime channel');
+      Supabase.instance.client.removeChannel(_vendorRealtimeChannel!);
+      _vendorRealtimeChannel = null;
+    }
+  }
+
   Future<void> _init() async {
     print('AppSession: Starting initialization...');
     try {
-      // Load onboarding completion status from SharedPreferences
+      // Load onboarding/deletion status from SharedPreferences
       await _loadOnboardingStatus();
       
-      // Check if user is already authenticated (for app restarts)
+      // Check if user is already authenticated
       final currentSession = Supabase.instance.client.auth.currentSession;
-      _isAuthenticated = currentSession != null;
-      print('AppSession: Initial auth check: $_isAuthenticated');
-      if (currentSession != null) {
-        print('AppSession: Current user: ${currentSession.user.email}');
+      
+      // If _isAuthenticated was set to false by _loadOnboardingStatus's signOut, don't override back to true immediately
+      if (_isAuthenticated && currentSession != null) {
+        await _checkVendorSetup();
+        _setupVendorRealtime();
+      } else {
+        _isAuthenticated = currentSession != null;
+        if (_isAuthenticated) {
+          await _checkVendorSetup();
+          _setupVendorRealtime();
+        }
       }
       
-      await _checkVendorSetup();
       _isInitialized = true;
-      print('AppSession: Initialization complete');
+      print('AppSession: Initialization complete (Authenticated: $_isAuthenticated)');
       notifyListeners();
     } catch (e) {
       print('AppSession: Error during initialization: $e');
@@ -60,6 +124,25 @@ class AppSession extends ChangeNotifier {
     try {
       final prefs = await SharedPreferences.getInstance();
       _isOnboardingComplete = prefs.getBool('isOnboardingComplete') ?? false;
+      
+      // Also check if they were a vendor before and were deleted
+      final lastKnownVendorId = prefs.getString('lastKnownVendorId');
+      final currentSession = Supabase.instance.client.auth.currentSession;
+      
+      if (currentSession != null && lastKnownVendorId != null) {
+        print('AppSession: Checking for deleted vendor account (lastKnown: $lastKnownVendorId)');
+        final user = currentSession.user;
+        final service = VendorService();
+        final profile = await service.getVendorProfile(user.id);
+        
+        if (profile == null) {
+          print('AppSession: VENDOR ACCOUNT DELETED detected in _init. Forcing logout.');
+          await prefs.remove('lastKnownVendorId');
+          await signOut();
+          return; // Stop initialization as we are logging out
+        }
+      }
+      
       print('AppSession: Loaded onboarding status: $_isOnboardingComplete');
     } catch (e) {
       print('AppSession: Error loading onboarding status: $e');
@@ -71,6 +154,13 @@ class AppSession extends ChangeNotifier {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool('isOnboardingComplete', _isOnboardingComplete);
+      
+      if (_vendorProfile != null) {
+        await prefs.setString('lastKnownVendorId', _vendorProfile!.id!);
+      } else {
+        await prefs.remove('lastKnownVendorId');
+      }
+      
       print('AppSession: Saved onboarding status: $_isOnboardingComplete');
     } catch (e) {
       print('AppSession: Error saving onboarding status: $e');
@@ -166,10 +256,10 @@ class AppSession extends ChangeNotifier {
       final service = VendorService();
       final profile = await service.getVendorProfile(user.id);
       _vendorProfile = profile;
-
-      // Vendor setup is considered complete only when profile exists.
-      // Admin approval status (pending/approved/rejected) is tracked separately.
       _isVendorSetupComplete = profile != null;
+      
+      // Sync status to persist the "was vendor" flag
+      await _saveOnboardingStatus();
     } catch (e) {
       _isVendorSetupComplete = false;
       _vendorProfile = null;
@@ -189,13 +279,21 @@ class AppSession extends ChangeNotifier {
     notifyListeners();
   }
 
-  void signOut() {
-    Supabase.instance.client.auth.signOut();
-    _isAuthenticated = false;
-    _isVendorSetupComplete = false;
-    _isPasswordRecovery = false;
-    _vendorProfile = null;
-    notifyListeners();
+  Future<void> signOut() async {
+    print('AppSession: Manual signOut called');
+    try {
+      _cleanupRealtime();
+      await Supabase.instance.client.auth.signOut();
+    } catch (e) {
+      print('AppSession: Error during auth signOut: $e');
+    } finally {
+      _isAuthenticated = false;
+      _isVendorSetupComplete = false;
+      _isPasswordRecovery = false;
+      _vendorProfile = null;
+      print('AppSession: Session cleared, notifying listeners');
+      notifyListeners();
+    }
   }
 
   Future<void> updatePassword(String newPassword) async {
@@ -210,8 +308,10 @@ class AppSession extends ChangeNotifier {
   }
 
   Future<void> reloadVendorProfile() async {
-    await _checkVendorSetup();
-    notifyListeners();
+    if (_isAuthenticated) {
+      await _checkVendorSetup();
+      notifyListeners();
+    }
   }
 }
 

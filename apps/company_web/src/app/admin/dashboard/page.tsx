@@ -4,12 +4,12 @@ import { useEffect, useState, useRef } from 'react'
 import Link from 'next/link'
 import { useNetworkStatus } from '@/hooks/useNetworkStatus'
 import { safeQuery } from '@/lib/api-client'
-import { 
-  ShoppingBag, 
-  MessageSquare, 
-  Settings, 
-  Store, 
-  Users, 
+import {
+  ShoppingBag,
+  MessageSquare,
+  Settings,
+  Store,
+  Users,
   Megaphone,
   BarChart3,
   TrendingUp,
@@ -21,9 +21,9 @@ import {
   Star,
   Activity
 } from 'lucide-react'
-import { 
-  getDashboardStats, 
-  getTopVendors, 
+import {
+  getDashboardStats,
+  getTopVendors,
   getPopularServices,
   getVendorActivityStatus,
   type DashboardStats,
@@ -60,7 +60,7 @@ export default function Dashboard() {
 
       try {
         setError(null)
-        
+
         // Use Promise.allSettled to handle partial failures gracefully
         // Set a shorter timeout and fewer retries for faster failure
         const results = await Promise.allSettled([
@@ -133,7 +133,7 @@ export default function Dashboard() {
         const errors = results
           .map((r, i) => r.status === 'rejected' ? r.reason : (r.status === 'fulfilled' && r.value.error ? r.value.error : null))
           .filter(Boolean)
-        
+
         if (errors.length > 0) {
           console.error('Error loading dashboard data:', errors)
           // Only show error if we have no data at all
@@ -157,7 +157,7 @@ export default function Dashboard() {
         }
       }
     }
-    
+
     loadData()
 
     return () => {
@@ -385,18 +385,24 @@ export default function Dashboard() {
           subtitle="Banners and campaigns"
           icon={Megaphone}
         />
+        <QuickActionCard
+          title="Deletion Requests"
+          href="/admin/dashboard/deletion-requests"
+          subtitle="Review account closure reasons"
+          icon={XCircle}
+        />
       </div>
     </div>
   )
 }
 
-function StatCard({ 
-  title, 
-  value, 
-  icon: Icon, 
+function StatCard({
+  title,
+  value,
+  icon: Icon,
   color,
   highlight = false
-}: { 
+}: {
   title: string
   value: string
   icon: any
@@ -426,12 +432,12 @@ function StatCard({
   )
 }
 
-function QuickActionCard({ 
-  title, 
-  subtitle, 
-  href, 
-  icon: Icon 
-}: { 
+function QuickActionCard({
+  title,
+  subtitle,
+  href,
+  icon: Icon
+}: {
   title: string
   subtitle: string
   href: string

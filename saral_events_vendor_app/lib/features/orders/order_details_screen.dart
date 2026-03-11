@@ -432,352 +432,132 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Status Card
-            Card(
-              elevation: 0,
-              color: _getStatusColor(status).withOpacity(0.1),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-                side: BorderSide(
-                  color: _getStatusColor(status),
-                  width: 2,
+            // Order Timeline
+            _buildSection(
+              title: 'Order Timeline',
+              icon: Icons.timeline,
+              child: Column(
+                children: [
+                  _buildTimelineStep(
+                    'Booking Requested',
+                    createdAt != null ? DateFormat('MMM dd, hh:mm a').format(DateTime.parse(createdAt)) : 'Pending',
+                    true,
+                  ),
+                  _buildTimelineStep(
+                    'Vendor Confirmed',
+                    booking['vendor_accepted_at'] != null ? DateFormat('MMM dd, hh:mm a').format(DateTime.parse(booking['vendor_accepted_at'])) : 'Pending',
+                    booking['vendor_accepted_at'] != null,
+                  ),
+                  _buildTimelineStep(
+                    'Payment Received',
+                    paymentMilestones.any((m) => m['status'] == 'paid' || m['status'] == 'held_in_escrow') ? 'Confirmed' : 'Pending',
+                    paymentMilestones.any((m) => m['status'] == 'paid' || m['status'] == 'held_in_escrow'),
+                  ),
+                  _buildTimelineStep(
+                    'Service Completed',
+                    status == 'completed' ? 'Done' : 'Pending',
+                    status == 'completed',
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 24),
+
+            // Customer Snapshot (Masked if pending)
+            _buildSection(
+              title: 'Customer & Event Snapshot',
+              icon: Icons.person_pin_circle,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildSnapshotItem(Icons.person, 'Customer', customerName),
+                  _buildSnapshotItem(
+                    Icons.email, 
+                    'Email', 
+                    status == 'pending' ? _maskEmail(customerEmail ?? '') : (customerEmail ?? 'N/A')
+                  ),
+                  _buildSnapshotItem(
+                    Icons.phone, 
+                    'Phone', 
+                    status == 'pending' ? _maskPhone(customerPhone ?? '') : (customerPhone ?? 'N/A')
+                  ),
+                  _buildSnapshotItem(Icons.event, 'Event Date', _formatDate(bookingDate)),
+                  _buildSnapshotItem(Icons.location_on, 'Location', status == 'pending' ? 'Visible after confirmation' : (booking['location_link'] ?? 'Shared soon')),
+                ],
+              ),
+            ),
+
+            if (status == 'pending')
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(
+                  '* Contact details and exact location are hidden until you accept the booking.',
+                  style: TextStyle(fontSize: 11, color: Colors.blue.shade700, fontStyle: FontStyle.italic),
                 ),
               ),
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Row(
+
+            const SizedBox(height: 24),
+
+            // Earnings Breakdown
+            _buildSection(
+              title: 'Earnings Breakdown',
+              icon: Icons.account_balance_wallet,
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade50,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.grey.shade200),
+                ),
+                child: Column(
                   children: [
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: _getStatusColor(status),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Icon(
-                        status == 'completed' 
-                            ? Icons.check_circle
-                            : status == 'cancelled'
-                                ? Icons.cancel
-                                : Icons.schedule,
-                        color: Colors.white,
-                        size: 24,
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            'Order Status',
-                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: Colors.grey[700],
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            _getDisplayStatus(status),
-                            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                              fontWeight: FontWeight.bold,
-                              color: _getStatusColor(status),
-                            ),
-                          ),
-                          // Show who cancelled if booking is cancelled
-                          if (status == 'cancelled' && _refund != null) ...[
-                            const SizedBox(height: 4),
-                            Text(
-                              _getCancelledByMessage(),
-                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                color: Colors.grey[700],
-                                fontStyle: FontStyle.italic,
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
+                    _buildEarningsRow('Service Price (Gross)', amount),
+                    _buildEarningsRow('Platform Commission (15%)', -(amount * 0.15)),
+                    _buildEarningsRow('GST (18% on Commission)', -(amount * 0.15 * 0.18)),
+                    _buildEarningsRow('Gateway Fees (2%)', -(amount * 0.02)),
+                    const Divider(),
+                    _buildEarningsRow(
+                      'Net Payout to You', 
+                      amount - (amount * 0.15) - (amount * 0.15 * 0.18) - (amount * 0.02),
+                      isTotal: true,
                     ),
                   ],
                 ),
               ),
             ),
 
-            const SizedBox(height: 8),
-
-            // Milestone status text (high level customer flow)
-            Row(
-              children: [
-                const Icon(Icons.timeline, size: 18, color: Colors.grey),
-                const SizedBox(width: 6),
-                Text(
-                  'Milestone: ${milestoneStatus.toUpperCase()}',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Colors.grey[700],
-                      ),
-                ),
-              ],
-            ),
-
             const SizedBox(height: 24),
 
-            // Service Information
+            // Cancellation Policy
             _buildSection(
-              title: 'Service Information',
-              icon: Icons.room_service,
+              title: 'Cancellation & Refund Info',
+              icon: Icons.info_outline,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
                 children: [
+                  const Text(
+                    'Cancellation Policy:',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                  ),
+                  const SizedBox(height: 4),
                   Text(
-                    serviceName,
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-                    maxLines: 3,
-                    overflow: TextOverflow.ellipsis,
+                    'Full refund for cancellations before 48h. 50% refund after that.',
+                    style: TextStyle(color: Colors.grey.shade700, fontSize: 13),
                   ),
-                  if (serviceDescription != null && serviceDescription.isNotEmpty) ...[
-                    const SizedBox(height: 8),
-                    Text(
-                      serviceDescription,
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: Colors.grey[700],
-                      ),
-                      maxLines: 5,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                  const SizedBox(height: 16),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Flexible(
-                        child: Text(
-                          'Total Amount',
-                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: Colors.grey[700],
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      Text(
-                        '₹${amount.toStringAsFixed(2)}',
-                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: Theme.of(context).colorScheme.primary,
-                        ),
-                      ),
-                    ],
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Responsibility:',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Vendors are responsible for full refunds for any rejection after confirmation.',
+                    style: TextStyle(color: Colors.grey.shade700, fontSize: 13),
                   ),
                 ],
               ),
             ),
-
-            const SizedBox(height: 24),
-
-            // Customer Information
-            _buildSection(
-              title: 'Customer Details',
-              icon: Icons.person,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _buildInfoRow('Name', customerName),
-                  if (customerEmail != null && customerEmail.isNotEmpty)
-                    _buildInfoRow('Email', customerEmail),
-                  if (customerPhone != null && customerPhone.isNotEmpty)
-                    _buildInfoRow('Phone', customerPhone),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 24),
-
-            // Order Information
-            _buildSection(
-              title: 'Order Information',
-              icon: Icons.receipt_long,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _buildCopyableInfoRow('Booking ID', bookingId),
-                  if (orderId != null && orderId.isNotEmpty)
-                    _buildCopyableInfoRow('Order ID', orderId),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 24),
-
-            // Location Link (if available)
-            if (booking['location_link'] != null && (booking['location_link'] as String).isNotEmpty) ...[
-              _buildSection(
-                title: 'Destination Location',
-                icon: Icons.location_on,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const SizedBox(height: 8),
-                    InkWell(
-                      onTap: () {
-                        final locationLink = booking['location_link'] as String;
-                        // Open location link in browser/maps app
-                        _openLocationLink(locationLink);
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: Colors.green.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Colors.green.withOpacity(0.3)),
-                        ),
-                        child: Row(
-                          children: [
-                            const Icon(Icons.location_on, color: Colors.green, size: 24),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  const Text(
-                                    'View Location on Maps',
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.w600,
-                                      color: Colors.green,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    booking['location_link'] as String,
-                                    style: const TextStyle(
-                                      fontSize: 12,
-                                      color: Colors.grey,
-                                    ),
-                                    maxLines: 2,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const Icon(Icons.open_in_new, color: Colors.green),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 24),
-            ],
-
-            // Event Details
-            _buildSection(
-              title: 'Event Details',
-              icon: Icons.event,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _buildInfoRow('Date', _formatDate(bookingDate)),
-                  _buildInfoRow('Time', _formatTime(bookingTime)),
-                  if (createdAt != null)
-                    _buildInfoRow(
-                      'Ordered',
-                      DateFormat('MMM dd, yyyy • hh:mm a').format(DateTime.parse(createdAt)),
-                    ),
-                ],
-              ),
-            ),
-
-            // Payment Milestones
-            if (paymentMilestones.isNotEmpty) ...[
-              const SizedBox(height: 24),
-              _buildSection(
-                title: 'Payment Milestones',
-                icon: Icons.payment,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: paymentMilestones.asMap().entries.map((entry) {
-                    final milestone = entry.value as Map<String, dynamic>;
-                    final milestoneType = milestone['milestone_type'] as String? ?? '';
-                    final milestoneAmount = (milestone['amount'] as num?)?.toDouble() ?? 0.0;
-                    final milestoneStatus = milestone['status'] as String? ?? 'pending';
-                    
-                    return Padding(
-                      padding: EdgeInsets.only(bottom: entry.key < paymentMilestones.length - 1 ? 12 : 0),
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 40,
-                            height: 40,
-                            decoration: BoxDecoration(
-                              color: milestoneStatus == 'paid' || milestoneStatus == 'released'
-                                  ? Colors.green.withOpacity(0.1)
-                                  : Colors.grey.withOpacity(0.1),
-                              shape: BoxShape.circle,
-                            ),
-                            child: Icon(
-                              milestoneStatus == 'paid' || milestoneStatus == 'released'
-                                  ? Icons.check_circle
-                                  : Icons.pending,
-                              color: milestoneStatus == 'paid' || milestoneStatus == 'released'
-                                  ? Colors.green
-                                  : Colors.grey,
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  milestoneType.toUpperCase(),
-                                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                                Text(
-                                  milestoneStatus.toUpperCase(),
-                                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                    color: Colors.grey[600],
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          Text(
-                            '₹${milestoneAmount.toStringAsFixed(2)}',
-                            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
-                      ),
-                    );
-                  }).toList(),
-                ),
-              ),
-            ],
-
-            // Notes
-            if (notes != null && notes.isNotEmpty) ...[
-              const SizedBox(height: 24),
-              _buildSection(
-                title: 'Notes',
-                icon: Icons.note,
-                child:                 Text(
-                  notes,
-                  style: Theme.of(context).textTheme.bodyMedium,
-                  maxLines: 10,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
 
             const SizedBox(height: 24),
 
@@ -1429,5 +1209,123 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
         ),
       );
     }
+  }
+  Widget _buildTimelineStep(String label, String value, bool active) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Column(
+            children: [
+              Container(
+                width: 24,
+                height: 24,
+                decoration: BoxDecoration(
+                  color: active ? Colors.green : Colors.grey.shade300,
+                  shape: BoxShape.circle,
+                ),
+                child: active 
+                    ? const Icon(Icons.check, size: 16, color: Colors.white)
+                    : null,
+              ),
+              Container(
+                width: 2,
+                height: 20,
+                color: Colors.grey.shade300,
+              ),
+            ],
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontWeight: active ? FontWeight.bold : FontWeight.normal,
+                    color: active ? Colors.black : Colors.grey,
+                  ),
+                ),
+                Text(
+                  value,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey.shade600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSnapshotItem(IconData icon, String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        children: [
+          Icon(icon, size: 20, color: Colors.grey.shade600),
+          const SizedBox(width: 12),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
+              ),
+              Text(
+                value,
+                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEarningsRow(String label, double amount, {bool isTotal = false}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              fontWeight: isTotal ? FontWeight.bold : FontWeight.normal,
+              fontSize: isTotal ? 15 : 13,
+              color: isTotal ? Colors.black : Colors.grey.shade700,
+            ),
+          ),
+          Text(
+            '₹${amount.toStringAsFixed(2)}',
+            style: TextStyle(
+              fontWeight: isTotal ? FontWeight.bold : FontWeight.normal,
+              fontSize: isTotal ? 16 : 13,
+              color: amount < 0 ? Colors.red.shade700 : (isTotal ? Colors.green.shade700 : Colors.black),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _maskEmail(String email) {
+    if (email.isEmpty || !email.contains('@')) return 'N/A';
+    final parts = email.split('@');
+    final user = parts[0];
+    if (user.length <= 1) return '*@${parts[1]}';
+    return '${user[0]}****@${parts[1]}';
+  }
+
+  String _maskPhone(String phone) {
+    if (phone.isEmpty) return 'N/A';
+    if (phone.length <= 3) return '***';
+    return '${phone.substring(0, 3)}*******';
   }
 }

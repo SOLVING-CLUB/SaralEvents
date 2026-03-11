@@ -2,12 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/state/session.dart';
-import '../../core/ui/app_icons.dart';
 import '../vendor_setup/vendor_models.dart';
-import 'business_details_screen.dart';
-import 'documents_screen.dart';
+import '../vendor_setup/vendor_service.dart';
 import 'notification_preferences_screen.dart';
-import 'settings_screen.dart';
 import 'business_info_expanded_screen.dart';
 import 'availability_settings_screen.dart';
 import 'pricing_policies_screen.dart';
@@ -133,7 +130,33 @@ class ProfileScreen extends StatelessWidget {
             'Notification Settings',
             'Manage alerts and sounds',
             Icons.notifications_outlined,
-            () => context.push('/app/settings'),
+            () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationPreferencesScreen())),
+          ),
+
+          _buildMenuTile(
+            context,
+            'Delete Account',
+            'Permanently remove your account and data',
+            Icons.delete_forever_outlined,
+            () {
+              showModalBottomSheet(
+                context: context,
+                isScrollControlled: true,
+                backgroundColor: Colors.transparent,
+                builder: (context) => _AccountDeletionFlow(
+                  vendorId: profile?.id ?? '',
+                  onSubmitted: () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Your deletion request has been sent for admin review.'),
+                        backgroundColor: Colors.blue,
+                      ),
+                    );
+                  },
+                ),
+              );
+            },
+            isDestructive: true,
           ),
           
           const SizedBox(height: 24),
@@ -300,27 +323,259 @@ class ProfileScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildMenuTile(BuildContext context, String title, String subtitle, IconData icon, VoidCallback onTap) {
+  Widget _buildMenuTile(BuildContext context, String title, String subtitle, IconData icon, VoidCallback onTap, {bool isDestructive = false}) {
+    final textColor = isDestructive ? Colors.red : Colors.black87;
+    final subtitleColor = isDestructive ? Colors.red.withOpacity(0.7) : Colors.grey[600];
+
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey.shade100),
+        border: Border.all(color: isDestructive ? Colors.red.withOpacity(0.1) : Colors.grey.shade100),
       ),
       child: ListTile(
         onTap: onTap,
         leading: Container(
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
-            color: Colors.grey[50],
+            color: isDestructive ? Colors.red.withOpacity(0.05) : Colors.grey[50],
             borderRadius: BorderRadius.circular(10),
           ),
-          child: Icon(icon, color: Colors.black87, size: 20),
+          child: Icon(icon, color: isDestructive ? Colors.red : Colors.black87, size: 20),
         ),
-        title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-        subtitle: Text(subtitle, style: TextStyle(color: Colors.grey[600], fontSize: 12)),
-        trailing: const Icon(Icons.chevron_right, size: 20, color: Colors.grey),
+        title: Text(title, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: textColor)),
+        subtitle: Text(subtitle, style: TextStyle(color: subtitleColor, fontSize: 12)),
+        trailing: Icon(Icons.chevron_right, size: 20, color: isDestructive ? Colors.red.withOpacity(0.5) : Colors.grey),
+      ),
+    );
+  }
+}
+
+class _AccountDeletionFlow extends StatefulWidget {
+  final String vendorId;
+  final VoidCallback onSubmitted;
+
+  const _AccountDeletionFlow({
+    required this.vendorId,
+    required this.onSubmitted,
+  });
+
+  @override
+  State<_AccountDeletionFlow> createState() => _AccountDeletionFlowState();
+}
+
+class _AccountDeletionFlowState extends State<_AccountDeletionFlow> {
+  int _step = 1;
+  String? _selectedReason;
+  final _suggestionController = TextEditingController();
+  bool _isSubmitting = false;
+
+  final List<Map<String, String>> _reasons = [
+    {
+      'id': 'too_expensive',
+      'label': 'It\'s too expensive / Pricing issues',
+      'suggestion': 'Did you know you can switch to a lower tier or pause your subscription temporarily? Contact support to see if you qualify for a discount.',
+    },
+    {
+      'id': 'privacy_concerns',
+      'label': 'Privacy or security concerns',
+      'suggestion': 'We take security seriously. You can manage your privacy settings to control who sees your data. Want to see our latest security report?',
+    },
+    {
+      'id': 'hard_to_use',
+      'label': 'The app is hard to use / Buggy',
+      'suggestion': 'We\'re sorry to hear that. Would you like a 1-on-1 demo with our team to help you get started, or to report a specific bug?',
+    },
+    {
+      'id': 'switching_platforms',
+      'label': 'I\'m switching to another platform',
+      'suggestion': 'We\'d love to know what we\'re missing. If it\'s a specific feature, tell us—it might already be in our roadmap!',
+    },
+    {
+      'id': 'other',
+      'label': 'Other reason',
+      'suggestion': 'Please tell us why you\'re leaving so we can improve for others.',
+    },
+  ];
+
+  @override
+  void dispose() {
+    _suggestionController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submitRequest() async {
+    if (_selectedReason == null) return;
+
+    setState(() => _isSubmitting = true);
+    try {
+      await VendorService().submitDeletionRequest(
+        vendorId: widget.vendorId,
+        reason: _selectedReason!,
+        suggestions: _suggestionController.text.trim(),
+      );
+      if (mounted) {
+        Navigator.pop(context);
+        widget.onSubmitted();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSubmitting = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+      ),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(24.0),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey[300],
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 24),
+            if (_step == 1) ...[
+              const Text(
+                'Help us improve. Why are you deleting your account?',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+              ),
+              const SizedBox(height: 16),
+              ..._reasons.map((reason) => ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(reason['label']!),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () {
+                      setState(() {
+                        _selectedReason = reason['label'];
+                        _step = 2;
+                      });
+                    },
+                  )),
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                child: TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('I changed my mind'),
+                ),
+              ),
+            ] else if (_step == 2) ...[
+              Row(
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.arrow_back),
+                    onPressed: () => setState(() => _step = 1),
+                  ),
+                  const Text(
+                    'We\'re sorry to see you go',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.blue[50],
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.blue[100]!),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Row(
+                      children: [
+                        Icon(Icons.lightbulb_outline, color: Colors.blue),
+                        SizedBox(width: 8),
+                        Text(
+                          'Wait! Did you know?',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.blue,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      _reasons.firstWhere((r) => r['label'] == _selectedReason)['suggestion']!,
+                      style: const TextStyle(fontSize: 14),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 24),
+              const Text(
+                'Additional feedback (optional)',
+                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _suggestionController,
+                maxLines: 3,
+                decoration: const InputDecoration(
+                  hintText: 'Is there anything else we could have done better?',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 24),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text('Keep Account'),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: _isSubmitting ? null : _submitRequest,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.red,
+                        foregroundColor: Colors.white,
+                      ),
+                      child: _isSubmitting
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                              ),
+                            )
+                          : const Text('Delete Permanently'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+            const SizedBox(height: 16),
+          ],
+        ),
       ),
     );
   }

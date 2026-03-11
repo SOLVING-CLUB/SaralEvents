@@ -47,6 +47,7 @@ class ServiceItem {
   List<MediaItem> media;
   bool enabled;
   bool isVisibleToUsers;
+  bool isDraft;
 
   double rating;
   int reviewCount;
@@ -61,6 +62,7 @@ class ServiceItem {
     required this.media,
     this.enabled = true,
     this.isVisibleToUsers = true,
+    this.isDraft = false,
     this.rating = 0.0,
     this.reviewCount = 0,
   });
